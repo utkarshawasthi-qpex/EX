@@ -132,7 +132,7 @@ export default function DashboardCanvasPage() {
 
     const loaded = getDashboardById(dashboardId)
     if (!loaded || !canAccessDashboard(loaded)) {
-      router.replace('/lifecycle/analytics')
+      router.replace('/lifecycle/analytics/list')
       return
     }
 
@@ -456,8 +456,8 @@ export default function DashboardCanvasPage() {
             <div className="flex min-w-0 items-center gap-2">
               <button
                 type="button"
-                className="text-xl text-gray-500 hover:text-gray-700"
-                onClick={() => router.push('/lifecycle/analytics')}
+                className="cursor-pointer text-xl text-gray-400 transition-colors hover:text-gray-600"
+                onClick={() => router.push('/lifecycle/analytics/list')}
                 aria-label="Back to dashboards"
               >
                 ←

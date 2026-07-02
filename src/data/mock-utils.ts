@@ -4,6 +4,10 @@ export function formatDate(date: string | Date): string {
   return format(new Date(date), 'MMM d, yyyy');
 }
 
+export function formatStudyDate(date: string | Date): string {
+  return format(new Date(date), 'MMM dd yyyy');
+}
+
 export function formatRelativeDate(date: string | Date): string {
   return formatDistanceToNow(new Date(date), { addSuffix: true });
 }

@@ -3,6 +3,8 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { EmpowerSideNav } from '@/components/empower/EmpowerSideNav';
+import { isEmpowerPath } from '@/lib/app-header';
 
 const WuSidebarContent = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuSidebarContent })),
@@ -13,28 +15,21 @@ const WuSidebarItem = dynamic(
   { ssr: false }
 );
 
-const NAV_ITEMS = [
-  {
-    label: 'Projects',
-    href: '/projects',
-    icon: <span className="wm-folder-data" />,
-  }
-];
-
 export function SideNav() {
   const pathname = usePathname();
 
+  if (isEmpowerPath(pathname)) {
+    return <EmpowerSideNav />;
+  }
+
   return (
     <WuSidebarContent>
-      {NAV_ITEMS.map((item) => (
-        <WuSidebarItem
-          key={item.href}
-          Icon={item.icon}
-          isActive={pathname.startsWith(item.href)}
-        >
-          <Link href={item.href}>{item.label}</Link>
-        </WuSidebarItem>
-      ))}
+      <WuSidebarItem
+        Icon={<span className="wm-folder-data" />}
+        isActive={pathname.startsWith('/projects')}
+      >
+        <Link href="/projects">Projects</Link>
+      </WuSidebarItem>
     </WuSidebarContent>
   );
 }

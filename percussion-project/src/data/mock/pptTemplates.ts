@@ -1,0 +1,106 @@
+import type { PptTemplate } from '@/types'
+
+export const mockPptTemplates: PptTemplate[] = [
+  {
+    id: 'tpl_default',
+    name: 'QuestionPro Default',
+    themeColor: '2E75B6',
+    isActive: true,
+    isDefault: true,
+    confidentialityEnabled: true,
+    confidentialityText: 'Confidential · Internal use only',
+    firstSlide: {
+      logoAlignment: 'left',
+      title: 'Unlocking human potential: Transforming workforces through data-driven insights',
+      titleFont: {
+        family: 'Fira Sans',
+        size: 36,
+        bold: false,
+        color: 'FFFFFF',
+        alignment: 'left',
+      },
+      description: '',
+      descriptionFont: {
+        family: 'Fira Sans',
+        size: 20,
+        bold: false,
+        color: 'FFFFFF',
+        alignment: 'left',
+      },
+      coverImageLayout: 'right',
+    },
+    widgetSlide: {
+      logoAlignment: 'left',
+      headingFont: {
+        family: 'Fira Sans',
+        size: 28,
+        bold: false,
+        color: 'FFFFFF',
+        alignment: 'left',
+      },
+    },
+    lastSlide: {
+      closingImageAlignment: 'center',
+      closingText: 'Thank you!',
+      closingTextFont: {
+        family: 'Fira Sans',
+        size: 36,
+        bold: true,
+        color: '1F3864',
+        alignment: 'center',
+      },
+    },
+    createdAt: '2026-01-01',
+  },
+  {
+    id: 'tpl_002',
+    name: 'Q3 2026 Stakeholder Deck',
+    themeColor: '1F3864',
+    isActive: false,
+    isDefault: false,
+    confidentialityEnabled: false,
+    confidentialityText: '',
+    firstSlide: {
+      logoAlignment: 'center',
+      title: 'Employee Experience — Q3 2026 Results',
+      titleFont: {
+        family: 'Fira Sans',
+        size: 36,
+        bold: true,
+        color: 'FFFFFF',
+        alignment: 'center',
+      },
+      description: 'Prepared by People Analytics',
+      descriptionFont: {
+        family: 'Fira Sans',
+        size: 20,
+        bold: false,
+        color: 'BDD7EE',
+        alignment: 'center',
+      },
+      coverImageLayout: 'full',
+    },
+    widgetSlide: {
+      logoAlignment: 'left',
+      headingFont: {
+        family: 'Fira Sans',
+        size: 28,
+        bold: true,
+        color: 'FFFFFF',
+        alignment: 'left',
+      },
+    },
+    lastSlide: {
+      closingImageAlignment: 'center',
+      closingText: 'Thank you for your attention.',
+      closingTextFont: {
+        family: 'Fira Sans',
+        size: 32,
+        bold: false,
+        color: '1F3864',
+        alignment: 'center',
+      },
+    },
+    createdAt: '2026-06-10',
+  },
+]

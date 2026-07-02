@@ -383,6 +383,7 @@ export function AnalyticsPortalShell({ children }: { children: React.ReactNode }
   const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
     const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY)
     setIsExpanded(stored === 'true')
     setIsHydrated(true)
@@ -391,7 +392,9 @@ export function AnalyticsPortalShell({ children }: { children: React.ReactNode }
   const toggleSidebar = useCallback(() => {
     setIsExpanded((current) => {
       const next = !current
-      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next))
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next))
+      }
       return next
     })
   }, [])

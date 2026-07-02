@@ -13,6 +13,7 @@ import {
   saveDashboardTabs,
   saveDashboardWidgets,
 } from '@/lib/mockDb'
+import { seedDefaultDashboardsIfNeeded } from '@/lib/seedDashboards'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { getCurrentUser, isAdminContext } from '@/lib/userContext'
 import { cn } from '@/lib/utils'
@@ -196,8 +197,17 @@ export default function LifecycleAnalyticsPage() {
   }, [allDashboards])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    seedDefaultDashboardsIfNeeded()
     setAllDashboards(loadDashboards())
-  }, [])
+
+    const dashboards = loadDashboards()
+    const first = dashboards.find((dashboard) => dashboard.access === 'global') ?? dashboards[0]
+    if (first) {
+      router.replace(`/lifecycle/analytics/${first.id}`)
+    }
+  }, [router])
 
   function persistDashboards(next: Dashboard[]) {
     setAllDashboards(next)

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import '@npm-questionpro/wick-ui-lib/dist/style.css'
 import '@npm-questionpro/wick-ui-icon/dist/wu-icon.css'
 import './globals.css'
+import { AppInitialiser } from '@/components/shared/AppInitialiser'
 import { AppShell } from '@/components/shared/AppShell'
 
 export const metadata: Metadata = {
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
+        <AppInitialiser />
         <AppShell>{children}</AppShell>
       </body>
     </html>

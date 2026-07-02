@@ -9,6 +9,7 @@ export default function EmpowerLayout({ children }: { children: React.ReactNode 
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
     if (window.localStorage.getItem('pp_authed') !== 'true') {
       router.replace('/login')
       return

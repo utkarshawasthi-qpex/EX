@@ -6,6 +6,11 @@ import { mockPptTemplates } from '@/data/mock/pptTemplates'
 import { mockPrograms360, mockRaterAssignments } from '@/data/mock/raters'
 import { mockSurveys } from '@/data/mock/surveys'
 import type { AppUser } from '@/lib/userContext'
+import {
+  createDefaultSeedDashboard,
+  DASHBOARDS_STORAGE_KEY,
+  seedDefaultDashboardsIfNeeded,
+} from '@/lib/seedDashboards'
 import type {
   Dashboard,
   DashboardTab,
@@ -29,7 +34,6 @@ import type {
 const CREATED_SURVEYS_STORAGE_KEY = 'pp_created_surveys'
 const CREATED_DASHBOARDS_STORAGE_KEY = 'pp_created_dashboards'
 const CREATED_INITIATIVES_STORAGE_KEY = 'pp_created_initiatives'
-const DASHBOARDS_STORAGE_KEY = 'pp_dashboards'
 
 function getCreatedSurveys(): LifecycleSurvey[] {
   if (typeof window === 'undefined') return []
@@ -174,24 +178,25 @@ export function getRatersBySubjectId(subjectId: ID): RaterAssignment[] {
 
 export function loadDashboards(): Dashboard[] {
   if (typeof window === 'undefined') {
-    return mockDashboards
+    return [createDefaultSeedDashboard()]
   }
+
+  seedDefaultDashboardsIfNeeded()
 
   try {
-    const stored = window.localStorage.getItem(DASHBOARDS_STORAGE_KEY)
+    const stored =
+      typeof window !== 'undefined' ? window.localStorage.getItem(DASHBOARDS_STORAGE_KEY) : null
     if (stored) {
-      return JSON.parse(stored) as Dashboard[]
+      const parsed = JSON.parse(stored) as Dashboard[]
+      if (parsed.length > 0) {
+        return parsed
+      }
     }
-
-    const merged = [...getCreatedDashboards(), ...mockDashboards]
-    const byId = new Map<string, Dashboard>()
-    for (const dashboard of merged) {
-      byId.set(dashboard.id, dashboard)
-    }
-    return Array.from(byId.values())
   } catch {
-    return mockDashboards
+    // fall through to default
   }
+
+  return [createDefaultSeedDashboard()]
 }
 
 export function saveDashboards(dashboards: Dashboard[]): void {

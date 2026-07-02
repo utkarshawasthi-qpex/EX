@@ -46,7 +46,8 @@ export function getCurrentUser(): AppUser {
     return enrichUser(DEFAULT_ADMIN)
   }
 
-  const impersonating = window.localStorage.getItem('pp_impersonating')
+  const impersonating =
+    typeof window !== 'undefined' ? window.localStorage.getItem('pp_impersonating') : null
   if (impersonating) {
     const emp = JSON.parse(impersonating) as {
       id: string

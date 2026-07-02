@@ -107,7 +107,9 @@ export function TopBar({ isSidebarCollapsed, onToggleSidebar }: TopBarProps) {
   }
 
   function handleExitImpersonation() {
-    window.localStorage.removeItem('pp_impersonating')
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('pp_impersonating')
+    }
     setUser(getCurrentUser())
     showToast({ variant: 'success', message: 'Returned to admin view' })
     router.push('/lifecycle/roster')

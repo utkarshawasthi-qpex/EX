@@ -154,7 +154,6 @@ export async function generateDashboardSummary(
 
   await new Promise((resolve) => setTimeout(resolve, 1500))
 
-  const hasContext = orgContext.trim().length > 0
   const hasFilters = activeFilters.length > 0
 
   if (viewType === 'team') {

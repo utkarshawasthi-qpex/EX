@@ -17,7 +17,6 @@ import {
   buildGridLayout,
   defaultWidgetLayout,
   getMaxLayoutY,
-  getDashboardTabLayoutStorageKey,
   loadDashboardTabLayout,
   removeWidgetFromTabLayout,
   saveDashboardTabLayout,

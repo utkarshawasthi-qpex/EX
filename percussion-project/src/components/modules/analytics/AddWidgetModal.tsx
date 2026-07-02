@@ -29,10 +29,6 @@ const WuCheckbox = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuCheckbox })),
   { ssr: false },
 )
-const WuFormGroup = dynamic(
-  () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuFormGroup })),
-  { ssr: false },
-)
 const WuHeading = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuHeading })),
   { ssr: false },

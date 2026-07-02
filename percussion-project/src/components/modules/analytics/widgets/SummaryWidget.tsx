@@ -443,13 +443,32 @@ function SummaryWidgetInner({
     setTeamError(null)
   }
 
-  if (!canSeeCompanySummaryTab && !showMyTeamTab) return null
-
   const companyContent = config.companyContent
     ? normalizeSummaryContent(config.companyContent)
     : undefined
   const companyGenerating = config.isGenerating
   const companyError = config.generationError
+
+  const showRefresh =
+    (activeTab === 'company' && isAdmin && Boolean(companyContent)) ||
+    (activeTab === 'team' && myTeamCache?.userId === currentUser.id && Boolean(myTeamCache))
+
+  useReportWidgetHeight(
+    reportWidgetHeight,
+    { headerRef: chromeRef, contentRef },
+    [
+      activeTab,
+      companyContent,
+      companyGenerating,
+      companyError,
+      myTeamCache,
+      isGeneratingTeam,
+      teamError,
+      showTabRow,
+    ],
+  )
+
+  if (!canSeeCompanySummaryTab && !showMyTeamTab) return null
 
   function renderCompanyTab() {
     if (companyGenerating) {
@@ -585,25 +604,6 @@ function SummaryWidgetInner({
       </>
     )
   }
-
-  const showRefresh =
-    (activeTab === 'company' && isAdmin && Boolean(companyContent)) ||
-    (activeTab === 'team' && myTeamCache?.userId === currentUser.id && Boolean(myTeamCache))
-
-  useReportWidgetHeight(
-    reportWidgetHeight,
-    { headerRef: chromeRef, contentRef },
-    [
-      activeTab,
-      companyContent,
-      companyGenerating,
-      companyError,
-      myTeamCache,
-      isGeneratingTeam,
-      teamError,
-      showTabRow,
-    ],
-  )
 
   return (
     <>

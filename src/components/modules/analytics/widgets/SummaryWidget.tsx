@@ -659,10 +659,12 @@ function SummaryWidgetInner({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div ref={contentRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {showMyTeamTab && activeTab === 'team' && renderTeamTab()}
-            {showCompanyTab && activeTab === 'company' && renderCompanyTab()}
-            {!showMyTeamTab && showCompanyTab && renderCompanyTab()}
+          <div ref={contentRef} className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-3">
+            {activeTab === 'team' && showMyTeamTab
+              ? renderTeamTab()
+              : showCompanyTab
+                ? renderCompanyTab()
+                : null}
           </div>
         </div>
       </div>

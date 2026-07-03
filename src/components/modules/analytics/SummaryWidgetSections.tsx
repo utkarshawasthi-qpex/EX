@@ -7,7 +7,6 @@ import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import {
   getActionVersionIndex,
   getActiveActionVersion,
-  getActiveActions,
   getActiveSummaryGeneratedAt,
   getActiveSummaryText,
   getSummaryVersionIndex,
@@ -17,7 +16,7 @@ import {
   updateSummaryFeedback,
 } from '@/lib/summaryContent'
 import { cn } from '@/lib/utils'
-import type { ActionVersion, SummaryAction, SummaryContent, SummaryPriority } from '@/types'
+import type { SummaryAction, SummaryContent, SummaryPriority } from '@/types'
 
 const WuButton = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuButton })),
@@ -271,7 +270,7 @@ export function SummaryWidgetSections({
     return (
       <div
         key={`action-${priority}-${version.versionId}`}
-        className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
+        className="min-h-[48px] rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
       >
         {confirmActionPriority === priority && (
           <div className="mb-2 rounded border border-blue-100 bg-blue-50 p-2 text-xs text-gray-700">
@@ -298,19 +297,8 @@ export function SummaryWidgetSections({
           </div>
         )}
 
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
           <div className="flex min-w-0 flex-1 items-start gap-2">
-            {canRegenerate && (
-              <button
-                type="button"
-                title="Regenerate this recommendation"
-                aria-label={`Regenerate P${priority} recommendation`}
-                onClick={() => setConfirmActionPriority(priority)}
-                className="mt-0.5 flex-shrink-0 text-xs text-gray-300 transition-colors hover:text-blue-600"
-              >
-                ↺
-              </button>
-            )}
             <span
               className={cn(
                 'mt-0.5 flex-shrink-0 rounded px-1.5 py-0.5 text-xs font-bold',
@@ -323,14 +311,12 @@ export function SummaryWidgetSections({
             </span>
 
             <div className="min-w-0 flex-1">
-              <WuText size="sm" as="p" className="font-medium leading-snug text-gray-800">
+              <p className="text-xs font-medium leading-snug break-words text-gray-800">
                 {version.action}
-              </WuText>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <WuText size="sm" as="span" className="text-gray-400">
-                  {version.timeframe}
-                </WuText>
-                <span className="text-xs text-gray-200">·</span>
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                <span>{version.timeframe}</span>
+                <span>·</span>
                 <span className="flex items-center gap-1">
                   <span
                     className={cn(
@@ -342,36 +328,84 @@ export function SummaryWidgetSections({
                           : 'bg-blue-400',
                     )}
                   />
-                  <WuText size="sm" as="span" className="text-gray-400">
-                    {version.owner}
-                  </WuText>
+                  {version.owner}
                 </span>
                 {version.context && (
                   <>
-                    <span className="text-xs text-gray-200">·</span>
-                    <WuText size="sm" as="span" className="italic text-gray-400">
-                      {version.context}
-                    </WuText>
+                    <span>·</span>
+                    <span className="italic">{version.context}</span>
                   </>
                 )}
-                <VersionNavigator
-                  compact
-                  currentIndex={actionIndex}
-                  total={actionVersionsCount}
-                  onPrev={() => prevActionVersion(priority)}
-                  onNext={() => nextActionVersion(priority)}
-                />
+                {actionVersionsCount > 1 && (
+                  <span className="ml-1 flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={actionIndex <= 0}
+                      onClick={() => prevActionVersion(priority)}
+                      className="disabled:opacity-30"
+                      aria-label="Previous action version"
+                    >
+                      ←
+                    </button>
+                    <span>
+                      v{actionIndex + 1}/{actionVersionsCount}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={actionIndex >= actionVersionsCount - 1}
+                      onClick={() => nextActionVersion(priority)}
+                      className="disabled:opacity-30"
+                      aria-label="Next action version"
+                    >
+                      →
+                    </button>
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="flex flex-shrink-0 items-center gap-2">
+          <div className="mt-0.5 flex flex-shrink-0 items-center gap-2">
             {canShowFeedback && (
-              <FeedbackButtons
-                feedback={content.actionFeedback[priority]}
-                onUp={() => handleActionFeedback(priority, 'up')}
-                onDown={() => handleActionFeedback(priority, 'down')}
-              />
+              <>
+                <button
+                  type="button"
+                  aria-label="Thumbs up"
+                  onClick={() => handleActionFeedback(priority, 'up')}
+                  className={cn(
+                    'text-sm hover:text-blue-500',
+                    content.actionFeedback[priority] === 'up'
+                      ? 'text-blue-600'
+                      : 'text-gray-300',
+                  )}
+                >
+                  👍
+                </button>
+                <button
+                  type="button"
+                  aria-label="Thumbs down"
+                  onClick={() => handleActionFeedback(priority, 'down')}
+                  className={cn(
+                    'text-sm hover:text-red-400',
+                    content.actionFeedback[priority] === 'down'
+                      ? 'text-red-500'
+                      : 'text-gray-300',
+                  )}
+                >
+                  👎
+                </button>
+              </>
+            )}
+            {canRegenerate && (
+              <button
+                type="button"
+                title="Regenerate this recommendation"
+                aria-label={`Regenerate P${priority} recommendation`}
+                onClick={() => setConfirmActionPriority(priority)}
+                className="text-xs text-gray-300 transition-colors hover:text-blue-600"
+              >
+                ↺
+              </button>
             )}
             {canCreateActionPlan && (
               <button
@@ -387,7 +421,7 @@ export function SummaryWidgetSections({
                   })
                 }
                 className={cn(
-                  'text-xs font-medium',
+                  'whitespace-nowrap text-xs font-medium',
                   priority === 1
                     ? 'rounded bg-blue-600 px-2.5 py-1 text-white transition-colors hover:bg-blue-700'
                     : 'text-blue-600 hover:underline',
@@ -403,104 +437,106 @@ export function SummaryWidgetSections({
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden px-4 py-3">
-      {regeneratingSummary ? (
-        <div className="mb-3 space-y-2">
-          <div className="h-3 w-3/4 animate-pulse rounded bg-gray-100" />
-          <div className="h-3 w-full animate-pulse rounded bg-gray-100" />
-          <div className="h-3 w-5/6 animate-pulse rounded bg-gray-100" />
-        </div>
-      ) : (
-        <WuText size="sm" as="p" className="mb-3 flex-shrink-0 leading-relaxed text-gray-700">
-          {summaryText}
-        </WuText>
-      )}
-
-      <VersionNavigator
-        currentIndex={summaryVersionIndex}
-        total={content.summaryVersions.length}
-        onPrev={prevSummaryVersion}
-        onNext={nextSummaryVersion}
-      />
-
-      {canShowFeedback && (
-        <div className="mt-2 flex flex-shrink-0 flex-col items-end gap-2">
-          <div className="flex items-center gap-2 text-xs text-gray-400">
-            <span>Was this summary helpful?</span>
-            <FeedbackButtons
-              feedback={content.summaryFeedback}
-              onUp={handleSummaryFeedbackUp}
-              onDown={handleSummaryFeedbackDown}
-            />
-            {content.summaryFeedback !== null && (
-              <button
-                type="button"
-                className="text-blue-600 hover:underline"
-                onClick={resetSummaryFeedback}
-              >
-                Change feedback
-              </button>
-            )}
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex-shrink-0">
+        {regeneratingSummary ? (
+          <div className="mb-3 space-y-2">
+            <div className="h-3 w-3/4 animate-pulse rounded bg-gray-100" />
+            <div className="h-3 w-full animate-pulse rounded bg-gray-100" />
+            <div className="h-3 w-5/6 animate-pulse rounded bg-gray-100" />
           </div>
+        ) : (
+          <WuText size="sm" as="p" className="leading-relaxed text-gray-700">
+            {summaryText}
+          </WuText>
+        )}
 
-          {showReasonPicker && content.summaryFeedback === 'down' && (
-            <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-3 text-left shadow-sm">
-              <p className="mb-2 text-xs font-medium text-gray-700">What could be better?</p>
-              <div className="space-y-1.5">
-                {FEEDBACK_REASONS.map((reason) => (
-                  <label key={reason} className="flex items-center gap-2 text-xs text-gray-600">
+        <VersionNavigator
+          currentIndex={summaryVersionIndex}
+          total={content.summaryVersions.length}
+          onPrev={prevSummaryVersion}
+          onNext={nextSummaryVersion}
+        />
+
+        {canShowFeedback && (
+          <div className="mt-2 flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <span>Was this summary helpful?</span>
+              <FeedbackButtons
+                feedback={content.summaryFeedback}
+                onUp={handleSummaryFeedbackUp}
+                onDown={handleSummaryFeedbackDown}
+              />
+              {content.summaryFeedback !== null && (
+                <button
+                  type="button"
+                  className="text-blue-600 hover:underline"
+                  onClick={resetSummaryFeedback}
+                >
+                  Change feedback
+                </button>
+              )}
+            </div>
+
+            {showReasonPicker && content.summaryFeedback === 'down' && (
+              <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-3 text-left shadow-sm">
+                <p className="mb-2 text-xs font-medium text-gray-700">What could be better?</p>
+                <div className="space-y-1.5">
+                  {FEEDBACK_REASONS.map((reason) => (
+                    <label key={reason} className="flex items-center gap-2 text-xs text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={selectedReasons.has(reason)}
+                        onChange={(event) => {
+                          setSelectedReasons((current) => {
+                            const next = new Set(current)
+                            if (event.target.checked) next.add(reason)
+                            else next.delete(reason)
+                            return next
+                          })
+                        }}
+                      />
+                      {reason}
+                    </label>
+                  ))}
+                  <label className="flex items-center gap-2 text-xs text-gray-600">
                     <input
                       type="checkbox"
-                      checked={selectedReasons.has(reason)}
+                      checked={selectedReasons.has('other')}
                       onChange={(event) => {
                         setSelectedReasons((current) => {
                           const next = new Set(current)
-                          if (event.target.checked) next.add(reason)
-                          else next.delete(reason)
+                          if (event.target.checked) next.add('other')
+                          else next.delete('other')
                           return next
                         })
                       }}
                     />
-                    {reason}
+                    Other:
+                    <input
+                      type="text"
+                      value={otherReason}
+                      onChange={(event) => setOtherReason(event.target.value)}
+                      className="flex-1 rounded border border-gray-200 px-2 py-0.5 text-xs"
+                      placeholder="Tell us more"
+                    />
                   </label>
-                ))}
-                <label className="flex items-center gap-2 text-xs text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={selectedReasons.has('other')}
-                    onChange={(event) => {
-                      setSelectedReasons((current) => {
-                        const next = new Set(current)
-                        if (event.target.checked) next.add('other')
-                        else next.delete('other')
-                        return next
-                      })
-                    }}
-                  />
-                  Other:
-                  <input
-                    type="text"
-                    value={otherReason}
-                    onChange={(event) => setOtherReason(event.target.value)}
-                    className="flex-1 rounded border border-gray-200 px-2 py-0.5 text-xs"
-                    placeholder="Tell us more"
-                  />
-                </label>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <WuButton variant="primary" size="sm" onClick={submitSummaryFeedbackReason}>
+                    Submit feedback
+                  </WuButton>
+                </div>
               </div>
-              <div className="mt-3 flex justify-end">
-                <WuButton variant="primary" size="sm" onClick={submitSummaryFeedbackReason}>
-                  Submit feedback
-                </WuButton>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="mb-3 flex-shrink-0 border-t border-gray-100" />
+            )}
+          </div>
+        )}
+      </div>
 
       {canSeeActions && (
         <>
+          <div className="my-2 flex-shrink-0 border-t border-gray-100" />
+
           <div className="mb-2 flex flex-shrink-0 items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="h-3.5 w-1 rounded-full bg-green-500" />
@@ -527,7 +563,7 @@ export function SummaryWidgetSections({
       )}
 
       {showRestrictedNote && (
-        <WuText size="sm" as="p" className="mt-3 text-center text-gray-400">
+        <WuText size="sm" as="p" className="mt-3 flex-shrink-0 text-center text-gray-400">
           Recommended actions are visible to HR Admins only
         </WuText>
       )}

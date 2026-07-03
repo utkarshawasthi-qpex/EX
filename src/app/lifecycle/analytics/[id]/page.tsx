@@ -34,7 +34,7 @@ import {
 import { seedDefaultDashboardsIfNeeded } from '@/lib/seedDashboards'
 import { getCurrentUser } from '@/lib/userContext'
 import { cn } from '@/lib/utils'
-import type { Dashboard, DashboardTab, DashboardWidget } from '@/types'
+import type { Dashboard, DashboardTab, DashboardWidget, WidgetType } from '@/types'
 import { getDashboardCapabilities } from '@/types'
 
 const GridLayoutWithWidth = WidthProvider(ReactGridLayout)
@@ -152,6 +152,20 @@ export default function DashboardCanvasPage() {
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
   const widgets = allTabWidgets[activeTabId] ?? []
 
+  const uniqueWidgets = useMemo(
+    () => widgets.filter((widget, index, self) => index === self.findIndex((item) => item.id === widget.id)),
+    [widgets],
+  )
+
+  const widgetTypesById = useMemo(
+    () =>
+      Object.fromEntries(uniqueWidgets.map((widget) => [widget.id, widget.type])) as Record<
+        string,
+        WidgetType
+      >,
+    [uniqueWidgets],
+  )
+
   const capabilities = useMemo(
     () => (dashboard ? getDashboardCapabilities(dashboard, getCurrentUser()) : null),
     [dashboard],
@@ -195,8 +209,16 @@ export default function DashboardCanvasPage() {
   }, [activeTabId, isDashboardLoading, loadLayoutForTab])
 
   const constrainedLayout = useMemo(
-    () => applyWidgetHeightConstraints(currentLayout, widgetContentHeights),
-    [currentLayout, widgetContentHeights],
+    () => applyWidgetHeightConstraints(currentLayout, widgetContentHeights, widgetTypesById),
+    [currentLayout, widgetContentHeights, widgetTypesById],
+  )
+
+  const uniqueLayout = useMemo(
+    () =>
+      constrainedLayout.filter(
+        (item, index, self) => index === self.findIndex((candidate) => candidate.i === item.i),
+      ),
+    [constrainedLayout],
   )
 
   const registerWidgetContentHeight = useCallback((widgetId: string, heightPx: number) => {
@@ -210,7 +232,7 @@ export default function DashboardCanvasPage() {
     if (!layoutReady || Object.keys(widgetContentHeights).length === 0) return
 
     setCurrentLayout((previous) => {
-      const next = applyWidgetHeightConstraints(previous, widgetContentHeights)
+      const next = applyWidgetHeightConstraints(previous, widgetContentHeights, widgetTypesById)
       const layoutChanged = next.some(
         (item, index) =>
           item.h !== previous[index]?.h || item.maxH !== previous[index]?.maxH,
@@ -227,20 +249,20 @@ export default function DashboardCanvasPage() {
       updateWidgets(activeTabId, applyLayoutToWidgets(tabWidgets, next))
       return next
     })
-  }, [activeTabId, dashboardId, layoutReady, updateWidgets, widgetContentHeights])
+  }, [activeTabId, dashboardId, layoutReady, updateWidgets, widgetContentHeights, widgetTypesById])
 
   const handleLayoutChange = useCallback(
     (newLayout: Layout) => {
-      setCurrentLayout(applyWidgetHeightConstraints(newLayout, widgetContentHeights))
+      setCurrentLayout(applyWidgetHeightConstraints(newLayout, widgetContentHeights, widgetTypesById))
     },
-    [widgetContentHeights],
+    [widgetContentHeights, widgetTypesById],
   )
 
   const commitLayoutStop = useCallback(
     (layout: Layout) => {
       if (!activeTabId) return
 
-      const constrained = applyWidgetHeightConstraints(layout, widgetContentHeights)
+      const constrained = applyWidgetHeightConstraints(layout, widgetContentHeights, widgetTypesById)
 
       try {
         saveDashboardTabLayout(dashboardId, activeTabId, constrained)
@@ -252,7 +274,7 @@ export default function DashboardCanvasPage() {
       const tabWidgets = allTabWidgetsRef.current[activeTabId] ?? []
       updateWidgets(activeTabId, applyLayoutToWidgets(tabWidgets, constrained))
     },
-    [activeTabId, dashboardId, updateWidgets, widgetContentHeights],
+    [activeTabId, dashboardId, updateWidgets, widgetContentHeights, widgetTypesById],
   )
 
   const addWidgetToCurrentTab = useCallback(
@@ -610,7 +632,7 @@ export default function DashboardCanvasPage() {
             >
               <GridLayoutWithWidth
                 className="layout"
-                layout={constrainedLayout}
+                layout={uniqueLayout}
                 cols={12}
                 rowHeight={60}
                 onLayoutChange={handleLayoutChange}
@@ -623,7 +645,7 @@ export default function DashboardCanvasPage() {
                 isResizable={capabilities?.canEdit ?? false}
                 isDraggable={capabilities?.canEdit ?? false}
               >
-                {widgets.map((widget) => (
+                {uniqueWidgets.map((widget) => (
                   <div key={widget.id} className="widget-grid-item">
                     <DashboardWidgetProvider
                       reportWidgetHeight={(heightPx) =>
@@ -637,7 +659,7 @@ export default function DashboardCanvasPage() {
                         onDuplicate={() => handleDuplicateWidget(widget)}
                         onDelete={() => handleDeleteWidget(widget.id)}
                         activeFilters={activeFilters}
-                        dashboardWidgets={widgets}
+                        dashboardWidgets={uniqueWidgets}
                         capabilities={capabilities ?? undefined}
                       />
                     </DashboardWidgetProvider>

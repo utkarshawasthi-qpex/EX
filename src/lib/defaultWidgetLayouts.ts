@@ -1,6 +1,6 @@
 import type { Layout } from 'react-grid-layout/legacy'
 import type { DashboardWidget, WidgetType } from '@/types'
-import { withDefaultGridConstraints } from '@/lib/widgetGridMetrics'
+import { getMinGridRowsForWidgetType, withDefaultGridConstraints } from '@/lib/widgetGridMetrics'
 
 export type LayoutItem = {
   x: number
@@ -21,11 +21,12 @@ export const defaultWidgetLayout: Record<WidgetType, LayoutItem> = {
   text_analysis: { x: 0, y: 34, w: 6, h: 6 },
   text_report: { x: 6, y: 34, w: 6, h: 6 },
   notes: { x: 0, y: 40, w: 6, h: 5 },
-  summary: { x: 0, y: 0, w: 12, h: 10 },
+  summary: { x: 0, y: 0, w: 12, h: 12 },
 }
 
 export function buildGridLayout(widgets: DashboardWidget[]): Layout {
   return widgets.map((widget) => {
+    const minH = getMinGridRowsForWidgetType(widget.type)
     if (
       widget.layout &&
       widget.layout.w !== undefined &&
@@ -33,23 +34,29 @@ export function buildGridLayout(widgets: DashboardWidget[]): Layout {
       widget.layout.w >= 5 &&
       widget.layout.h >= 5
     ) {
-      return withDefaultGridConstraints({
-        i: widget.id,
-        x: widget.layout.x,
-        y: widget.layout.y,
-        w: widget.layout.w,
-        h: widget.layout.h,
-      })
+      return withDefaultGridConstraints(
+        {
+          i: widget.id,
+          x: widget.layout.x,
+          y: widget.layout.y,
+          w: widget.layout.w,
+          h: widget.layout.h,
+        },
+        { minH },
+      )
     }
 
     const defaults = defaultWidgetLayout[widget.type] ?? { x: 0, y: 0, w: 6, h: 6 }
-    return withDefaultGridConstraints({
-      i: widget.id,
-      x: defaults.x,
-      y: defaults.y,
-      w: defaults.w,
-      h: defaults.h,
-    })
+    return withDefaultGridConstraints(
+      {
+        i: widget.id,
+        x: defaults.x,
+        y: defaults.y,
+        w: defaults.w,
+        h: defaults.h,
+      },
+      { minH },
+    )
   })
 }
 
@@ -71,16 +78,20 @@ export function createLayoutItemForNewWidget(
   options?: { insertAtTop?: boolean },
 ): Layout[number] {
   const defaults = defaultWidgetLayout[widget.type] ?? { x: 0, y: 0, w: 6, h: 6 }
+  const minH = getMinGridRowsForWidgetType(widget.type)
   const maxY = existingLayout.length > 0 ? getMaxLayoutY(existingLayout) : 0
   const insertAtTop = options?.insertAtTop ?? widget.type === 'summary'
 
-  return withDefaultGridConstraints({
-    i: widget.id,
-    x: 0,
-    y: insertAtTop ? 0 : maxY,
-    w: defaults.w,
-    h: defaults.h,
-  })
+  return withDefaultGridConstraints(
+    {
+      i: widget.id,
+      x: 0,
+      y: insertAtTop ? 0 : maxY,
+      w: defaults.w,
+      h: defaults.h,
+    },
+    { minH },
+  )
 }
 
 export function appendLayoutItem(
@@ -101,13 +112,17 @@ export function createLayoutItemForWidget(
   y: number,
 ): Layout[number] {
   const defaults = defaultWidgetLayout[widget.type]
-  return withDefaultGridConstraints({
-    i: widget.id,
-    x: widget.layout?.x ?? defaults.x,
-    y,
-    w: widget.layout?.w ?? defaults.w,
-    h: widget.layout?.h ?? defaults.h,
-  })
+  const minH = getMinGridRowsForWidgetType(widget.type)
+  return withDefaultGridConstraints(
+    {
+      i: widget.id,
+      x: widget.layout?.x ?? defaults.x,
+      y,
+      w: widget.layout?.w ?? defaults.w,
+      h: widget.layout?.h ?? defaults.h,
+    },
+    { minH },
+  )
 }
 
 export function syncLayoutWithWidgets(widgets: DashboardWidget[], savedLayout?: Layout): Layout {
@@ -117,17 +132,23 @@ export function syncLayoutWithWidgets(widgets: DashboardWidget[], savedLayout?: 
   return widgets.map((widget, index) => {
     const saved = savedById.get(widget.id)
     if (saved) {
-      return withDefaultGridConstraints(saved)
+      return withDefaultGridConstraints(saved, {
+        minH: getMinGridRowsForWidgetType(widget.type),
+      })
     }
 
     const defaults = defaultWidgetLayout[widget.type]
-    return withDefaultGridConstraints({
-      i: widget.id,
-      x: defaults.x,
-      y: maxY + index,
-      w: defaults.w,
-      h: defaults.h,
-    })
+    const minH = getMinGridRowsForWidgetType(widget.type)
+    return withDefaultGridConstraints(
+      {
+        i: widget.id,
+        x: defaults.x,
+        y: maxY + index,
+        w: defaults.w,
+        h: defaults.h,
+      },
+      { minH },
+    )
   })
 }
 

@@ -9,6 +9,7 @@ export default function Feedback360Layout({ children }: { children: React.ReactN
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
     if (window.localStorage.getItem('pp_authed') !== 'true') {
       router.replace('/login')
       return

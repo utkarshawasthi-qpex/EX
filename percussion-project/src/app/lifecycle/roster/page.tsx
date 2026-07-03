@@ -125,15 +125,17 @@ function EmployeeActions({ employee }: { employee: Employee }) {
 
   function handleLoginAsEmployee() {
     const name = `${employee.firstName} ${employee.lastName}`
-    window.localStorage.setItem(
-      'pp_impersonating',
-      JSON.stringify({
-        id: employee.id,
-        name,
-        email: employee.email,
-        role: 'employee',
-      }),
-    )
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        'pp_impersonating',
+        JSON.stringify({
+          id: employee.id,
+          name,
+          email: employee.email,
+          role: 'employee',
+        }),
+      )
+    }
     showToast({
       variant: 'info',
       message: `Now viewing portal as ${name}`,

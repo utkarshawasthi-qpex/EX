@@ -43,7 +43,9 @@ export default function LoginPage() {
         return
       }
 
-      window.localStorage.setItem('pp_authed', 'true')
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('pp_authed', 'true')
+      }
       router.push('/lifecycle')
     }, 800)
   }

@@ -78,6 +78,8 @@ const IMAGE_LAYOUT_OPTIONS: SelectOption[] = [
 ]
 
 function loadTemplates(): PptTemplate[] {
+  if (typeof window === 'undefined') return mockPptTemplates
+
   try {
     const stored = window.localStorage.getItem(TEMPLATE_STORAGE_KEY)
     if (stored) return JSON.parse(stored) as PptTemplate[]
@@ -173,7 +175,9 @@ export default function PptExportTemplatesPage() {
 
   function saveTemplates(nextTemplates: PptTemplate[]) {
     setTemplates(nextTemplates)
-    window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(nextTemplates))
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(nextTemplates))
+    }
   }
 
   function setActive(template: PptTemplate) {

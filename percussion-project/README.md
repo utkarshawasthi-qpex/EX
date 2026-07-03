@@ -1,29 +1,23 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Percussion Project (mirror)
 
-## Getting Started
+This folder is a **mirror** of the prototype at the repo root. It exists so Vercel projects that were configured with **Root Directory = `percussion-project`** continue to deploy the same app as local development.
 
-First, run the development server:
+## Source of truth
+
+Develop and run locally from the **repo root** (not this folder):
 
 ```bash
+cd ..
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result. The app redirects to `/lifecycle`.
+Open [http://localhost:3000](http://localhost:3000) — the app redirects to `/lifecycle`.
 
 ## Deploy on Vercel
 
-This repo contains two Next.js apps. **Local development and analytics work use this folder (`percussion-project/`).**
+**Recommended:** In Vercel → Project → Settings → General → **Root Directory**, leave empty or set to `.` (repo root). Then redeploy.
 
-In Vercel → Project → Settings → General → **Root Directory**, set:
+**Legacy:** If Root Directory is already `percussion-project`, that also works — this folder is kept in sync with the root app. Redeploy after pulling latest `main`.
 
-```
-percussion-project
-```
-
-Then redeploy. Without this, Vercel builds the parent app at the repo root (routes like `/studies`), which is a different, older prototype.
+Both setups use the same `package.json`, Next.js 16 webpack build, and routes (including `/lifecycle/analytics/list`).

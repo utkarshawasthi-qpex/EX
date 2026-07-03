@@ -11,6 +11,21 @@ npm install
 npm run dev
 ```
 
+Open [http://localhost:3000](http://localhost:3000). The analytics portal lives under `/lifecycle/analytics`.
+
+## Deploy on Vercel
+
+This prototype is built from the **repo root** (`employee-experience/`).
+
+In Vercel → Project → Settings → General → **Root Directory**, leave empty or set to `.` — **not** `percussion-project`.
+
+Build command (default): `npm run build`  
+Install command (default): `npm install`
+
+After changing Root Directory or pushing to `main`, trigger a **Redeploy** so production matches local.
+
+If your project still uses Root Directory `percussion-project`, that folder is kept as a mirror of this app and will also work after redeploy.
+
 ## Building Features
 
 1. Fill in `PRD.md` with the screens and flows you want to build

@@ -5,6 +5,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Ensures correct file tracing when a nested copy exists under percussion-project/
+  outputFileTracingRoot: path.join(__dirname),
   webpack: (config, { isServer, webpack }) => {
     if (!isServer) {
       const browserEmptyModule = path.resolve(__dirname, 'src/lib/browserEmptyModule.ts')

@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Layout } from 'react-grid-layout/legacy'
 import ReactGridLayout, { WidthProvider } from 'react-grid-layout/legacy'
@@ -12,6 +12,7 @@ import type { AddWidgetConfig } from '@/components/modules/analytics/AddWidgetMo
 import { DashboardWidgetProvider } from '@/components/modules/analytics/DashboardWidgetContext'
 import { ExportPptModal } from '@/components/modules/analytics/ExportPptModal'
 import { DashboardWidgetRenderer } from '@/components/modules/analytics/widgetRegistry'
+import { AuthChecking } from '@/components/shared/AuthChecking'
 import {
   appendLayoutItem,
   buildGridLayout,
@@ -22,9 +23,7 @@ import {
   saveDashboardTabLayout,
   syncLayoutWithWidgets,
 } from '@/lib/defaultWidgetLayouts'
-import {
-  applyWidgetHeightConstraints,
-} from '@/lib/widgetGridMetrics'
+import { applyWidgetHeightConstraints } from '@/lib/widgetGridMetrics'
 import {
   getDashboardById,
   getDashboardTabs,
@@ -32,6 +31,7 @@ import {
   saveDashboardTabs,
   saveDashboardWidgets,
 } from '@/lib/mockDb'
+import { seedDefaultDashboardsIfNeeded } from '@/lib/seedDashboards'
 import { getCurrentUser } from '@/lib/userContext'
 import { cn } from '@/lib/utils'
 import type { Dashboard, DashboardTab, DashboardWidget } from '@/types'
@@ -55,10 +55,6 @@ const WuText = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuText })),
   { ssr: false },
 )
-
-type DashboardCanvasPageProps = {
-  params: { id: string }
-}
 
 type DepartmentOption = {
   value: string
@@ -106,10 +102,11 @@ function applyLayoutToWidgets(widgets: DashboardWidget[], layout: Layout): Dashb
   })
 }
 
-export default function DashboardCanvasPage({ params }: DashboardCanvasPageProps) {
+export default function DashboardCanvasPage() {
   const router = useRouter()
+  const params = useParams()
+  const dashboardId = params.id as string
   const { showToast } = useWuShowToast()
-  const dashboardId = params.id
 
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
   const [tabs, setTabs] = useState<DashboardTab[]>([])
@@ -129,9 +126,13 @@ export default function DashboardCanvasPage({ params }: DashboardCanvasPageProps
   const [widgetContentHeights, setWidgetContentHeights] = useState<Record<string, number>>({})
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    seedDefaultDashboardsIfNeeded()
+
     const loaded = getDashboardById(dashboardId)
     if (!loaded || !canAccessDashboard(loaded)) {
-      router.replace('/lifecycle/analytics')
+      router.replace('/lifecycle/analytics/list')
       return
     }
 
@@ -443,7 +444,9 @@ export default function DashboardCanvasPage({ params }: DashboardCanvasPageProps
     showToast({ variant: 'success', message: 'Widget removed' })
   }
 
-  if (isDashboardLoading || !dashboard) return null
+  if (isDashboardLoading || !dashboard) {
+    return <AuthChecking />
+  }
 
   return (
     <div className="flex h-full min-h-[calc(100vh-2.5rem)]">
@@ -453,8 +456,8 @@ export default function DashboardCanvasPage({ params }: DashboardCanvasPageProps
             <div className="flex min-w-0 items-center gap-2">
               <button
                 type="button"
-                className="text-xl text-gray-500 hover:text-gray-700"
-                onClick={() => router.push('/lifecycle/analytics')}
+                className="cursor-pointer text-xl text-gray-400 transition-colors hover:text-gray-600"
+                onClick={() => router.push('/lifecycle/analytics/list')}
                 aria-label="Back to dashboards"
               >
                 ←

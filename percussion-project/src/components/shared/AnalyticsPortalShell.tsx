@@ -11,7 +11,7 @@ const SIDEBAR_STORAGE_KEY = 'pp_sidebar_expanded'
 const SIDEBAR_SHADOW =
   '2px 0px 0px rgba(27,51,128,0.04), 4px 0px 16px rgba(27,51,128,0.04)'
 
-const DASHBOARDS_PATH = '/lifecycle/analytics'
+const DASHBOARDS_PATH = '/lifecycle/analytics/list'
 const SURVEY_COMPARISON_PATH = '/lifecycle/analytics/survey-comparison'
 const BENCHMARKING_PATH = '/lifecycle/analytics/benchmarking'
 const PPT_TEMPLATES_PATH = '/lifecycle/analytics/settings'
@@ -40,6 +40,7 @@ type NavItem = {
 }
 
 const RESERVED_ANALYTICS_SEGMENTS = new Set([
+  'list',
   'survey-comparison',
   'benchmarking',
   'settings',
@@ -48,9 +49,9 @@ const RESERVED_ANALYTICS_SEGMENTS = new Set([
 ])
 
 function isDashboardsActive(pathname: string): boolean {
-  if (pathname === DASHBOARDS_PATH) return true
-  if (!pathname.startsWith(`${DASHBOARDS_PATH}/`)) return false
-  const segment = pathname.slice(`${DASHBOARDS_PATH}/`.length).split('/')[0]
+  if (pathname === '/lifecycle/analytics' || pathname === '/lifecycle/analytics/list') return true
+  if (!pathname.startsWith('/lifecycle/analytics/')) return false
+  const segment = pathname.slice('/lifecycle/analytics/'.length).split('/')[0]
   return Boolean(segment) && !RESERVED_ANALYTICS_SEGMENTS.has(segment)
 }
 
@@ -383,6 +384,7 @@ export function AnalyticsPortalShell({ children }: { children: React.ReactNode }
   const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
     const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY)
     setIsExpanded(stored === 'true')
     setIsHydrated(true)
@@ -391,7 +393,9 @@ export function AnalyticsPortalShell({ children }: { children: React.ReactNode }
   const toggleSidebar = useCallback(() => {
     setIsExpanded((current) => {
       const next = !current
-      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next))
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next))
+      }
       return next
     })
   }, [])

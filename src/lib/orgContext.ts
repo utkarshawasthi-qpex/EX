@@ -9,6 +9,7 @@ type LegacyOrgContext = {
   text?: string
   files?: Array<{ name: string; uploadedAt: string; category?: OrgContextCategory }>
   notes?: OrgContextNote[]
+  kpis?: import('@/types').OrgContextKPI[]
 }
 
 function isFullOrgContext(parsed: LegacyOrgContext | OrgContext): parsed is OrgContext {
@@ -24,7 +25,10 @@ function isFullOrgContext(parsed: LegacyOrgContext | OrgContext): parsed is OrgC
 
 function normalizeLegacyContext(parsed: LegacyOrgContext | OrgContext): OrgContext {
   if (isFullOrgContext(parsed)) {
-    return parsed
+    return {
+      ...parsed,
+      kpis: parsed.kpis ?? mockOrgContext.kpis,
+    }
   }
 
   const files: OrgContextFile[] = (parsed.files ?? mockOrgContext.files).map((file, index) => {
@@ -55,7 +59,7 @@ function normalizeLegacyContext(parsed: LegacyOrgContext | OrgContext): OrgConte
         ]
       : mockOrgContext.notes)
 
-  return { files, notes }
+  return { files, notes, kpis: parsed.kpis ?? mockOrgContext.kpis }
 }
 
 export function getOrgContextVersion(): string {
@@ -95,6 +99,7 @@ export function saveOrgContext(data: OrgContext): void {
     JSON.stringify({
       files: data.files,
       notes: data.notes,
+      kpis: data.kpis ?? [],
       savedAt: new Date().toISOString(),
     }),
   )

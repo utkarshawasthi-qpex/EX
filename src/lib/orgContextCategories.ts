@@ -36,7 +36,28 @@ export const ORG_CONTEXT_CATEGORIES: {
     badgeClass: 'bg-gray-100 text-gray-700',
     textClass: 'text-gray-700',
   },
+  {
+    id: 'kpi',
+    label: 'KPI',
+    badgeClass: 'bg-purple-100 text-purple-700',
+    textClass: 'text-purple-700',
+  },
 ]
+
+export const ORG_CONTEXT_TAG_TOOLTIPS: Record<OrgContextCategory, string> = {
+  policy:
+    'A formal rule or constraint the AI must never recommend violating. Treated as a hard boundary.',
+  initiative:
+    'An active programme your organisation is running. AI will recommend actions that support and accelerate it.',
+  to_do:
+    'A priority action your org is committed to. AI recommendations will align with and build on these.',
+  not_to_do:
+    'An action the AI must never suggest, regardless of what the data shows. A hard block on recommendations.',
+  guideline:
+    'A soft preference that shapes tone and approach but is not a hard constraint. AI treats these as strong suggestions.',
+  kpi:
+    'A target metric with a current value and deadline. AI links recommendations to closing the gap.',
+}
 
 export function getCategoryMeta(category: OrgContextCategory) {
   return (
@@ -55,6 +76,7 @@ export function countContextByCategory(context: OrgContext): Record<OrgContextCa
     to_do: 0,
     not_to_do: 0,
     guideline: 0,
+    kpi: 0,
   }
 
   for (const file of context.files) {
@@ -63,6 +85,7 @@ export function countContextByCategory(context: OrgContext): Record<OrgContextCa
   for (const note of context.notes) {
     counts[note.category] += 1
   }
+  counts.kpi += context.kpis?.length ?? 0
 
   return counts
 }
@@ -75,6 +98,15 @@ export function formatOrgContextForPrompt(context: OrgContext): string {
   }
   for (const note of context.notes) {
     parts.push(`[${getCategoryLabel(note.category)}] ${note.text}`)
+  }
+
+  if (context.kpis?.length) {
+    parts.push('KPIs to address:')
+    for (const kpi of context.kpis) {
+      parts.push(
+        `- ${kpi.metric}: currently ${kpi.currentValue}, target ${kpi.targetValue} by ${kpi.deadline}`,
+      )
+    }
   }
 
   return parts.join('\n')

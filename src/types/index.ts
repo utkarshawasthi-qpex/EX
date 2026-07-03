@@ -417,18 +417,41 @@ export type ManagerSummaryCache = {
   dataFilters: string[]
 }
 
+export type SummaryPriority = 1 | 2 | 3 | 4
+
 export type SummaryAction = {
+  id: string
   action: string
   timeframe: '30 days' | '60 days' | '90 days'
   owner: 'Manager' | 'HR' | 'Leadership'
-  priority: 1 | 2 | 3 | 4
-  context?: string
+  priority: SummaryPriority
+  context: string
+}
+
+export type SummaryVersion = {
+  versionId: string
+  summary: string
+  generatedAt: string
+}
+
+export type ActionVersion = {
+  versionId: string
+  action: string
+  timeframe: '30 days' | '60 days' | '90 days'
+  owner: 'Manager' | 'HR' | 'Leadership'
+  priority: SummaryPriority
+  context: string
+  generatedAt: string
 }
 
 export type SummaryContent = {
-  summary: string
-  actions: SummaryAction[]
-  generatedAt: string
+  activeSummaryVersionId: string
+  activeActionVersionIds: Record<SummaryPriority, string>
+  summaryVersions: SummaryVersion[]
+  actionVersions: Record<SummaryPriority, ActionVersion[]>
+  summaryFeedback: 'up' | 'down' | null
+  summaryFeedbackReason: string | null
+  actionFeedback: Record<SummaryPriority, 'up' | 'down' | null>
   generatedBy: ID
   dashboardDataSnapshot: string
 }
@@ -439,6 +462,15 @@ export type OrgContextCategory =
   | 'to_do'
   | 'not_to_do'
   | 'guideline'
+  | 'kpi'
+
+export type OrgContextKPI = {
+  id: ID
+  metric: string
+  currentValue: string
+  targetValue: string
+  deadline: string
+}
 
 export type OrgContextFile = {
   id: ID
@@ -459,6 +491,7 @@ export type OrgContextNote = {
 export type OrgContext = {
   files: OrgContextFile[]
   notes: OrgContextNote[]
+  kpis: OrgContextKPI[]
 }
 
 export type LogoAlignment = 'left' | 'center' | 'right'

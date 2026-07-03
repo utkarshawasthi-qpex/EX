@@ -9,13 +9,19 @@ import { PageContent } from '@/components/shared/PageContent'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { PageShell } from '@/components/shared/PageShell'
 import {
+  ORG_CONTEXT_CATEGORIES,
+  ORG_CONTEXT_TAG_TOOLTIPS,
   countContextByCategory,
   getCategoryMeta,
-  ORG_CONTEXT_CATEGORIES,
 } from '@/lib/orgContextCategories'
 import { getOrgContext, incrementOrgContextVersion, saveOrgContext } from '@/lib/orgContext'
 import { isAdminContext } from '@/lib/userContext'
-import type { OrgContextCategory, OrgContextFile, OrgContextNote } from '@/types'
+import type { OrgContextCategory, OrgContextFile, OrgContextKPI, OrgContextNote } from '@/types'
+
+const WuTooltip = dynamic(
+  () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuTooltip })),
+  { ssr: false },
+)
 
 const WuTextarea = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuTextarea })),
@@ -35,6 +41,25 @@ const MOCK_UPLOAD_NAMES = [
   { name: 'Manager Playbook.docx', sizeLabel: '412 KB', extension: 'DOCX' },
   { name: 'Culture Principles.txt', sizeLabel: '18 KB', extension: 'TXT' },
 ]
+
+function TagTooltip({ category }: { category: OrgContextCategory }) {
+  return (
+    <WuTooltip
+      content={
+        <span className="block max-w-[220px] text-xs leading-relaxed">
+          {ORG_CONTEXT_TAG_TOOLTIPS[category]}
+        </span>
+      }
+    >
+      <span
+        className="cursor-help text-xs text-gray-400"
+        aria-label={`About ${getCategoryMeta(category).label}`}
+      >
+        ⓘ
+      </span>
+    </WuTooltip>
+  )
+}
 
 function CategoryPills({
   label,
@@ -61,7 +86,10 @@ function CategoryPills({
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
-            {category.label}
+            <span className="inline-flex items-center gap-1">
+              {category.label}
+              <TagTooltip category={category.id} />
+            </span>
           </button>
         )
       })}
@@ -72,8 +100,9 @@ function CategoryPills({
 function CategoryBadge({ category }: { category: OrgContextCategory }) {
   const meta = getCategoryMeta(category)
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.badgeClass}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${meta.badgeClass}`}>
       {meta.label}
+      <TagTooltip category={category} />
     </span>
   )
 }
@@ -84,14 +113,15 @@ export default function OrganizationContextPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<OrgContextFile[]>(mockOrgContext.files)
   const [notes, setNotes] = useState<OrgContextNote[]>(mockOrgContext.notes)
+  const [kpis, setKpis] = useState<OrgContextKPI[]>(mockOrgContext.kpis)
   const [uploadCategory, setUploadCategory] = useState<OrgContextCategory>('policy')
   const [noteCategory, setNoteCategory] = useState<OrgContextCategory>('policy')
   const [noteDraft, setNoteDraft] = useState('')
   const [isDragOver, setIsDragOver] = useState(false)
 
   const categoryCounts = useMemo(
-    () => countContextByCategory({ files, notes }),
-    [files, notes],
+    () => countContextByCategory({ files, notes, kpis }),
+    [files, notes, kpis],
   )
 
   const overviewCategories = useMemo(
@@ -100,8 +130,13 @@ export default function OrganizationContextPage() {
   )
 
   const persistContext = useCallback(
-    (nextFiles: OrgContextFile[], nextNotes: OrgContextNote[], toastMessage?: string) => {
-      saveOrgContext({ files: nextFiles, notes: nextNotes })
+    (
+      nextFiles: OrgContextFile[],
+      nextNotes: OrgContextNote[],
+      nextKpis: OrgContextKPI[],
+      toastMessage?: string,
+    ) => {
+      saveOrgContext({ files: nextFiles, notes: nextNotes, kpis: nextKpis })
       incrementOrgContextVersion()
       if (toastMessage) {
         showToast({ variant: 'success', message: toastMessage })
@@ -120,6 +155,7 @@ export default function OrganizationContextPage() {
     const stored = getOrgContext()
     setFiles(stored.files)
     setNotes(stored.notes)
+    setKpis(stored.kpis ?? [])
   }, [])
 
   if (!isAdminContext()) {
@@ -138,13 +174,13 @@ export default function OrganizationContextPage() {
     }
     const nextFiles = [...files, newFile]
     setFiles(nextFiles)
-    persistContext(nextFiles, notes, `${template.name} added to context`)
+    persistContext(nextFiles, notes, kpis, `${template.name} added to context`)
   }
 
   function handleDeleteFile(fileId: string) {
     const nextFiles = files.filter((file) => file.id !== fileId)
     setFiles(nextFiles)
-    persistContext(nextFiles, notes)
+    persistContext(nextFiles, notes, kpis)
   }
 
   function handleAddNote() {
@@ -160,13 +196,39 @@ export default function OrganizationContextPage() {
     const nextNotes = [...notes, newNote]
     setNotes(nextNotes)
     setNoteDraft('')
-    persistContext(files, nextNotes, 'Note added to context')
+    persistContext(files, nextNotes, kpis, 'Note added to context')
   }
 
   function handleDeleteNote(noteId: string) {
     const nextNotes = notes.filter((note) => note.id !== noteId)
     setNotes(nextNotes)
-    persistContext(files, nextNotes)
+    persistContext(files, nextNotes, kpis)
+  }
+
+  function handleAddKpi() {
+    if (kpis.length >= 10) return
+    const newKpi: OrgContextKPI = {
+      id: `kpi_${Date.now()}`,
+      metric: '',
+      currentValue: '',
+      targetValue: '',
+      deadline: '',
+    }
+    const nextKpis = [...kpis, newKpi]
+    setKpis(nextKpis)
+    persistContext(files, notes, nextKpis)
+  }
+
+  function handleUpdateKpi(id: string, field: keyof OrgContextKPI, value: string) {
+    const nextKpis = kpis.map((kpi) => (kpi.id === id ? { ...kpi, [field]: value } : kpi))
+    setKpis(nextKpis)
+    persistContext(files, notes, nextKpis)
+  }
+
+  function handleDeleteKpi(id: string) {
+    const nextKpis = kpis.filter((kpi) => kpi.id !== id)
+    setKpis(nextKpis)
+    persistContext(files, notes, nextKpis)
   }
 
   function handleNoteKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -275,6 +337,74 @@ export default function OrganizationContextPage() {
                 </ul>
               </div>
             )}
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-5">
+            <div className="mb-4">
+              <WuHeading size="md" className="text-gray-800">
+                KPIs
+              </WuHeading>
+              <WuText size="sm" as="p" className="mt-0.5 text-gray-500">
+                Configure the metrics your organisation is targeting. AI recommendations will
+                prioritise actions that close these gaps.
+              </WuText>
+            </div>
+
+            <div className="space-y-3">
+              {kpis.map((kpi) => (
+                <div key={kpi.id} className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={kpi.metric}
+                    placeholder="e.g. eNPS, Favorability %"
+                    onChange={(event) => handleUpdateKpi(kpi.id, 'metric', event.target.value)}
+                    className="min-w-[140px] flex-1 rounded border border-gray-200 px-2 py-1.5 text-sm"
+                  />
+                  <input
+                    type="text"
+                    value={kpi.currentValue}
+                    placeholder="e.g. -12"
+                    onChange={(event) =>
+                      handleUpdateKpi(kpi.id, 'currentValue', event.target.value)
+                    }
+                    className="w-24 rounded border border-gray-200 px-2 py-1.5 text-sm"
+                  />
+                  <input
+                    type="text"
+                    value={kpi.targetValue}
+                    placeholder="e.g. +20"
+                    onChange={(event) =>
+                      handleUpdateKpi(kpi.id, 'targetValue', event.target.value)
+                    }
+                    className="w-24 rounded border border-gray-200 px-2 py-1.5 text-sm"
+                  />
+                  <input
+                    type="text"
+                    value={kpi.deadline}
+                    placeholder="e.g. Q4 2026"
+                    onChange={(event) => handleUpdateKpi(kpi.id, 'deadline', event.target.value)}
+                    className="w-28 rounded border border-gray-200 px-2 py-1.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    className="text-gray-400 hover:text-gray-600"
+                    onClick={() => handleDeleteKpi(kpi.id)}
+                    aria-label="Remove KPI"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              className="mt-4 rounded-lg border border-blue-200 px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={handleAddKpi}
+              disabled={kpis.length >= 10}
+            >
+              + Add KPI
+            </button>
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-5">

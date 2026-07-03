@@ -1,20 +1,23 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { format } from 'date-fns'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CreateActionPlanModal } from '@/components/modules/analytics/CreateActionPlanModal'
 import { useDashboardWidgetContext } from '@/components/modules/analytics/DashboardWidgetContext'
-import { useReportWidgetHeight } from '@/components/modules/analytics/useReportWidgetHeight'
 import { SummarySettingsModal } from '@/components/modules/analytics/SummarySettingsModal'
+import { SummaryWidgetSections } from '@/components/modules/analytics/SummaryWidgetSections'
+import { useReportWidgetHeight } from '@/components/modules/analytics/useReportWidgetHeight'
 import { WidgetKebabMenu } from '@/components/modules/analytics/widgets/WidgetKebabMenu'
 import { widgetSurfaceClassName } from '@/components/modules/analytics/widgets/WidgetCardShell'
 import { mockScorecardData } from '@/data/mock/analyticsData'
-import { generateDashboardSummary } from '@/lib/buildSummaryPrompt'
+import {
+  generateDashboardSummary,
+  regenerateSingleAction,
+  regenerateSummaryParagraph,
+} from '@/lib/buildSummaryPrompt'
 import { normalizeSummaryAdminConfig } from '@/lib/normalizeSummaryConfig'
 import {
   clearCachedCompanySummary,
-  clearCachedManagerSummary,
   getCachedCompanySummary,
   getCachedManagerSummary,
   normalizeSummaryContent,
@@ -29,13 +32,10 @@ import type {
   ManagerSummaryCache,
   SummaryAction,
   SummaryContent,
+  SummaryPriority,
   ViewerCapabilities,
 } from '@/types'
 
-const WuButton = dynamic(
-  () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuButton })),
-  { ssr: false },
-)
 const WuHeading = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuHeading })),
   { ssr: false },
@@ -67,148 +67,6 @@ function GeneratingState({ message = 'Generating summary...' }: { message?: stri
       <WuText size="sm" as="p" className="mt-4 text-center text-gray-400">
         {message}
       </WuText>
-    </div>
-  )
-}
-
-function SummarySections({
-  content,
-  onCreateActionPlan,
-  canSeeActions = true,
-  canCreateActionPlan = true,
-  showRestrictedNote = false,
-  isCreator = false,
-  onRefresh,
-}: {
-  content: SummaryContent
-  onCreateActionPlan: (action: SummaryAction) => void
-  canSeeActions?: boolean
-  canCreateActionPlan?: boolean
-  showRestrictedNote?: boolean
-  isCreator?: boolean
-  onRefresh?: () => void
-}) {
-  const sortedActions = [...content.actions].sort((a, b) => a.priority - b.priority)
-
-  return (
-    <div className="flex h-full flex-col overflow-hidden px-4 py-3">
-      <WuText size="sm" as="p" className="mb-3 flex-shrink-0 leading-relaxed text-gray-700">
-        {content.summary}
-      </WuText>
-
-      <div className="mb-3 flex-shrink-0 border-t border-gray-100" />
-
-      {canSeeActions && (
-        <>
-          <div className="mb-2 flex flex-shrink-0 items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-3.5 w-1 rounded-full bg-green-500" />
-              <WuText size="sm" as="span" className="font-semibold uppercase tracking-wide text-gray-400">
-                Recommended actions
-              </WuText>
-              <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500">
-                {sortedActions.length}
-              </span>
-            </div>
-            <WuText size="sm" as="span" className="text-gray-400">
-              Sorted by priority
-            </WuText>
-          </div>
-
-          <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
-            {sortedActions.map((action, index) => (
-              <div
-                key={`action-${index}`}
-                className="flex items-start justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
-              >
-                <div className="flex min-w-0 flex-1 items-start gap-2">
-                  <span
-                    className={cn(
-                      'mt-0.5 flex-shrink-0 rounded px-1.5 py-0.5 text-xs font-bold',
-                      action.priority === 1
-                        ? 'bg-blue-600 text-white'
-                        : 'border border-gray-300 text-gray-500',
-                    )}
-                  >
-                    P{action.priority}
-                  </span>
-
-                  <div className="min-w-0 flex-1">
-                    <WuText size="sm" as="p" className="font-medium leading-snug text-gray-800">
-                      {action.action}
-                    </WuText>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <WuText size="sm" as="span" className="text-gray-400">
-                        {action.timeframe}
-                      </WuText>
-                      <span className="text-xs text-gray-200">·</span>
-                      <span className="flex items-center gap-1">
-                        <span
-                          className={cn(
-                            'size-1.5 rounded-full',
-                            action.owner === 'HR'
-                              ? 'bg-amber-400'
-                              : action.owner === 'Leadership'
-                                ? 'bg-purple-400'
-                                : 'bg-blue-400',
-                          )}
-                        />
-                        <WuText size="sm" as="span" className="text-gray-400">
-                          {action.owner}
-                        </WuText>
-                      </span>
-                      {action.context && (
-                        <>
-                          <span className="text-xs text-gray-200">·</span>
-                          <WuText size="sm" as="span" className="italic text-gray-400">
-                            {action.context}
-                          </WuText>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {canCreateActionPlan && (
-                  <button
-                    type="button"
-                    onClick={() => onCreateActionPlan(action)}
-                    className={cn(
-                      'mt-0.5 flex-shrink-0 text-xs font-medium',
-                      action.priority === 1
-                        ? 'rounded bg-blue-600 px-2.5 py-1 text-white transition-colors hover:bg-blue-700'
-                        : 'text-blue-600 hover:underline',
-                    )}
-                  >
-                    Create action plan →
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {showRestrictedNote && (
-        <WuText size="sm" as="p" className="mt-3 text-center text-gray-400">
-          Recommended actions are visible to HR Admins only
-        </WuText>
-      )}
-
-      <div className="mt-2 flex flex-shrink-0 items-center justify-between border-t border-gray-50 pt-2">
-        <WuText size="sm" as="span" className="text-gray-400">
-          Generated {format(new Date(content.generatedAt), 'MMM d, yyyy')}
-        </WuText>
-        {isCreator && onRefresh && (
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="text-xs text-gray-400 transition-colors hover:text-blue-600"
-          >
-            ↺ Refresh
-          </button>
-        )}
-      </div>
     </div>
   )
 }
@@ -247,41 +105,34 @@ function SummaryWidgetInner({
   const config = normalizeSummaryAdminConfig(widget.summaryConfig!)
 
   const isAdmin = capabilities.isOwner
+  const currentUserIsManager = currentUser.role === 'manager'
+  const managerSummariesEnabled = Boolean(config?.allowEmployeeSummaries)
+
   const canSeeCompanySummaryTab = canSeeCompanySummary(
     config.visibility,
     currentUser,
     config.createdBy,
   )
 
-  const viewerDataDiffersFromOrg =
+  const myTeamDataDiffers =
     activeFilters.length > 0 || currentUser.isImpersonating === true
 
   const showMyTeamTab =
-    Boolean(config?.allowEmployeeSummaries) && !isAdmin && viewerDataDiffersFromOrg
+    managerSummariesEnabled && !isAdmin && currentUserIsManager && myTeamDataDiffers
 
   const showCompanyTab = canSeeCompanySummaryTab
   const showTabRow = showCompanyTab && showMyTeamTab
 
-  const [activeTab, setActiveTab] = useState<'company' | 'team'>(() =>
-    showMyTeamTab ? 'team' : 'company',
-  )
+  const defaultTab: 'company' | 'team' =
+    managerSummariesEnabled && currentUserIsManager && myTeamDataDiffers ? 'team' : 'company'
 
-  const canSeeActions = (() => {
-    if (activeTab === 'company') {
-      return isAdmin
-    }
-
-    if (activeTab === 'team') {
-      return true
-    }
-
-    return false
-  })()
-
-  const canCreateActionPlan = canSeeActions
+  const [activeTab, setActiveTab] = useState<'company' | 'team'>(defaultTab)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
+  const [showSummaryRegenerateConfirm, setShowSummaryRegenerateConfirm] = useState(false)
+  const [regeneratingSummary, setRegeneratingSummary] = useState(false)
+  const [regeneratingActionPriority, setRegeneratingActionPriority] =
+    useState<SummaryPriority | null>(null)
   const [actionPlanOpen, setActionPlanOpen] = useState(false)
   const [actionPlanPrefill, setActionPlanPrefill] = useState({
     title: '',
@@ -295,6 +146,13 @@ function SummaryWidgetInner({
   )
   const [isGeneratingTeam, setIsGeneratingTeam] = useState(false)
   const [teamError, setTeamError] = useState<'api_error' | null>(null)
+
+  const canSeeActions = activeTab === 'company' ? isAdmin : activeTab === 'team'
+  const canCreateActionPlan = canSeeActions
+  const canRegenerate =
+    (activeTab === 'company' && isAdmin && Boolean(config.companyContent)) ||
+    (activeTab === 'team' && Boolean(myTeamCache) && myTeamCache?.userId === currentUser.id)
+  const canShowFeedback = canRegenerate
 
   const dataWidgets = useMemo(
     () => dashboardWidgets.filter((item) => item.type !== 'summary' && item.type !== 'notes'),
@@ -412,10 +270,103 @@ function SummaryWidgetInner({
     }
   }, [activeFilters, config, currentUser.id, dataWidgets, widget.id])
 
-  function handleRegenerateCompany() {
+  function handleCompanyContentChange(content: SummaryContent) {
+    if (!config) return
+    saveCachedCompanySummary(widget.id, content)
+    onUpdate({
+      ...widget,
+      summaryConfig: {
+        ...config,
+        companyContent: content,
+      },
+    })
+  }
+
+  function handleTeamContentChange(content: SummaryContent) {
+    if (!myTeamCache) return
+    const updated: ManagerSummaryCache = {
+      ...myTeamCache,
+      content,
+      generatedAt: new Date().toISOString(),
+    }
+    saveCachedManagerSummary(widget.id, updated)
+    setMyTeamCache(updated)
+  }
+
+  async function handleRegenerateSummaryParagraph() {
+    if (!config?.companyContent) return
+    setShowSummaryRegenerateConfirm(false)
+    setRegeneratingSummary(true)
+    try {
+      const normalized = normalizeSummaryContent(config.companyContent)
+      const updated = await regenerateSummaryParagraph(
+        normalized,
+        dataWidgets,
+        activeFilters,
+        'company',
+      )
+      handleCompanyContentChange(updated)
+    } finally {
+      setRegeneratingSummary(false)
+    }
+  }
+
+  async function handleRegenerateTeamSummaryParagraph() {
+    if (!myTeamCache) return
+    setShowSummaryRegenerateConfirm(false)
+    setRegeneratingSummary(true)
+    try {
+      const normalized = normalizeSummaryContent(myTeamCache.content)
+      const updated = await regenerateSummaryParagraph(
+        normalized,
+        dataWidgets,
+        activeFilters,
+        'team',
+      )
+      handleTeamContentChange(updated)
+    } finally {
+      setRegeneratingSummary(false)
+    }
+  }
+
+  async function handleRegenerateAction(priority: SummaryPriority) {
+    if (activeTab === 'company' && config?.companyContent) {
+      setRegeneratingActionPriority(priority)
+      try {
+        const normalized = normalizeSummaryContent(config.companyContent)
+        const updated = await regenerateSingleAction(
+          normalized,
+          priority,
+          dataWidgets,
+          activeFilters,
+        )
+        handleCompanyContentChange(updated)
+      } finally {
+        setRegeneratingActionPriority(null)
+      }
+      return
+    }
+
+    if (activeTab === 'team' && myTeamCache) {
+      setRegeneratingActionPriority(priority)
+      try {
+        const normalized = normalizeSummaryContent(myTeamCache.content)
+        const updated = await regenerateSingleAction(
+          normalized,
+          priority,
+          dataWidgets,
+          activeFilters,
+        )
+        handleTeamContentChange(updated)
+      } finally {
+        setRegeneratingActionPriority(null)
+      }
+    }
+  }
+
+  function handleRegenerateCompanyFull() {
     if (!config) return
     clearCachedCompanySummary(widget.id)
-    setShowRegenerateConfirm(false)
     onUpdate({
       ...widget,
       summaryConfig: {
@@ -437,21 +388,14 @@ function SummaryWidgetInner({
     setActionPlanOpen(true)
   }
 
-  function handleClearTeamCache() {
-    clearCachedManagerSummary(widget.id, currentUser.id)
-    setMyTeamCache(null)
-    setTeamError(null)
-  }
-
   const companyContent = config.companyContent
     ? normalizeSummaryContent(config.companyContent)
     : undefined
   const companyGenerating = config.isGenerating
   const companyError = config.generationError
 
-  const showRefresh =
-    (activeTab === 'company' && isAdmin && Boolean(companyContent)) ||
-    (activeTab === 'team' && myTeamCache?.userId === currentUser.id && Boolean(myTeamCache))
+  const showCompanyWideBadge =
+    !isAdmin && activeTab === 'company' && Boolean(companyContent)
 
   useReportWidgetHeight(
     reportWidgetHeight,
@@ -465,6 +409,8 @@ function SummaryWidgetInner({
       isGeneratingTeam,
       teamError,
       showTabRow,
+      regeneratingSummary,
+      regeneratingActionPriority,
     ],
   )
 
@@ -500,7 +446,7 @@ function SummaryWidgetInner({
               <button
                 type="button"
                 className="rounded border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-                onClick={handleRegenerateCompany}
+                onClick={handleRegenerateCompanyFull}
               >
                 Try again
               </button>
@@ -513,25 +459,28 @@ function SummaryWidgetInner({
     if (!companyContent) return null
 
     return (
-      <>
-        <SummarySections
-          content={companyContent}
-          onCreateActionPlan={handleCreateActionPlan}
-          canSeeActions={canSeeActions}
-          canCreateActionPlan={canCreateActionPlan}
-          showRestrictedNote={!canSeeActions && !isAdmin}
-          isCreator={isAdmin}
-          onRefresh={handleRegenerateCompany}
-        />
-      </>
+      <SummaryWidgetSections
+        content={companyContent}
+        onContentChange={handleCompanyContentChange}
+        onCreateActionPlan={handleCreateActionPlan}
+        canSeeActions={canSeeActions}
+        canCreateActionPlan={canCreateActionPlan}
+        showRestrictedNote={!canSeeActions && !isAdmin}
+        canShowFeedback={canShowFeedback}
+        canRegenerate={canRegenerate}
+        onRegenerateSummary={() => void handleRegenerateSummaryParagraph()}
+        onRegenerateAction={(priority) => void handleRegenerateAction(priority)}
+        regeneratingSummary={regeneratingSummary}
+        regeneratingActionPriority={regeneratingActionPriority}
+        showSummaryRegenerateConfirm={showSummaryRegenerateConfirm}
+        onToggleSummaryRegenerateConfirm={() =>
+          setShowSummaryRegenerateConfirm((open) => !open)
+        }
+      />
     )
   }
 
   function renderTeamTab() {
-    return renderTeamContent()
-  }
-
-  function renderTeamContent() {
     if (isGeneratingTeam) {
       return <GeneratingState message="Generating summary..." />
     }
@@ -564,9 +513,9 @@ function SummaryWidgetInner({
               ✦
             </span>
           </div>
-          <p className="mb-1 text-sm font-medium text-gray-700">Generate AI Summary</p>
+          <p className="mb-1 text-sm font-medium text-gray-700">Generate my team summary</p>
           <p className="mx-auto mb-4 max-w-xs text-xs text-gray-400">
-            Summarises all data on this dashboard using your organisation context.
+            Based on your filtered view of this dashboard
           </p>
           {activeFilters.length > 0 && (
             <div className="mb-4 flex flex-wrap justify-center gap-1">
@@ -585,23 +534,30 @@ function SummaryWidgetInner({
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
             onClick={() => void generateTeamSummary()}
           >
-            Generate Summary
+            Generate my team summary
           </button>
         </div>
       )
     }
 
     return (
-      <>
-        <SummarySections
-          content={normalizeSummaryContent(myTeamCache.content)}
-          onCreateActionPlan={handleCreateActionPlan}
-          canSeeActions
-          canCreateActionPlan
-          isCreator={myTeamCache.userId === currentUser.id}
-          onRefresh={handleClearTeamCache}
-        />
-      </>
+      <SummaryWidgetSections
+        content={normalizeSummaryContent(myTeamCache.content)}
+        onContentChange={handleTeamContentChange}
+        onCreateActionPlan={handleCreateActionPlan}
+        canSeeActions
+        canCreateActionPlan
+        canShowFeedback={canShowFeedback}
+        canRegenerate={canRegenerate}
+        onRegenerateSummary={() => void handleRegenerateTeamSummaryParagraph()}
+        onRegenerateAction={(priority) => void handleRegenerateAction(priority)}
+        regeneratingSummary={regeneratingSummary}
+        regeneratingActionPriority={regeneratingActionPriority}
+        showSummaryRegenerateConfirm={showSummaryRegenerateConfirm}
+        onToggleSummaryRegenerateConfirm={() =>
+          setShowSummaryRegenerateConfirm((open) => !open)
+        }
+      />
     )
   }
 
@@ -610,135 +566,103 @@ function SummaryWidgetInner({
       <div className={widgetSurfaceClassName}>
         <div ref={chromeRef} className="flex-shrink-0">
           <div className="flex items-start justify-between px-4 pt-3 pb-2">
-          <div className="flex items-start gap-2">
-            {capabilities.canEdit && (
-              <span
-                className="widget-drag-handle mt-0.5 cursor-grab text-base text-gray-300 select-none active:cursor-grabbing"
-                aria-label="Drag widget"
-              >
-                ⠿
-              </span>
-            )}
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <WuHeading size="md" className="text-gray-900">
-                  {widget.title}
-                </WuHeading>
-                <WuText
-                  size="sm"
-                  as="span"
-                  className="rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 font-medium text-blue-600"
+            <div className="flex items-start gap-2">
+              {capabilities.canEdit && (
+                <span
+                  className="widget-drag-handle mt-0.5 cursor-grab text-base text-gray-300 select-none active:cursor-grabbing"
+                  aria-label="Drag widget"
                 >
-                  AI
-                </WuText>
-                {isAdmin && config.visibility === 'private' && (
-                  <WuText size="sm" as="span" className="text-gray-400">
-                    🔒 Private
+                  ⠿
+                </span>
+              )}
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <WuHeading size="md" className="text-gray-900">
+                    {widget.title}
+                  </WuHeading>
+                  <WuText
+                    size="sm"
+                    as="span"
+                    className="rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 font-medium text-blue-600"
+                  >
+                    AI
                   </WuText>
-                )}
-                {isAdmin && config.visibility !== 'private' && (
-                  <span className="flex items-center gap-1 rounded border border-gray-200 px-1.5 py-0.5">
-                    <span className="inline-block size-1.5 rounded-full bg-blue-400" />
-                    <WuText size="sm" as="span" className="text-gray-500">
-                      Shared
+                  {showCompanyWideBadge && (
+                    <span className="ml-2 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-400">
+                      Company-wide
+                    </span>
+                  )}
+                  {isAdmin && config.visibility === 'private' && (
+                    <WuText size="sm" as="span" className="text-gray-400">
+                      🔒 Private
                     </WuText>
-                  </span>
-                )}
+                  )}
+                  {isAdmin && config.visibility !== 'private' && (
+                    <span className="flex items-center gap-1 rounded border border-gray-200 px-1.5 py-0.5">
+                      <span className="inline-block size-1.5 rounded-full bg-blue-400" />
+                      <WuText size="sm" as="span" className="text-gray-500">
+                        Shared
+                      </WuText>
+                    </span>
+                  )}
+                </div>
               </div>
+            </div>
+
+            <div className="relative flex shrink-0 items-center gap-2">
+              {isAdmin && (
+                <WidgetKebabMenu
+                  title={widget.title}
+                  canEdit
+                  onSettings={() => setSettingsOpen(true)}
+                  onEdit={onEdit}
+                  onDuplicate={onDuplicate}
+                  onDelete={onDelete}
+                  onExportPpt={onExportPpt}
+                />
+              )}
             </div>
           </div>
 
-          <div className="relative flex shrink-0 items-center gap-2">
-            {showRefresh && (
-              <>
+          {showTabRow && (
+            <div className="flex shrink-0 border-b border-gray-100 bg-gray-50">
+              {showMyTeamTab && (
                 <button
                   type="button"
-                  className="text-sm text-gray-400 transition-colors hover:text-blue-600"
-                  aria-label="Regenerate summary"
-                  title="Regenerate summary"
-                  onClick={() => {
-                    if (activeTab === 'company') {
-                      setShowRegenerateConfirm((open) => !open)
-                    } else {
-                      handleClearTeamCache()
-                    }
-                  }}
+                  className={cn(
+                    'px-4 py-2 text-sm transition-colors',
+                    activeTab === 'team'
+                      ? 'border-b-2 border-blue-600 bg-white font-medium text-blue-600'
+                      : 'text-gray-500 hover:text-gray-700',
+                  )}
+                  onClick={() => setActiveTab('team')}
                 >
-                  ↺
+                  My Team
                 </button>
-                {showRegenerateConfirm && activeTab === 'company' && (
-                  <div className="absolute top-8 right-0 z-20 w-56 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
-                    <p className="text-sm text-gray-700">
-                      Regenerate summary? This will replace the current summary.
-                    </p>
-                    <div className="mt-3 flex justify-end gap-2">
-                      <WuButton
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setShowRegenerateConfirm(false)}
-                      >
-                        Cancel
-                      </WuButton>
-                      <WuButton variant="primary" size="sm" onClick={handleRegenerateCompany}>
-                        Regenerate
-                      </WuButton>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-            {isAdmin && (
-              <WidgetKebabMenu
-                title={widget.title}
-                canEdit
-                onSettings={() => setSettingsOpen(true)}
-                onEdit={onEdit}
-                onDuplicate={onDuplicate}
-                onDelete={onDelete}
-                onExportPpt={onExportPpt}
-              />
-            )}
-          </div>
-        </div>
-
-        {showTabRow && (
-          <div className="flex shrink-0 border-b border-gray-100 bg-gray-50">
-            {showCompanyTab && (
-              <button
-                type="button"
-                className={cn(
-                  'px-4 py-2 text-sm transition-colors',
-                  activeTab === 'company'
-                    ? 'border-b-2 border-blue-600 bg-white font-medium text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700',
-                )}
-                onClick={() => setActiveTab('company')}
-              >
-                Company Overview
-              </button>
-            )}
-            {showMyTeamTab && (
-              <button
-                type="button"
-                className={cn(
-                  'px-4 py-2 text-sm transition-colors',
-                  activeTab === 'team'
-                    ? 'border-b-2 border-blue-600 bg-white font-medium text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700',
-                )}
-                onClick={() => setActiveTab('team')}
-              >
-                My Team
-              </button>
-            )}
-          </div>
-        )}
+              )}
+              {showCompanyTab && (
+                <button
+                  type="button"
+                  className={cn(
+                    'px-4 py-2 text-sm transition-colors',
+                    activeTab === 'company'
+                      ? 'border-b-2 border-blue-600 bg-white font-medium text-blue-600'
+                      : 'text-gray-500 hover:text-gray-700',
+                  )}
+                  onClick={() => setActiveTab('company')}
+                >
+                  Company Overview
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div ref={contentRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {showCompanyTab && (!showMyTeamTab || activeTab === 'company') && renderCompanyTab()}
-            {showMyTeamTab && (!showCompanyTab || activeTab === 'team') && renderTeamTab()}
+            {showMyTeamTab && activeTab === 'team' && renderTeamTab()}
+            {showCompanyTab && activeTab === 'company' && renderCompanyTab()}
+            {!showMyTeamTab && showCompanyTab && renderCompanyTab()}
           </div>
         </div>
       </div>

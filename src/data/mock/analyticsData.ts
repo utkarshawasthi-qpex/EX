@@ -33,6 +33,15 @@ export const mockOrgContext: OrgContext = {
       addedAt: '2026-06-15T11:20:00.000Z',
     },
   ],
+  kpis: [
+    {
+      id: 'kpi_1',
+      metric: 'eNPS',
+      currentValue: '-12',
+      targetValue: '+20',
+      deadline: 'Q4 2026',
+    },
+  ],
 }
 
 export const mockScorecardData = {

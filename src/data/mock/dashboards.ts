@@ -1,4 +1,43 @@
 import type { Dashboard, DashboardWidget, WidgetType } from '@/types'
+import { buildSummaryContent, normalizeActionsFromApi } from '@/lib/summaryContent'
+
+const pptDemoSummary = buildSummaryContent(
+  'Organization-wide favorability remains soft at 40%, with transparency and technology among the lowest-performing markers while eNPS continues to reflect a detractor-heavy profile compared to prior cycles. Employees appear to lack consistent visibility into organizational priorities, and survey commentary repeatedly points to friction in systems, process clarity, and follow-through after prior feedback cycles. Heatmap results show uneven performance across departments, with enablement and agility lagging collaboration improvements that emerged in the most recent quarter. Response rates remain healthy enough to treat these patterns as representative, but localized teams report sharper declines in manager communication cadence. Organization context suggests recent structural changes have outpaced leadership messaging rhythms, leaving managers without sufficient support to translate employee input into visible action plans that rebuild trust and demonstrate measurable progress.',
+  normalizeActionsFromApi([
+    {
+      action: 'Launch a leadership communication cadence explaining priorities and progress.',
+      timeframe: '30 days',
+      owner: 'Leadership',
+      context: 'Targets transparency (54)',
+    },
+    {
+      action: 'Identify the top three technology blockers and assign owners for resolution.',
+      timeframe: '60 days',
+      owner: 'HR',
+      context: 'Addresses enablement (58)',
+    },
+    {
+      action: 'Publish a dashboard action tracker tied to the lowest-scoring markers.',
+      timeframe: '60 days',
+      owner: 'Manager',
+      context: 'Tracks progress over time',
+    },
+    {
+      action: 'Re-measure transparency and enablement after action plans have been communicated.',
+      timeframe: '90 days',
+      owner: 'Leadership',
+      context: 'Validates improvement impact',
+    },
+  ]),
+  'emp_001',
+  'SCORECARD DATA: Overall favorability: 40%...',
+)
+pptDemoSummary.summaryVersions[0].generatedAt = '2026-05-20T10:30:00.000Z'
+for (const priority of [1, 2, 3, 4] as const) {
+  if (pptDemoSummary.actionVersions[priority][0]) {
+    pptDemoSummary.actionVersions[priority][0].generatedAt = '2026-05-20T10:30:00.000Z'
+  }
+}
 
 function widget(
   id: string,
@@ -103,43 +142,7 @@ export const mockDashboards: Dashboard[] = [
               allowEmployeeSummaries: true,
               createdBy: 'emp_001',
               isGenerating: false,
-              companyContent: {
-                summary:
-                  'Organization-wide favorability remains soft at 40%, with transparency and technology among the lowest-performing markers while eNPS continues to reflect a detractor-heavy profile compared to prior cycles. Employees appear to lack consistent visibility into organizational priorities, and survey commentary repeatedly points to friction in systems, process clarity, and follow-through after prior feedback cycles. Heatmap results show uneven performance across departments, with enablement and agility lagging collaboration improvements that emerged in the most recent quarter. Response rates remain healthy enough to treat these patterns as representative, but localized teams report sharper declines in manager communication cadence. Organization context suggests recent structural changes have outpaced leadership messaging rhythms, leaving managers without sufficient support to translate employee input into visible action plans that rebuild trust and demonstrate measurable progress.',
-                actions: [
-                  {
-                    action: 'Launch a leadership communication cadence explaining priorities and progress.',
-                    timeframe: '30 days',
-                    owner: 'Leadership',
-                    priority: 1,
-                    context: 'Targets transparency (54)',
-                  },
-                  {
-                    action: 'Identify the top three technology blockers and assign owners for resolution.',
-                    timeframe: '60 days',
-                    owner: 'HR',
-                    priority: 2,
-                    context: 'Addresses enablement (58)',
-                  },
-                  {
-                    action: 'Publish a dashboard action tracker tied to the lowest-scoring markers.',
-                    timeframe: '60 days',
-                    owner: 'Manager',
-                    priority: 3,
-                    context: 'Tracks progress over time',
-                  },
-                  {
-                    action: 'Re-measure transparency and enablement after action plans have been communicated.',
-                    timeframe: '90 days',
-                    owner: 'Leadership',
-                    priority: 4,
-                    context: 'Validates improvement impact',
-                  },
-                ],
-                generatedAt: '2026-05-20T10:30:00.000Z',
-                generatedBy: 'emp_001',
-                dashboardDataSnapshot: 'SCORECARD DATA: Overall favorability: 40%...',
-              },
+              companyContent: pptDemoSummary,
             },
           },
         ],

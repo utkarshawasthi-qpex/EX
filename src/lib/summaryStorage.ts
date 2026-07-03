@@ -1,60 +1,13 @@
 import { getOrgContextVersion } from '@/lib/orgContext'
-import type { ID, ManagerSummaryCache, SummaryAction, SummaryContent } from '@/types'
+import { normalizeSummaryContent } from '@/lib/summaryContent'
+import type { ID, ManagerSummaryCache, SummaryContent } from '@/types'
 
 type CompanySummaryCacheEntry = {
   content: SummaryContent
   contextVersion: string
 }
 
-type LegacySummaryContent = {
-  what?: string[]
-  why?: string[]
-  summary?: string
-  actions?: SummaryAction[]
-  generatedAt: string
-  generatedBy: ID
-  dashboardDataSnapshot: string
-}
-
-function normalizeLegacyAction(
-  action: SummaryAction,
-  index: number,
-): SummaryAction {
-  const priority = action.priority ?? ((Math.min(index + 1, 4) as 1 | 2 | 3 | 4))
-  return {
-    ...action,
-    priority,
-    context: action.context,
-  }
-}
-
-export function normalizeSummaryContent(content: LegacySummaryContent): SummaryContent {
-  if (typeof content.summary === 'string' && content.summary.trim().length > 0) {
-    return {
-      summary: content.summary,
-      actions: (content.actions ?? []).map(normalizeLegacyAction),
-      generatedAt: content.generatedAt,
-      generatedBy: content.generatedBy,
-      dashboardDataSnapshot: content.dashboardDataSnapshot,
-    }
-  }
-
-  const what = content.what ?? []
-  const why = content.why ?? []
-  const summaryParts = [...what, ...why].map((part) => part.replace(/\*\*/g, ''))
-  const summary =
-    summaryParts.length > 0
-      ? summaryParts.slice(0, 2).join(' ')
-      : 'Summary data is unavailable for this dashboard view.'
-
-  return {
-    summary,
-    actions: (content.actions ?? []).map(normalizeLegacyAction),
-    generatedAt: content.generatedAt,
-    generatedBy: content.generatedBy,
-    dashboardDataSnapshot: content.dashboardDataSnapshot,
-  }
-}
+export { normalizeSummaryContent } from '@/lib/summaryContent'
 
 export function getCompanySummaryCacheKey(widgetId: ID): string {
   return `pp_summary_${widgetId}_company`
@@ -77,7 +30,7 @@ export function getCachedCompanySummary(widgetId: ID): SummaryContent | null {
       window.localStorage.getItem(getLegacyWidgetCacheKey(widgetId))
     if (!raw) return null
 
-    const entry = JSON.parse(raw) as CompanySummaryCacheEntry | LegacySummaryContent
+    const entry = JSON.parse(raw) as CompanySummaryCacheEntry | SummaryContent
     if ('content' in entry && entry.content) {
       if ('contextVersion' in entry && entry.contextVersion !== getOrgContextVersion()) {
         return null
@@ -85,7 +38,7 @@ export function getCachedCompanySummary(widgetId: ID): SummaryContent | null {
       return normalizeSummaryContent(entry.content)
     }
 
-    if ('generatedAt' in entry && 'generatedBy' in entry) {
+    if ('generatedBy' in entry) {
       return normalizeSummaryContent(entry)
     }
 

@@ -106,6 +106,7 @@ function SummaryWidgetInner({
   const { capabilities: contextCapabilities, onExportPpt, reportWidgetHeight } =
     useDashboardWidgetContext()
   const capabilities = capabilitiesProp ?? contextCapabilities
+  const rootRef = useRef<HTMLDivElement>(null)
   const chromeRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -456,7 +457,7 @@ function SummaryWidgetInner({
 
   useReportWidgetHeight(
     reportWidgetHeight,
-    { headerRef: chromeRef, contentRef },
+    { rootRef, headerRef: chromeRef, contentRef },
     [
       activeTab,
       companyContent,
@@ -653,7 +654,7 @@ function SummaryWidgetInner({
 
   return (
     <>
-      <div className={widgetSurfaceClassName}>
+      <div ref={rootRef} className={widgetSurfaceClassName}>
         <div ref={chromeRef} className="flex-shrink-0">
           <div className="flex items-start justify-between px-4 pt-3 pb-2">
             <div className="flex items-start gap-2">
@@ -748,14 +749,12 @@ function SummaryWidgetInner({
           )}
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div ref={contentRef} className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-3">
-            {activeTab === 'team' && showMyTeamTab
-              ? renderTeamTab()
-              : showCompanyTab
-                ? renderCompanyTab()
-                : null}
-          </div>
+        <div ref={contentRef} className="shrink-0 px-4 pb-3">
+          {activeTab === 'team' && showMyTeamTab
+            ? renderTeamTab()
+            : showCompanyTab
+              ? renderCompanyTab()
+              : null}
         </div>
       </div>
 

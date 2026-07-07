@@ -81,7 +81,7 @@ export function ENPSWidget({
 
   return (
     <WidgetCardShell title="eNPS" showInfo onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="shrink-0">
       <WuText size="sm" as="p" className="mb-3 flex-shrink-0 italic text-gray-500">
         {data.question}
       </WuText>

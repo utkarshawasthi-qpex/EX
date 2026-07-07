@@ -22,7 +22,7 @@ export function TextReportWidget({
 
   return (
     <WidgetCardShell title="Text report" subtitle={surveyName} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
-      <div className="overflow-y-auto flex-1 min-h-0">
+      <div className="shrink-0">
         <div className="flex flex-col gap-4">
         {responses.map((response, index) => (
           <blockquote

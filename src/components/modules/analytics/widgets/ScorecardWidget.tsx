@@ -120,17 +120,18 @@ export function ScorecardWidget({
 }) {
   const { surveyName, markers } = mockScorecardData
   const { capabilities, onExportPpt, reportWidgetHeight } = useDashboardWidgetContext()
+  const rootRef = useRef<HTMLElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
   useReportWidgetHeight(
     reportWidgetHeight,
-    { headerRef, contentRef, extraPx: 0 },
+    { rootRef, headerRef, contentRef, extraPx: 0 },
     [surveyName, markers],
   )
 
   return (
-    <article className={widgetSurfaceClassName}>
+    <article ref={rootRef} className={widgetSurfaceClassName}>
       <div ref={headerRef} className="flex shrink-0 items-start justify-between px-4 pb-2 pt-3">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {capabilities.canEdit && (
@@ -160,8 +161,7 @@ export function ScorecardWidget({
         />
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div ref={contentRef} className="overflow-auto flex-1 min-h-0">
+      <div ref={contentRef} className="overflow-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="bg-gray-50">
@@ -229,7 +229,6 @@ export function ScorecardWidget({
               })}
             </tbody>
           </table>
-        </div>
       </div>
     </article>
   )

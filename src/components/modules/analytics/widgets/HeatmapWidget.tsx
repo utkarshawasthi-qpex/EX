@@ -56,7 +56,7 @@ export function HeatmapWidget({
         </div>
       }
     >
-      <div className="overflow-auto flex-1 min-h-0">
+      <div className="overflow-auto shrink-0">
         <table className="w-full min-w-[640px] border-collapse">
           <thead>
             <tr className="border-b border-gray-200 text-left">

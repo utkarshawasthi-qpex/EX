@@ -40,7 +40,7 @@ export function TimeTrendWidget({
 
   return (
     <WidgetCardShell title="Time trend" subtitle={yLabel} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="h-[280px] w-full shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />

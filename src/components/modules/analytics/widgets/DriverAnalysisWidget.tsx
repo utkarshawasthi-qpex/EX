@@ -69,7 +69,7 @@ export function DriverAnalysisWidget({
 
   return (
     <WidgetCardShell title="Driver analysis" subtitle={surveyName} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
-      <div className="relative flex-1 min-h-0 overflow-hidden">
+      <div className="h-[320px] w-full shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />

@@ -17,7 +17,7 @@ export function SurveyComparisonWidget({
 
   return (
     <WidgetCardShell title="Survey comparison" flushContent onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
-      <div className="overflow-auto flex-1 min-h-0">
+      <div className="overflow-auto shrink-0">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-left text-xs text-gray-500">

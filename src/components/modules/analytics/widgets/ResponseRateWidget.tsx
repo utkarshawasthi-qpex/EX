@@ -45,7 +45,7 @@ export function ResponseRateWidget({
 
   return (
     <WidgetCardShell title="Response rate" subtitle={surveyName} flushContent onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
-      <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
+      <div className="shrink-0 px-4 pb-4">
       <span className="mb-4 inline-flex flex-shrink-0 rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700">
         Location
       </span>
@@ -69,7 +69,7 @@ export function ResponseRateWidget({
         </div>
       </div>
 
-      <div className="overflow-auto flex-1 min-h-0">
+      <div className="overflow-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-left text-xs text-gray-500">

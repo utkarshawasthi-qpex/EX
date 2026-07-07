@@ -36,7 +36,7 @@ export function NotesWidget({
 
   return (
     <WidgetCardShell title="Notes" onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
-      <div className="overflow-y-auto flex-1 min-h-0">
+      <div className="shrink-0">
         <div className="flex flex-col gap-3">
         <WuTextarea
           value={draft}

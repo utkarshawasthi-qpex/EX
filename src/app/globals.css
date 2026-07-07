@@ -33,7 +33,9 @@ body {
 }
 
 .widget-grid-item > * {
-  height: 100%;
+  width: 100%;
+  height: auto;
+  align-self: flex-start;
   overflow: hidden;
   display: flex;
   flex-direction: column;

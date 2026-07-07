@@ -17,7 +17,7 @@ const WuText = dynamic(
 )
 
 export const widgetSurfaceClassName =
-  'relative flex h-full flex-col overflow-hidden rounded-lg bg-white border border-gray-200'
+  'relative flex h-auto w-full flex-col overflow-hidden rounded-lg bg-white border border-gray-200'
 
 type WidgetCardShellProps = {
   title: string
@@ -45,12 +45,14 @@ export function WidgetCardShell({
   children,
 }: WidgetCardShellProps) {
   const { capabilities, onExportPpt, reportWidgetHeight } = useDashboardWidgetContext()
+  const rootRef = useRef<HTMLElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
   useReportWidgetHeight(
     reportWidgetHeight,
     {
+      rootRef,
       headerRef,
       contentRef,
       extraPx: flushContent ? 0 : 16,
@@ -59,7 +61,7 @@ export function WidgetCardShell({
   )
 
   return (
-    <article className={widgetSurfaceClassName}>
+    <article ref={rootRef} className={widgetSurfaceClassName}>
       <div ref={headerRef} className="flex shrink-0 items-start justify-between px-4 pb-2 pt-3">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {capabilities.canEdit && (
@@ -108,8 +110,8 @@ export function WidgetCardShell({
           />
         </div>
       </div>
-      <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', !flushContent && 'px-4 pb-4')}>
-        <div ref={contentRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className={cn('flex shrink-0 flex-col', !flushContent && 'px-4 pb-4')}>
+        <div ref={contentRef} className="flex shrink-0 flex-col">
           {children}
         </div>
       </div>

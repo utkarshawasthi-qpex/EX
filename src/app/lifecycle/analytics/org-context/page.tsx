@@ -25,7 +25,7 @@ export default function OrganizationContextPage() {
     <PageShell>
       <PageHeader
         title="Org Context"
-        description="Provide the six inputs your AI summary uses — three documents and three text fields. All limits are enforced by the token budget meter."
+        description="Provide three tagged documents and three text fields (To-do, Not-to-do, KPI) for your AI summary."
       />
 
       <PageContent>

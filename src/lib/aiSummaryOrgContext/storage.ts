@@ -31,7 +31,9 @@ export function getAiSummaryOrgContext(): AiSummaryOrgContext {
       },
       textFields: {
         ...createEmptyAiSummaryOrgContext().textFields,
-        ...parsed.textFields,
+        todo: parsed.textFields?.todo ?? '',
+        notToDo: parsed.textFields?.notToDo ?? '',
+        kpis: parsed.textFields?.kpis ?? '',
       },
     }
   } catch {

@@ -1088,7 +1088,7 @@ export function AddWidgetModal({
   }
 
   return (
-    <WuModal open={open} onOpenChange={handleModalOpenChange} size={isSummaryFlow && step === 1 ? 'xl' : 'lg'}>
+    <WuModal open={open} onOpenChange={handleModalOpenChange} size="lg">
       <WuModalHeader>
         <span className="flex items-center gap-2">
           {selectedType ? getWidgetDisplayName(selectedType) : 'Add widget'}

@@ -49,7 +49,7 @@ export const AI_SUMMARY_TEXT_FIELDS = [
   },
   {
     key: 'kpis' as const,
-    label: 'KPIs',
+    label: 'KPI',
     placeholder: "Metrics and targets, one per line, e.g. 'eNPS ≥ +40'",
     meterColor: 'bg-indigo-500',
   },

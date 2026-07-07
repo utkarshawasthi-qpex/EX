@@ -296,7 +296,11 @@ export async function generateDashboardSummary(
       ? 'Your filtered team view shows softer favorability on enablement and communication markers, with direct reports reporting higher friction with tools and process clarity than the broader organization. Compared to company benchmarks, this cohort scores meaningfully lower on transparency and collaboration, suggesting employees may not see priorities translated into day-to-day expectations or consistent follow-through after prior pulse cycles. Organization context and team notes indicate recent change has outpaced manager-led communication, limiting visible progress on themes raised in earlier feedback. Response patterns within the filtered group remain sufficient to treat findings as actionable, though participation varies by location. Time-trend data hints at gradual recovery on inclusion markers, yet enablement gaps persist and likely suppress eNPS improvement until managers publish clearer accountability for technology fixes and workflow blockers identified in this view.'
       : 'Team-level scores trail the organization on transparency and collaboration, while enablement markers remain the weakest signals in this view. Employees appear to lack visibility into team priorities and face localized workload spikes that reduce time for coaching and feedback loops. Compared with company-wide heatmap patterns, this group reports sharper declines in agility and solutions markers, suggesting process bottlenecks are concentrated within the team rather than reflected uniformly across the enterprise. eNPS commentary highlights frustration with unclear decision ownership and uneven access to resources needed to execute on agreed priorities. Organization context notes reinforce that recent restructuring may have diluted manager bandwidth, making it harder to close loops on prior survey themes. Sustained improvement will likely require clearer weekly communication, explicit ownership for top blockers, and targeted enablement support from HR partners.'
 
-    return buildSummaryContent(summary, mockTeamActions(hasFilters), generatedBy, snapshot)
+    return buildSummaryContent(summary, mockTeamActions(hasFilters), generatedBy, snapshot, {
+      scope: `team:${generatedBy}`,
+      createdBy: generatedBy,
+      visibility: 'private',
+    })
   }
 
   return buildSummaryContent(
@@ -304,6 +308,11 @@ export async function generateDashboardSummary(
     mockCompanyActions(),
     generatedBy,
     snapshot,
+    {
+      scope: 'company',
+      createdBy: generatedBy,
+      visibility: 'everyone',
+    },
   )
 }
 

@@ -9,6 +9,7 @@ import {
   summaryAdminConfigToFields,
   type SummaryAdminSettingsFieldValues,
 } from '@/components/modules/analytics/SummaryAdminSettingsFields'
+import { DEFAULT_SUMMARY_ADMIN_SETTINGS } from '@/lib/summaryDefaults'
 import { normalizeSummaryAdminConfig } from '@/lib/normalizeSummaryConfig'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { clearAllManagerCachesForWidget } from '@/lib/summaryStorage'
@@ -43,8 +44,7 @@ type SummarySettingsModalProps = {
 }
 
 const DEFAULT_FIELD_VALUES: SummaryAdminSettingsFieldValues = {
-  visibility: 'everyone',
-  allowEmployeeSummaries: false,
+  ...DEFAULT_SUMMARY_ADMIN_SETTINGS,
 }
 
 export function SummarySettingsModal({

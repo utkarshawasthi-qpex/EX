@@ -1,3 +1,4 @@
+import { DEFAULT_SUMMARY_ADMIN_SETTINGS } from '@/lib/summaryDefaults'
 import type { DashboardWidget, SummaryAdminConfig, SummaryVisibilityMode } from '@/types'
 
 function normalizeVisibility(raw: SummaryAdminConfig['visibility'] | { mode?: string }): SummaryVisibilityMode {
@@ -20,8 +21,9 @@ export function normalizeSummaryAdminConfig(
   }
 
   return {
-    visibility: normalizeVisibility(legacy.visibility),
-    allowEmployeeSummaries: legacy.allowEmployeeSummaries ?? false,
+    visibility: normalizeVisibility(legacy.visibility ?? DEFAULT_SUMMARY_ADMIN_SETTINGS.visibility),
+    allowEmployeeSummaries:
+      legacy.allowEmployeeSummaries ?? DEFAULT_SUMMARY_ADMIN_SETTINGS.allowEmployeeSummaries,
     companyContent: legacy.companyContent ?? legacy.content,
     createdBy: legacy.createdBy,
     isGenerating: legacy.isGenerating ?? false,

@@ -13,6 +13,7 @@ import { PageContent } from '@/components/shared/PageContent'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { PageShell } from '@/components/shared/PageShell'
 import { getEmployees } from '@/lib/mockDb'
+import { mockEmployees } from '@/data/mock/employees'
 import { isEmployeeContext } from '@/lib/userContext'
 import type { Employee, EmployeeStatus } from '@/types'
 
@@ -125,6 +126,11 @@ function EmployeeActions({ employee }: { employee: Employee }) {
 
   function handleLoginAsEmployee() {
     const name = `${employee.firstName} ${employee.lastName}`
+    const hasDirectReports = mockEmployees.some(
+      (item) => item.managerId === employee.id && item.id !== employee.id,
+    )
+    const isManager =
+      hasDirectReports || employee.jobTitle.toLowerCase().includes('manager')
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(
         'pp_impersonating',
@@ -132,7 +138,7 @@ function EmployeeActions({ employee }: { employee: Employee }) {
           id: employee.id,
           name,
           email: employee.email,
-          role: 'employee',
+          role: isManager ? 'manager' : 'employee',
         }),
       )
     }

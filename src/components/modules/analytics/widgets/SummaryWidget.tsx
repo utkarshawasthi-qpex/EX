@@ -17,6 +17,12 @@ import {
 } from '@/lib/buildSummaryPrompt'
 import { normalizeSummaryAdminConfig } from '@/lib/normalizeSummaryConfig'
 import {
+  canGenerateSummary,
+  canManageVersions,
+  canRegenerateSummary,
+  isSharedSummaryViewer,
+} from '@/lib/summaryPermissions'
+import {
   clearCachedCompanySummary,
   getCachedCompanySummary,
   getCachedManagerSummary,
@@ -24,8 +30,9 @@ import {
   saveCachedCompanySummary,
   saveCachedManagerSummary,
 } from '@/lib/summaryStorage'
+import { resolveSummaryContentForViewer } from '@/lib/summaryContent'
 import { canSeeCompanySummary } from '@/lib/summaryVisibility'
-import { getCurrentUser } from '@/lib/userContext'
+import { getCurrentUser, isManagerUser } from '@/lib/userContext'
 import { cn } from '@/lib/utils'
 import type {
   DashboardWidget,
@@ -105,8 +112,8 @@ function SummaryWidgetInner({
   const config = normalizeSummaryAdminConfig(widget.summaryConfig!)
 
   const isAdmin = capabilities.isOwner
-  const currentUserIsManager = currentUser.role === 'manager'
-  const managerSummariesEnabled = Boolean(config?.allowEmployeeSummaries)
+  const currentUserIsManager = isManagerUser(currentUser)
+  const managerSummariesEnabled = config.allowEmployeeSummaries
 
   const canSeeCompanySummaryTab = canSeeCompanySummary(
     config.visibility,
@@ -114,11 +121,20 @@ function SummaryWidgetInner({
     config.createdBy,
   )
 
+  const [myTeamCache, setMyTeamCache] = useState<ManagerSummaryCache | null>(() =>
+    getCachedManagerSummary(widget.id, currentUser.id),
+  )
+
   const myTeamDataDiffers =
-    activeFilters.length > 0 || currentUser.isImpersonating === true
+    activeFilters.length > 0 ||
+    currentUser.isImpersonating === true ||
+    (currentUserIsManager && managerSummariesEnabled)
 
   const showMyTeamTab =
-    managerSummariesEnabled && !isAdmin && currentUserIsManager && myTeamDataDiffers
+    !isAdmin &&
+    currentUserIsManager &&
+    myTeamDataDiffers &&
+    (managerSummariesEnabled || Boolean(myTeamCache))
 
   const showCompanyTab = canSeeCompanySummaryTab
   const showTabRow = showCompanyTab && showMyTeamTab
@@ -141,18 +157,30 @@ function SummaryWidgetInner({
     surveyName: mockScorecardData.surveyName,
   })
 
-  const [myTeamCache, setMyTeamCache] = useState<ManagerSummaryCache | null>(() =>
-    getCachedManagerSummary(widget.id, currentUser.id),
-  )
   const [isGeneratingTeam, setIsGeneratingTeam] = useState(false)
   const [teamError, setTeamError] = useState<'api_error' | null>(null)
 
+  const canGenerateCompany = canGenerateSummary(config, currentUser, isAdmin, 'company')
+  const canGenerateTeam = canGenerateSummary(config, currentUser, isAdmin, 'team')
+
   const canSeeActions = activeTab === 'company' ? isAdmin : activeTab === 'team'
   const canCreateActionPlan = canSeeActions
-  const canRegenerate =
-    (activeTab === 'company' && isAdmin && Boolean(config.companyContent)) ||
-    (activeTab === 'team' && Boolean(myTeamCache) && myTeamCache?.userId === currentUser.id)
-  const canShowFeedback = canRegenerate
+  const canRegenerateCompany = canRegenerateSummary(
+    config,
+    currentUser,
+    isAdmin,
+    'company',
+    Boolean(config.companyContent),
+  )
+  const canRegenerateTeam = canRegenerateSummary(
+    config,
+    currentUser,
+    isAdmin,
+    'team',
+    Boolean(myTeamCache),
+    myTeamCache?.userId,
+  )
+  const canRegenerate = activeTab === 'company' ? canRegenerateCompany : canRegenerateTeam
 
   const dataWidgets = useMemo(
     () => dashboardWidgets.filter((item) => item.type !== 'summary' && item.type !== 'notes'),
@@ -389,8 +417,36 @@ function SummaryWidgetInner({
   }
 
   const companyContent = config.companyContent
-    ? normalizeSummaryContent(config.companyContent)
+    ? normalizeSummaryContent(config.companyContent, {
+        scope: 'company',
+        createdBy: config.createdBy,
+        visibility: config.visibility,
+      })
     : undefined
+
+  const companyResolved = companyContent
+    ? resolveSummaryContentForViewer(companyContent, {
+        canManageVersions: canManageVersions(currentUser, companyContent, isAdmin),
+        isSharedViewer: isSharedSummaryViewer(currentUser, companyContent, config, isAdmin),
+        visibility: config.visibility,
+      })
+    : null
+
+  const teamContent = myTeamCache
+    ? normalizeSummaryContent(myTeamCache.content, {
+        scope: `team:${myTeamCache.userId}`,
+        createdBy: myTeamCache.userId,
+        visibility: 'private',
+      })
+    : undefined
+
+  const teamResolved = teamContent
+    ? resolveSummaryContentForViewer(teamContent, {
+        canManageVersions: canManageVersions(currentUser, teamContent, isAdmin),
+        isSharedViewer: false,
+        visibility: 'private',
+      })
+    : null
   const companyGenerating = config.isGenerating
   const companyError = config.generationError
 
@@ -456,18 +512,40 @@ function SummaryWidgetInner({
       )
     }
 
-    if (!companyContent) return null
+    if (!companyContent || !companyResolved) return null
+
+    if (companyResolved.isPendingShare) {
+      return (
+        <div className="px-4 py-8 text-center">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50">
+            <span className="text-lg text-gray-400" aria-hidden>
+              ✦
+            </span>
+          </div>
+          <p className="mb-1 text-sm font-medium text-gray-700">Summary not yet shared</p>
+          <p className="mx-auto max-w-xs text-xs text-gray-400">
+            The dashboard owner has not published a summary version for viewers yet.
+          </p>
+        </div>
+      )
+    }
+
+    const displayContent = companyResolved.content
+    const manageVersions = canManageVersions(currentUser, companyContent, isAdmin)
 
     return (
       <SummaryWidgetSections
-        content={companyContent}
+        content={displayContent}
         onContentChange={handleCompanyContentChange}
         onCreateActionPlan={handleCreateActionPlan}
+        viewerUserId={currentUser.id}
         canSeeActions={canSeeActions}
         canCreateActionPlan={canCreateActionPlan}
         showRestrictedNote={!canSeeActions && !isAdmin}
-        canShowFeedback={canShowFeedback}
-        canRegenerate={canRegenerate}
+        canManageVersions={manageVersions}
+        canRegenerate={canRegenerateCompany}
+        canPublishVersion={manageVersions && config.visibility === 'everyone'}
+        publishedVersionMissing={companyResolved.publishedVersionMissing}
         onRegenerateSummary={() => void handleRegenerateSummaryParagraph()}
         onRegenerateAction={(priority) => void handleRegenerateAction(priority)}
         regeneratingSummary={regeneratingSummary}
@@ -493,13 +571,15 @@ function SummaryWidgetInner({
             <p className="mb-3 text-xs text-red-700">
               There was an error connecting to the AI service.
             </p>
-            <button
-              type="button"
-              className="rounded border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-              onClick={() => void generateTeamSummary()}
-            >
-              Try again
-            </button>
+            {canGenerateTeam && (
+              <button
+                type="button"
+                className="rounded border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                onClick={() => void generateTeamSummary()}
+              >
+                Try again
+              </button>
+            )}
           </div>
         </div>
       )
@@ -529,26 +609,35 @@ function SummaryWidgetInner({
               ))}
             </div>
           )}
-          <button
-            type="button"
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-            onClick={() => void generateTeamSummary()}
-          >
-            Generate my team summary
-          </button>
+            {canGenerateTeam && (
+              <button
+                type="button"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                onClick={() => void generateTeamSummary()}
+              >
+                Generate Summary
+              </button>
+            )}
         </div>
       )
     }
 
+    if (!teamContent || !teamResolved) return null
+
+    const manageTeamVersions = canManageVersions(currentUser, teamContent, isAdmin)
+
     return (
       <SummaryWidgetSections
-        content={normalizeSummaryContent(myTeamCache.content)}
+        content={teamResolved.content}
         onContentChange={handleTeamContentChange}
         onCreateActionPlan={handleCreateActionPlan}
+        viewerUserId={currentUser.id}
         canSeeActions
         canCreateActionPlan
-        canShowFeedback={canShowFeedback}
-        canRegenerate={canRegenerate}
+        canManageVersions={manageTeamVersions}
+        canRegenerate={canRegenerateTeam}
+        canPublishVersion={false}
+        publishedVersionMissing={teamResolved.publishedVersionMissing}
         onRegenerateSummary={() => void handleRegenerateTeamSummaryParagraph()}
         onRegenerateAction={(priority) => void handleRegenerateAction(priority)}
         regeneratingSummary={regeneratingSummary}

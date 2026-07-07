@@ -2,21 +2,24 @@
 
 import dynamic from 'next/dynamic'
 import { format } from 'date-fns'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import {
-  getActionVersionIndex,
+  clearSummaryFeedback,
+  getSummaryFeedback,
+  saveSummaryFeedback,
+} from '@/lib/summaryFeedbackStorage'
+import {
   getActiveActionVersion,
   getActiveSummaryGeneratedAt,
   getActiveSummaryText,
-  getSummaryVersionIndex,
-  setActiveActionVersionId,
+  getSummaryVersionsNewestFirst,
+  getVersionDisplayLabel,
+  publishSummaryVersion,
   setActiveSummaryVersionId,
-  updateActionFeedback,
-  updateSummaryFeedback,
 } from '@/lib/summaryContent'
 import { cn } from '@/lib/utils'
-import type { SummaryAction, SummaryContent, SummaryPriority } from '@/types'
+import type { ID, SummaryAction, SummaryContent, SummaryPriority } from '@/types'
 
 const WuButton = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuButton })),
@@ -27,22 +30,18 @@ const WuText = dynamic(
   { ssr: false },
 )
 
-const FEEDBACK_REASONS = [
-  "Doesn't reflect our data",
-  'Ignores org context',
-  'Too generic',
-  'Incorrect facts',
-] as const
-
 type SummaryWidgetSectionsProps = {
   content: SummaryContent
   onContentChange: (content: SummaryContent) => void
   onCreateActionPlan: (action: SummaryAction) => void
+  viewerUserId: ID
   canSeeActions?: boolean
   canCreateActionPlan?: boolean
   showRestrictedNote?: boolean
-  canShowFeedback?: boolean
+  canManageVersions?: boolean
   canRegenerate?: boolean
+  canPublishVersion?: boolean
+  publishedVersionMissing?: boolean
   onRegenerateSummary?: () => void
   onRegenerateAction?: (priority: SummaryPriority) => void
   regeneratingSummary?: boolean
@@ -97,62 +96,18 @@ function FeedbackButtons({
   )
 }
 
-function VersionNavigator({
-  currentIndex,
-  total,
-  onPrev,
-  onNext,
-  compact = false,
-}: {
-  currentIndex: number
-  total: number
-  onPrev: () => void
-  onNext: () => void
-  compact?: boolean
-}) {
-  if (total <= 1) return null
-
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-2 text-xs text-gray-400',
-        compact ? '' : 'mt-2',
-      )}
-    >
-      <button
-        type="button"
-        disabled={currentIndex <= 0}
-        onClick={onPrev}
-        className="disabled:opacity-30"
-        aria-label="Previous version"
-      >
-        ←
-      </button>
-      <span>
-        {compact ? `v${currentIndex + 1}/${total}` : `Version ${currentIndex + 1} of ${total}`}
-      </span>
-      <button
-        type="button"
-        disabled={currentIndex >= total - 1}
-        onClick={onNext}
-        className="disabled:opacity-30"
-        aria-label="Next version"
-      >
-        →
-      </button>
-    </div>
-  )
-}
-
 export function SummaryWidgetSections({
   content,
   onContentChange,
   onCreateActionPlan,
+  viewerUserId,
   canSeeActions = true,
   canCreateActionPlan = true,
   showRestrictedNote = false,
-  canShowFeedback = false,
+  canManageVersions = false,
   canRegenerate = false,
+  canPublishVersion = false,
+  publishedVersionMissing = false,
   onRegenerateSummary,
   onRegenerateAction,
   regeneratingSummary = false,
@@ -161,115 +116,101 @@ export function SummaryWidgetSections({
   onToggleSummaryRegenerateConfirm,
 }: SummaryWidgetSectionsProps) {
   const { showToast } = useWuShowToast()
-  const [showReasonPicker, setShowReasonPicker] = useState(false)
-  const [selectedReasons, setSelectedReasons] = useState<Set<string>>(new Set())
-  const [otherReason, setOtherReason] = useState('')
   const [confirmActionPriority, setConfirmActionPriority] = useState<SummaryPriority | null>(null)
+  const [feedbackRating, setFeedbackRating] = useState<'up' | 'down' | null>(null)
+  const [showCommentInput, setShowCommentInput] = useState(false)
+  const [feedbackComment, setFeedbackComment] = useState('')
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
 
   const summaryText = getActiveSummaryText(content)
   const summaryGeneratedAt = getActiveSummaryGeneratedAt(content)
-  const summaryVersionIndex = getSummaryVersionIndex(content)
+  const activeVersionId = content.activeSummaryVersionId
+  const versionsNewestFirst = getSummaryVersionsNewestFirst(content)
+  const totalVersions = content.summaryVersions.length
+  const isPublishedVersion = content.publishedVersionId === activeVersionId
+
+  useEffect(() => {
+    const existing = getSummaryFeedback(content.id, activeVersionId, viewerUserId)
+    if (existing) {
+      setFeedbackRating(existing.rating)
+      setFeedbackComment(existing.comment ?? '')
+      setFeedbackSubmitted(true)
+      setShowCommentInput(false)
+      return
+    }
+    setFeedbackRating(null)
+    setFeedbackComment('')
+    setFeedbackSubmitted(false)
+    setShowCommentInput(false)
+  }, [content.id, activeVersionId, viewerUserId])
 
   function persistContent(next: SummaryContent) {
     onContentChange(next)
   }
 
-  function handleSummaryFeedbackUp() {
-    persistContent(updateSummaryFeedback(content, 'up'))
-    setShowReasonPicker(false)
-    showToast({ variant: 'success', message: 'Thanks for the feedback' })
+  function handleVersionSelect(versionId: string) {
+    persistContent(setActiveSummaryVersionId(content, versionId))
   }
 
-  function handleSummaryFeedbackDown() {
-    if (content.summaryFeedback === 'down') {
-      setShowReasonPicker(true)
-      return
-    }
-    persistContent(updateSummaryFeedback(content, 'down'))
-    setShowReasonPicker(true)
+  function handlePublishVersion() {
+    const next = publishSummaryVersion(content, activeVersionId)
+    persistContent(next)
+    showToast({ variant: 'success', message: 'This version is now shared with dashboard viewers' })
   }
 
-  function submitSummaryFeedbackReason() {
-    const reasons = [...selectedReasons]
-    if (otherReason.trim()) reasons.push(otherReason.trim())
-    persistContent(updateSummaryFeedback(content, 'down', reasons.join('; ') || null))
-    setShowReasonPicker(false)
-    showToast({ variant: 'success', message: 'Thanks — this helps us improve' })
+  function handleFeedbackUp() {
+    setFeedbackRating('up')
+    setShowCommentInput(false)
+    setFeedbackSubmitted(false)
   }
 
-  function resetSummaryFeedback() {
-    persistContent(updateSummaryFeedback(content, null))
-    setShowReasonPicker(false)
-    setSelectedReasons(new Set())
-    setOtherReason('')
+  function handleFeedbackDown() {
+    setFeedbackRating('down')
+    setShowCommentInput(true)
+    setFeedbackSubmitted(false)
   }
 
-  function handleActionFeedback(priority: SummaryPriority, value: 'up' | 'down') {
-    const current = content.actionFeedback[priority]
-    const next = current === value ? null : value
-    persistContent(updateActionFeedback(content, priority, next))
-    if (next) {
-      showToast({ variant: 'success', message: 'Thanks for the feedback' })
-    }
+  function submitFeedback(skipComment = false) {
+    if (!feedbackRating) return
+
+    saveSummaryFeedback({
+      summaryId: content.id,
+      versionId: activeVersionId,
+      userId: viewerUserId,
+      rating: feedbackRating,
+      comment:
+        feedbackRating === 'down' && !skipComment && feedbackComment.trim()
+          ? feedbackComment.trim().slice(0, 200)
+          : undefined,
+      createdAt: new Date().toISOString(),
+    })
+    setFeedbackSubmitted(true)
+    setShowCommentInput(false)
+    showToast({ variant: 'success', message: 'Thanks — feedback recorded' })
   }
 
-  function prevSummaryVersion() {
-    const index = getSummaryVersionIndex(content)
-    if (index > 0) {
-      persistContent(
-        setActiveSummaryVersionId(content, content.summaryVersions[index - 1].versionId),
-      )
-    }
-  }
-
-  function nextSummaryVersion() {
-    const index = getSummaryVersionIndex(content)
-    if (index < content.summaryVersions.length - 1) {
-      persistContent(
-        setActiveSummaryVersionId(content, content.summaryVersions[index + 1].versionId),
-      )
-    }
-  }
-
-  function prevActionVersion(priority: SummaryPriority) {
-    const index = getActionVersionIndex(content, priority)
-    if (index > 0) {
-      persistContent(
-        setActiveActionVersionId(
-          content,
-          priority,
-          content.actionVersions[priority][index - 1].versionId,
-        ),
-      )
-    }
-  }
-
-  function nextActionVersion(priority: SummaryPriority) {
-    const index = getActionVersionIndex(content, priority)
-    const versions = content.actionVersions[priority]
-    if (index < versions.length - 1) {
-      persistContent(
-        setActiveActionVersionId(content, priority, versions[index + 1].versionId),
-      )
-    }
+  function resetFeedback() {
+    clearSummaryFeedback(content.id, activeVersionId, viewerUserId)
+    setFeedbackRating(null)
+    setFeedbackComment('')
+    setFeedbackSubmitted(false)
+    setShowCommentInput(false)
   }
 
   function renderActionRow(priority: SummaryPriority) {
-    const version = getActiveActionVersion(content, priority)
-    if (!version && regeneratingActionPriority !== priority) return null
+    const displayVersion = getActiveActionVersion(content, priority)
+
+    if (!displayVersion && regeneratingActionPriority !== priority) return null
 
     if (regeneratingActionPriority === priority) {
       return <ActionRowSkeleton key={`action-skeleton-${priority}`} />
     }
 
-    if (!version) return null
-
-    const actionIndex = getActionVersionIndex(content, priority)
-    const actionVersionsCount = content.actionVersions[priority].length
+    if (!displayVersion) return null
 
     return (
       <div
-        key={`action-${priority}-${version.versionId}`}
+        key={`action-${priority}-${displayVersion.versionId}`}
         className="min-h-[48px] rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
       >
         {confirmActionPriority === priority && (
@@ -312,90 +253,35 @@ export function SummaryWidgetSections({
 
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium leading-snug break-words text-gray-800">
-                {version.action}
+                {displayVersion.action}
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
-                <span>{version.timeframe}</span>
+                <span>{displayVersion.timeframe}</span>
                 <span>·</span>
                 <span className="flex items-center gap-1">
                   <span
                     className={cn(
                       'size-1.5 rounded-full',
-                      version.owner === 'HR'
+                      displayVersion.owner === 'HR'
                         ? 'bg-amber-400'
-                        : version.owner === 'Leadership'
+                        : displayVersion.owner === 'Leadership'
                           ? 'bg-purple-400'
                           : 'bg-blue-400',
                     )}
                   />
-                  {version.owner}
+                  {displayVersion.owner}
                 </span>
-                {version.context && (
+                {displayVersion.context && (
                   <>
                     <span>·</span>
-                    <span className="italic">{version.context}</span>
+                    <span className="italic">{displayVersion.context}</span>
                   </>
-                )}
-                {actionVersionsCount > 1 && (
-                  <span className="ml-1 flex items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={actionIndex <= 0}
-                      onClick={() => prevActionVersion(priority)}
-                      className="disabled:opacity-30"
-                      aria-label="Previous action version"
-                    >
-                      ←
-                    </button>
-                    <span>
-                      v{actionIndex + 1}/{actionVersionsCount}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={actionIndex >= actionVersionsCount - 1}
-                      onClick={() => nextActionVersion(priority)}
-                      className="disabled:opacity-30"
-                      aria-label="Next action version"
-                    >
-                      →
-                    </button>
-                  </span>
                 )}
               </div>
             </div>
           </div>
 
           <div className="mt-0.5 flex flex-shrink-0 items-center gap-2">
-            {canShowFeedback && (
-              <>
-                <button
-                  type="button"
-                  aria-label="Thumbs up"
-                  onClick={() => handleActionFeedback(priority, 'up')}
-                  className={cn(
-                    'text-sm hover:text-blue-500',
-                    content.actionFeedback[priority] === 'up'
-                      ? 'text-blue-600'
-                      : 'text-gray-300',
-                  )}
-                >
-                  👍
-                </button>
-                <button
-                  type="button"
-                  aria-label="Thumbs down"
-                  onClick={() => handleActionFeedback(priority, 'down')}
-                  className={cn(
-                    'text-sm hover:text-red-400',
-                    content.actionFeedback[priority] === 'down'
-                      ? 'text-red-500'
-                      : 'text-gray-300',
-                  )}
-                >
-                  👎
-                </button>
-              </>
-            )}
             {canRegenerate && (
               <button
                 type="button"
@@ -412,12 +298,12 @@ export function SummaryWidgetSections({
                 type="button"
                 onClick={() =>
                   onCreateActionPlan({
-                    id: `action_${priority}_${version.versionId}`,
-                    action: version.action,
-                    timeframe: version.timeframe,
-                    owner: version.owner,
-                    priority: version.priority,
-                    context: version.context,
+                    id: `action_${priority}_${displayVersion.versionId}`,
+                    action: displayVersion.action,
+                    timeframe: displayVersion.timeframe,
+                    owner: displayVersion.owner,
+                    priority: displayVersion.priority,
+                    context: displayVersion.context,
                   })
                 }
                 className={cn(
@@ -438,7 +324,50 @@ export function SummaryWidgetSections({
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      {publishedVersionMissing && canManageVersions && (
+        <div className="mb-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          The published version is no longer available. Share a version to restore dashboard access.
+        </div>
+      )}
+
       <div className="flex-shrink-0">
+        {canManageVersions && totalVersions > 1 && (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <label htmlFor={`summary-version-${content.id}`} className="text-xs text-gray-500">
+              Version
+            </label>
+            <select
+              id={`summary-version-${content.id}`}
+              value={activeVersionId}
+              onChange={(event) => handleVersionSelect(event.target.value)}
+              className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
+            >
+              {versionsNewestFirst.map((version, index) => {
+                const versionNumber = totalVersions - index
+                return (
+                  <option key={version.versionId} value={version.versionId}>
+                    {getVersionDisplayLabel(version, versionNumber)}
+                  </option>
+                )
+              })}
+            </select>
+            {canPublishVersion && !isPublishedVersion && (
+              <button
+                type="button"
+                onClick={handlePublishVersion}
+                className="text-xs font-medium text-blue-600 hover:underline"
+              >
+                Share this version
+              </button>
+            )}
+            {canPublishVersion && isPublishedVersion && (
+              <span className="rounded border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">
+                Shared
+              </span>
+            )}
+          </div>
+        )}
+
         {regeneratingSummary ? (
           <div className="mb-3 space-y-2">
             <div className="h-3 w-3/4 animate-pulse rounded bg-gray-100" />
@@ -449,87 +378,6 @@ export function SummaryWidgetSections({
           <WuText size="sm" as="p" className="leading-relaxed text-gray-700">
             {summaryText}
           </WuText>
-        )}
-
-        <VersionNavigator
-          currentIndex={summaryVersionIndex}
-          total={content.summaryVersions.length}
-          onPrev={prevSummaryVersion}
-          onNext={nextSummaryVersion}
-        />
-
-        {canShowFeedback && (
-          <div className="mt-2 flex flex-col items-end gap-2">
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              <span>Was this summary helpful?</span>
-              <FeedbackButtons
-                feedback={content.summaryFeedback}
-                onUp={handleSummaryFeedbackUp}
-                onDown={handleSummaryFeedbackDown}
-              />
-              {content.summaryFeedback !== null && (
-                <button
-                  type="button"
-                  className="text-blue-600 hover:underline"
-                  onClick={resetSummaryFeedback}
-                >
-                  Change feedback
-                </button>
-              )}
-            </div>
-
-            {showReasonPicker && content.summaryFeedback === 'down' && (
-              <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-3 text-left shadow-sm">
-                <p className="mb-2 text-xs font-medium text-gray-700">What could be better?</p>
-                <div className="space-y-1.5">
-                  {FEEDBACK_REASONS.map((reason) => (
-                    <label key={reason} className="flex items-center gap-2 text-xs text-gray-600">
-                      <input
-                        type="checkbox"
-                        checked={selectedReasons.has(reason)}
-                        onChange={(event) => {
-                          setSelectedReasons((current) => {
-                            const next = new Set(current)
-                            if (event.target.checked) next.add(reason)
-                            else next.delete(reason)
-                            return next
-                          })
-                        }}
-                      />
-                      {reason}
-                    </label>
-                  ))}
-                  <label className="flex items-center gap-2 text-xs text-gray-600">
-                    <input
-                      type="checkbox"
-                      checked={selectedReasons.has('other')}
-                      onChange={(event) => {
-                        setSelectedReasons((current) => {
-                          const next = new Set(current)
-                          if (event.target.checked) next.add('other')
-                          else next.delete('other')
-                          return next
-                        })
-                      }}
-                    />
-                    Other:
-                    <input
-                      type="text"
-                      value={otherReason}
-                      onChange={(event) => setOtherReason(event.target.value)}
-                      className="flex-1 rounded border border-gray-200 px-2 py-0.5 text-xs"
-                      placeholder="Tell us more"
-                    />
-                  </label>
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <WuButton variant="primary" size="sm" onClick={submitSummaryFeedbackReason}>
-                    Submit feedback
-                  </WuButton>
-                </div>
-              </div>
-            )}
-          </div>
         )}
       </div>
 
@@ -568,37 +416,104 @@ export function SummaryWidgetSections({
         </WuText>
       )}
 
-      <div className="mt-2 flex flex-shrink-0 items-center justify-between border-t border-gray-50 pt-2">
-        <WuText size="sm" as="span" className="text-gray-400">
-          Generated {format(new Date(summaryGeneratedAt), 'MMM d, yyyy')}
-        </WuText>
-        {canRegenerate && onRegenerateSummary && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={onToggleSummaryRegenerateConfirm}
-              className="text-xs text-gray-400 transition-colors hover:text-blue-600"
-            >
-              ↺ Regenerate summary
-            </button>
-            {showSummaryRegenerateConfirm && (
-              <div className="absolute bottom-full right-0 z-20 mb-2 w-64 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
-                <p className="text-sm text-gray-700">
-                  This will regenerate the summary paragraph only. Your 4 recommendations will not
-                  change.
-                </p>
-                <div className="mt-3 flex justify-end gap-2">
-                  <WuButton variant="secondary" size="sm" onClick={onToggleSummaryRegenerateConfirm}>
-                    Cancel
-                  </WuButton>
-                  <WuButton variant="primary" size="sm" onClick={onRegenerateSummary}>
-                    Regenerate
-                  </WuButton>
+      <div className="mt-2 flex flex-shrink-0 flex-col gap-2 border-t border-gray-50 pt-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <WuText size="sm" as="span" className="text-gray-400">
+            Generated {format(new Date(summaryGeneratedAt), 'MMM d, yyyy')}
+          </WuText>
+          {canRegenerate && onRegenerateSummary && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={onToggleSummaryRegenerateConfirm}
+                className="text-xs text-gray-400 transition-colors hover:text-blue-600"
+              >
+                ↺ Regenerate summary
+              </button>
+              {showSummaryRegenerateConfirm && (
+                <div className="absolute bottom-full right-0 z-20 mb-2 w-64 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+                  <p className="text-sm text-gray-700">
+                    This will regenerate the summary paragraph only. Your 4 recommendations will not
+                    change.
+                  </p>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <WuButton
+                      variant="secondary"
+                      size="sm"
+                      onClick={onToggleSummaryRegenerateConfirm}
+                    >
+                      Cancel
+                    </WuButton>
+                    <WuButton variant="primary" size="sm" onClick={onRegenerateSummary}>
+                      Regenerate
+                    </WuButton>
+                  </div>
                 </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+          {feedbackSubmitted ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+              <span>Thanks — feedback recorded</span>
+              <button
+                type="button"
+                className="text-blue-600 hover:underline"
+                onClick={resetFeedback}
+              >
+                Change
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+              <span>Was this summary helpful?</span>
+              <FeedbackButtons
+                feedback={feedbackRating}
+                onUp={handleFeedbackUp}
+                onDown={handleFeedbackDown}
+              />
+            </div>
+          )}
+
+          {showCommentInput && !feedbackSubmitted && feedbackRating === 'down' && (
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={feedbackComment}
+                onChange={(event) => setFeedbackComment(event.target.value.slice(0, 200))}
+                placeholder="What could be better?"
+                className="w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+                maxLength={200}
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                  onClick={() => submitFeedback(true)}
+                >
+                  Skip
+                </button>
+                <WuButton variant="primary" size="sm" onClick={() => submitFeedback(false)}>
+                  Submit
+                </WuButton>
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+
+          {feedbackRating === 'up' && !feedbackSubmitted && (
+            <div className="flex justify-end">
+              <WuButton variant="primary" size="sm" onClick={() => submitFeedback(true)}>
+                Submit
+              </WuButton>
+            </div>
+          )}
+
+          <WuText size="sm" as="p" className="text-[11px] text-gray-400">
+            AI-generated — verify before acting
+          </WuText>
+        </div>
       </div>
     </div>
   )

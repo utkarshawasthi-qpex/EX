@@ -11,6 +11,7 @@ import type {
   WidgetType,
 } from '@/types'
 import { WIDGET_CATALOG } from '@/components/modules/analytics/widgetRegistry'
+import { DEFAULT_SUMMARY_ADMIN_SETTINGS } from '@/lib/summaryDefaults'
 import {
   buildSummaryAdminConfigFromFields,
   SummaryAdminSettingsFields,
@@ -111,8 +112,7 @@ const SUMMARY_STEPS = [
 ] as const
 
 const DEFAULT_SUMMARY_SETTINGS: SummaryAdminSettingsFieldValues = {
-  visibility: 'everyone',
-  allowEmployeeSummaries: false,
+  ...DEFAULT_SUMMARY_ADMIN_SETTINGS,
 }
 
 const GROUP_BY_OPTIONS: SelectOption[] = [

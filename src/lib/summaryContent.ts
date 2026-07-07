@@ -4,7 +4,9 @@ import type {
   SummaryAction,
   SummaryContent,
   SummaryPriority,
+  SummaryScope,
   SummaryVersion,
+  SummaryVisibilityMode,
 } from '@/types'
 
 export const SUMMARY_PRIORITIES: SummaryPriority[] = [1, 2, 3, 4]
@@ -34,6 +36,23 @@ function createVersionId(prefix: string): string {
   return `${prefix}_${Date.now()}`
 }
 
+function createSummaryId(): string {
+  return `summary_${Date.now()}`
+}
+
+function snapshotActiveActions(
+  content: SummaryContent,
+): Partial<Record<SummaryPriority, ActionVersion>> {
+  const snapshots: Partial<Record<SummaryPriority, ActionVersion>> = {}
+  for (const priority of SUMMARY_PRIORITIES) {
+    const version = getActiveActionVersion(content, priority)
+    if (version) {
+      snapshots[priority] = { ...version }
+    }
+  }
+  return snapshots
+}
+
 export function getActiveSummaryVersion(content: SummaryContent): SummaryVersion | undefined {
   return content.summaryVersions.find(
     (version) => version.versionId === content.activeSummaryVersionId,
@@ -52,6 +71,11 @@ export function getActiveActionVersion(
   content: SummaryContent,
   priority: SummaryPriority,
 ): ActionVersion | undefined {
+  const summaryVersion = getActiveSummaryVersion(content)
+  if (summaryVersion?.actionSnapshots?.[priority]) {
+    return summaryVersion.actionSnapshots[priority]
+  }
+
   const versionId = content.activeActionVersionIds[priority]
   return content.actionVersions[priority].find((version) => version.versionId === versionId)
 }
@@ -98,19 +122,24 @@ export function normalizeActionsFromApi(
   }))
 }
 
+type BuildSummaryContentOptions = {
+  scope?: SummaryScope
+  createdBy?: ID
+  visibility?: SummaryVisibilityMode
+  summaryId?: ID
+}
+
 export function buildSummaryContent(
   summary: string,
   actions: SummaryAction[],
   generatedBy: ID,
   dashboardDataSnapshot: string,
+  options?: BuildSummaryContentOptions,
 ): SummaryContent {
   validateActionsLength(actions)
   const generatedAt = new Date().toISOString()
   const summaryVersionId = createVersionId('sv')
-
-  const summaryVersions: SummaryVersion[] = [
-    { versionId: summaryVersionId, summary, generatedAt },
-  ]
+  const scope = options?.scope ?? 'company'
 
   const actionVersions: Record<SummaryPriority, ActionVersion[]> = {
     1: [],
@@ -119,6 +148,7 @@ export function buildSummaryContent(
     4: [],
   }
   const activeActionVersionIds = { ...EMPTY_ACTIVE_ACTION_VERSION_IDS }
+  const actionSnapshots: Partial<Record<SummaryPriority, ActionVersion>> = {}
 
   for (const action of actions.sort((a, b) => a.priority - b.priority)) {
     const versionId = createVersionId(`av${action.priority}`)
@@ -133,16 +163,29 @@ export function buildSummaryContent(
     }
     actionVersions[action.priority] = [version]
     activeActionVersionIds[action.priority] = versionId
+    actionSnapshots[action.priority] = version
   }
 
+  const summaryVersions: SummaryVersion[] = [
+    {
+      versionId: summaryVersionId,
+      summary,
+      generatedAt,
+      generatedBy,
+      actionSnapshots,
+    },
+  ]
+
   return {
+    id: options?.summaryId ?? createSummaryId(),
+    scope,
+    createdBy: options?.createdBy ?? generatedBy,
+    visibility: options?.visibility ?? 'everyone',
+    publishedVersionId: null,
     activeSummaryVersionId: summaryVersionId,
     activeActionVersionIds,
     summaryVersions,
     actionVersions,
-    summaryFeedback: null,
-    summaryFeedbackReason: null,
-    actionFeedback: { ...EMPTY_ACTION_FEEDBACK },
     generatedBy,
     dashboardDataSnapshot,
   }
@@ -156,6 +199,7 @@ type LegacyFlatSummary = {
   dashboardDataSnapshot?: string
   what?: string[]
   why?: string[]
+  content?: string
 }
 
 function padLegacyActions(
@@ -194,32 +238,81 @@ function padLegacyActions(
   }))
 }
 
-export function normalizeSummaryContent(raw: LegacyFlatSummary | SummaryContent): SummaryContent {
-  if ('summaryVersions' in raw && Array.isArray(raw.summaryVersions)) {
-    return {
-      ...raw,
-      actionFeedback: { ...EMPTY_ACTION_FEEDBACK, ...raw.actionFeedback },
-      actionVersions: {
-        1: raw.actionVersions[1] ?? [],
-        2: raw.actionVersions[2] ?? [],
-        3: raw.actionVersions[3] ?? [],
-        4: raw.actionVersions[4] ?? [],
-      },
+function ensureActionSnapshots(content: SummaryContent): SummaryContent {
+  let changed = false
+  const summaryVersions = content.summaryVersions.map((version) => {
+    if (version.actionSnapshots && Object.keys(version.actionSnapshots).length > 0) {
+      return version
     }
+
+    changed = true
+    const snapshots: Partial<Record<SummaryPriority, ActionVersion>> = {}
+    for (const priority of SUMMARY_PRIORITIES) {
+      const versionId = content.activeActionVersionIds[priority]
+      const actionVersion = content.actionVersions[priority].find(
+        (item) => item.versionId === versionId,
+      )
+      if (actionVersion) {
+        snapshots[priority] = actionVersion
+      }
+    }
+    return { ...version, actionSnapshots: snapshots }
+  })
+
+  if (!changed) return content
+  return { ...content, summaryVersions }
+}
+
+export function normalizeSummaryContent(
+  raw: LegacyFlatSummary | SummaryContent,
+  options?: {
+    scope?: SummaryScope
+    createdBy?: ID
+    visibility?: SummaryVisibilityMode
+  },
+): SummaryContent {
+  if ('summaryVersions' in raw && Array.isArray(raw.summaryVersions)) {
+    const legacy = raw as SummaryContent & {
+      id?: ID
+      scope?: SummaryScope
+      createdBy?: ID
+      visibility?: SummaryVisibilityMode
+      publishedVersionId?: string | null
+    }
+
+    const activeSummaryVersionId =
+      legacy.activeSummaryVersionId || legacy.summaryVersions[0]?.versionId || ''
+
+    const normalized: SummaryContent = {
+      id: legacy.id ?? createSummaryId(),
+      scope: legacy.scope ?? options?.scope ?? 'company',
+      createdBy: legacy.createdBy ?? legacy.generatedBy ?? options?.createdBy ?? 'system',
+      visibility: legacy.visibility ?? options?.visibility ?? 'everyone',
+      publishedVersionId:
+        legacy.publishedVersionId === undefined
+          ? activeSummaryVersionId || null
+          : legacy.publishedVersionId,
+      activeSummaryVersionId,
+      activeActionVersionIds: {
+        ...EMPTY_ACTIVE_ACTION_VERSION_IDS,
+        ...legacy.activeActionVersionIds,
+      },
+      summaryVersions: legacy.summaryVersions,
+      actionVersions: {
+        1: legacy.actionVersions[1] ?? [],
+        2: legacy.actionVersions[2] ?? [],
+        3: legacy.actionVersions[3] ?? [],
+        4: legacy.actionVersions[4] ?? [],
+      },
+      generatedBy: legacy.generatedBy,
+      dashboardDataSnapshot: legacy.dashboardDataSnapshot,
+    }
+
+    return ensureActionSnapshots(normalized)
   }
 
-  let summaryText = ''
-  let legacyGeneratedAt: string | undefined
-  let legacyGeneratedBy: ID | undefined
-  let legacySnapshot: string | undefined
-  let legacyActions: LegacyFlatSummary['actions'] = []
-
   const legacy = raw as LegacyFlatSummary
-  summaryText = legacy.summary ?? ''
-  legacyGeneratedAt = legacy.generatedAt
-  legacyGeneratedBy = legacy.generatedBy
-  legacySnapshot = legacy.dashboardDataSnapshot
-  legacyActions = legacy.actions ?? []
+  let summaryText = legacy.summary ?? legacy.content ?? ''
 
   if (!summaryText.trim()) {
     const parts = [...(legacy.what ?? []), ...(legacy.why ?? [])].map((part) =>
@@ -231,19 +324,27 @@ export function normalizeSummaryContent(raw: LegacyFlatSummary | SummaryContent)
         : 'Summary data is unavailable for this dashboard view.'
   }
 
-  const actions = padLegacyActions(legacyActions)
+  const actions = padLegacyActions(legacy.actions ?? [])
   const base = buildSummaryContent(
     summaryText,
     actions,
-    legacyGeneratedBy ?? 'system',
-    legacySnapshot ?? '',
+    legacy.generatedBy ?? options?.createdBy ?? 'system',
+    legacy.dashboardDataSnapshot ?? '',
+    {
+      scope: options?.scope ?? 'company',
+      createdBy: options?.createdBy ?? legacy.generatedBy,
+      visibility: options?.visibility,
+    },
   )
 
-  if (legacyGeneratedAt && base.summaryVersions[0]) {
-    base.summaryVersions[0].generatedAt = legacyGeneratedAt
+  if (legacy.generatedAt && base.summaryVersions[0]) {
+    base.summaryVersions[0].generatedAt = legacy.generatedAt
     for (const priority of SUMMARY_PRIORITIES) {
       if (base.actionVersions[priority][0]) {
-        base.actionVersions[priority][0].generatedAt = legacyGeneratedAt
+        base.actionVersions[priority][0].generatedAt = legacy.generatedAt
+      }
+      if (base.summaryVersions[0].actionSnapshots?.[priority]) {
+        base.summaryVersions[0].actionSnapshots[priority]!.generatedAt = legacy.generatedAt
       }
     }
   }
@@ -251,12 +352,18 @@ export function normalizeSummaryContent(raw: LegacyFlatSummary | SummaryContent)
   return base
 }
 
-export function appendSummaryVersion(content: SummaryContent, summary: string): SummaryContent {
+export function appendSummaryVersion(
+  content: SummaryContent,
+  summary: string,
+  generatedBy?: ID,
+): SummaryContent {
   const versionId = createVersionId('sv')
   const newVersion: SummaryVersion = {
     versionId,
     summary,
     generatedAt: new Date().toISOString(),
+    generatedBy: generatedBy ?? content.generatedBy,
+    actionSnapshots: snapshotActiveActions(content),
   }
   let summaryVersions = [...content.summaryVersions, newVersion]
   if (summaryVersions.length > 5) {
@@ -288,7 +395,8 @@ export function appendActionVersion(
   if (versions.length > 5) {
     versions = versions.slice(versions.length - 5)
   }
-  return {
+
+  const nextContent: SummaryContent = {
     ...content,
     actionVersions: {
       ...content.actionVersions,
@@ -299,16 +407,46 @@ export function appendActionVersion(
       [priority]: versionId,
     },
   }
+
+  const activeSummary = getActiveSummaryVersion(nextContent)
+  if (!activeSummary) return nextContent
+
+  const summaryVersions = nextContent.summaryVersions.map((version) => {
+    if (version.versionId !== activeSummary.versionId) return version
+    return {
+      ...version,
+      actionSnapshots: {
+        ...version.actionSnapshots,
+        [priority]: newVersion,
+      },
+    }
+  })
+
+  return { ...nextContent, summaryVersions }
 }
 
 export function setActiveSummaryVersionId(
   content: SummaryContent,
   versionId: string,
 ): SummaryContent {
-  if (!content.summaryVersions.some((version) => version.versionId === versionId)) {
-    return content
+  const version = content.summaryVersions.find((item) => item.versionId === versionId)
+  if (!version) return content
+
+  const activeActionVersionIds = { ...content.activeActionVersionIds }
+  if (version.actionSnapshots) {
+    for (const priority of SUMMARY_PRIORITIES) {
+      const snapshot = version.actionSnapshots[priority]
+      if (snapshot) {
+        activeActionVersionIds[priority] = snapshot.versionId
+      }
+    }
   }
-  return { ...content, activeSummaryVersionId: versionId }
+
+  return {
+    ...content,
+    activeSummaryVersionId: versionId,
+    activeActionVersionIds,
+  }
 }
 
 export function setActiveActionVersionId(
@@ -342,6 +480,99 @@ export function getActionVersionIndex(
   return content.actionVersions[priority].findIndex((version) => version.versionId === versionId)
 }
 
+export function getSummaryVersionsNewestFirst(content: SummaryContent): SummaryVersion[] {
+  return [...content.summaryVersions].reverse()
+}
+
+export function getVersionDisplayLabel(version: SummaryVersion, versionNumber: number): string {
+  const dateLabel = new Date(version.generatedAt).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  return `v${versionNumber} — ${dateLabel}`
+}
+
+export function publishSummaryVersion(
+  content: SummaryContent,
+  versionId: string,
+): SummaryContent {
+  if (!content.summaryVersions.some((version) => version.versionId === versionId)) {
+    return content
+  }
+  return { ...content, publishedVersionId: versionId }
+}
+
+export type ResolvedSummaryView = {
+  content: SummaryContent
+  isPendingShare: boolean
+  publishedVersionMissing: boolean
+}
+
+export function resolveSummaryContentForViewer(
+  content: SummaryContent,
+  options: {
+    canManageVersions: boolean
+    isSharedViewer: boolean
+    visibility: SummaryVisibilityMode
+  },
+): ResolvedSummaryView {
+  const normalized = normalizeSummaryContent(content)
+
+  if (options.canManageVersions) {
+    return {
+      content: normalized,
+      isPendingShare: false,
+      publishedVersionMissing: false,
+    }
+  }
+
+  if (!options.isSharedViewer) {
+    return {
+      content: normalized,
+      isPendingShare: false,
+      publishedVersionMissing: false,
+    }
+  }
+
+  if (options.visibility === 'everyone' && !normalized.publishedVersionId) {
+    return {
+      content: normalized,
+      isPendingShare: true,
+      publishedVersionMissing: false,
+    }
+  }
+
+  const publishedId = normalized.publishedVersionId
+  if (!publishedId) {
+    return {
+      content: normalized,
+      isPendingShare: false,
+      publishedVersionMissing: false,
+    }
+  }
+
+  const publishedVersion = normalized.summaryVersions.find(
+    (version) => version.versionId === publishedId,
+  )
+
+  if (!publishedVersion) {
+    return {
+      content: normalized,
+      isPendingShare: false,
+      publishedVersionMissing: true,
+    }
+  }
+
+  return {
+    content: setActiveSummaryVersionId(normalized, publishedId),
+    isPendingShare: false,
+    publishedVersionMissing: false,
+  }
+}
+
+/** @deprecated use summaryFeedbackStorage */
 export function updateSummaryFeedback(
   content: SummaryContent,
   feedback: 'up' | 'down' | null,
@@ -354,6 +585,7 @@ export function updateSummaryFeedback(
   }
 }
 
+/** @deprecated use summaryFeedbackStorage */
 export function updateActionFeedback(
   content: SummaryContent,
   priority: SummaryPriority,
@@ -362,6 +594,7 @@ export function updateActionFeedback(
   return {
     ...content,
     actionFeedback: {
+      ...EMPTY_ACTION_FEEDBACK,
       ...content.actionFeedback,
       [priority]: feedback,
     },

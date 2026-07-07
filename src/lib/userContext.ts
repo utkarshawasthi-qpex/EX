@@ -77,3 +77,17 @@ export function isEmployeeContext(): boolean {
   const user = getCurrentUser()
   return user.role === 'employee' || user.role === 'manager' || user.isImpersonating === true
 }
+
+export function isManagerUser(user: AppUser): boolean {
+  if (user.role === 'manager') return true
+
+  const employee = mockEmployees.find((item) => item.id === user.id)
+  if (!employee) return false
+
+  const hasDirectReports = mockEmployees.some(
+    (item) => item.managerId === user.id && item.id !== user.id,
+  )
+  if (hasDirectReports) return true
+
+  return employee.jobTitle.toLowerCase().includes('manager')
+}

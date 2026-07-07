@@ -428,10 +428,14 @@ export type SummaryAction = {
   context: string
 }
 
+export type SummaryScope = 'company' | `team:${ID}`
+
 export type SummaryVersion = {
   versionId: string
   summary: string
   generatedAt: string
+  generatedBy?: ID
+  actionSnapshots?: Partial<Record<SummaryPriority, ActionVersion>>
 }
 
 export type ActionVersion = {
@@ -445,15 +449,32 @@ export type ActionVersion = {
 }
 
 export type SummaryContent = {
+  id: ID
+  scope: SummaryScope
+  createdBy: ID
+  visibility: SummaryVisibilityMode
+  publishedVersionId: string | null
   activeSummaryVersionId: string
   activeActionVersionIds: Record<SummaryPriority, string>
   summaryVersions: SummaryVersion[]
   actionVersions: Record<SummaryPriority, ActionVersion[]>
-  summaryFeedback: 'up' | 'down' | null
-  summaryFeedbackReason: string | null
-  actionFeedback: Record<SummaryPriority, 'up' | 'down' | null>
+  /** @deprecated use summaryFeedbackStorage */
+  summaryFeedback?: 'up' | 'down' | null
+  /** @deprecated use summaryFeedbackStorage */
+  summaryFeedbackReason?: string | null
+  /** @deprecated use summaryFeedbackStorage */
+  actionFeedback?: Record<SummaryPriority, 'up' | 'down' | null>
   generatedBy: ID
   dashboardDataSnapshot: string
+}
+
+export type SummaryFeedbackRecord = {
+  summaryId: ID
+  versionId: string
+  userId: ID
+  rating: 'up' | 'down'
+  comment?: string
+  createdAt: string
 }
 
 export type OrgContextCategory =

@@ -11,7 +11,9 @@ import type {
   WidgetType,
 } from '@/types'
 import { WIDGET_CATALOG } from '@/components/modules/analytics/widgetRegistry'
+import { SummaryOrgContextPanel } from '@/components/modules/analytics/SummaryOrgContextPanel'
 import { DEFAULT_SUMMARY_ADMIN_SETTINGS } from '@/lib/summaryDefaults'
+import { isAdminContext } from '@/lib/userContext'
 import {
   buildSummaryAdminConfigFromFields,
   SummaryAdminSettingsFields,
@@ -107,6 +109,7 @@ const WIDGET_STEPS = [
 
 const SUMMARY_STEPS = [
   { icon: '📊', label: 'Widget' },
+  { icon: '📋', label: 'Org Context' },
   { icon: '⚙', label: 'Settings' },
   { icon: '👁', label: 'Visibility' },
 ] as const
@@ -538,8 +541,9 @@ export function AddWidgetModal({
     Boolean(selectedSurveyId) && (!needsQuestions || selectedQuestions.length > 0)
   const canContinue =
     (step === 0 && Boolean(selectedType)) ||
-    (isSummaryFlow && step === 1 && widgetName.trim().length > 0) ||
-    (isSummaryFlow && step === 2 && dataWidgetsOnTab.length > 0) ||
+    (isSummaryFlow && step === 1) ||
+    (isSummaryFlow && step === 2 && widgetName.trim().length > 0) ||
+    (isSummaryFlow && step === 3 && dataWidgetsOnTab.length > 0) ||
     (!isSummaryFlow && step === 1 && widgetName.trim().length > 0) ||
     (!isSummaryFlow && step === 2 && standardSourceValid) ||
     (!isSummaryFlow && step === 3 && standardSourceValid && widgetName.trim().length > 0)
@@ -853,40 +857,17 @@ export function AddWidgetModal({
 
     if (step === 1) {
       if (isSummaryFlow) {
+        if (!isAdminContext()) {
+          return (
+            <WuText size="sm" as="p" className="text-sm text-gray-600">
+              Organization context is available to HR admins when creating summary widgets.
+            </WuText>
+          )
+        }
+
         return (
-          <div className="space-y-5">
-            <FieldRow label="Name">
-              <div className="space-y-1">
-                <WuInput
-                  value={widgetName}
-                  placeholder="Enter name"
-                  maxLength={100}
-                  onChange={(event) => setWidgetName(event.target.value.slice(0, 100))}
-                />
-                <div className="text-right text-xs text-gray-400">{widgetName.length}/100</div>
-              </div>
-            </FieldRow>
-            <FieldRow label="Description">
-              <WuTextarea
-                rows={4}
-                value={widgetDescription}
-                placeholder="Describe what this summary covers..."
-                onChange={(event) => setWidgetDescription(event.target.value)}
-              />
-            </FieldRow>
-            <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
-              <div className="flex items-start gap-2">
-                <span className="text-purple-500" aria-hidden>
-                  ✦
-                </span>
-                <div>
-                  <WuText size="sm" as="p" className="text-purple-700">
-                    This widget generates an AI-powered summary of all data currently on this dashboard
-                    tab, combined with your organization&apos;s context settings.
-                  </WuText>
-                </div>
-              </div>
-            </div>
+          <div className="max-h-[60vh] overflow-y-auto pr-1">
+            <SummaryOrgContextPanel />
           </div>
         )
       }
@@ -931,12 +912,40 @@ export function AddWidgetModal({
     if (step === 2) {
       if (isSummaryFlow) {
         return (
-          <SummaryAdminSettingsFields
-            values={summarySettings}
-            onChange={(patch) => setSummarySettings((current) => ({ ...current, ...patch }))}
-            dataWidgets={dataWidgetsOnTab}
-            showDataCheck
-          />
+          <div className="space-y-5">
+            <FieldRow label="Name">
+              <div className="space-y-1">
+                <WuInput
+                  value={widgetName}
+                  placeholder="Enter name"
+                  maxLength={100}
+                  onChange={(event) => setWidgetName(event.target.value.slice(0, 100))}
+                />
+                <div className="text-right text-xs text-gray-400">{widgetName.length}/100</div>
+              </div>
+            </FieldRow>
+            <FieldRow label="Description">
+              <WuTextarea
+                rows={4}
+                value={widgetDescription}
+                placeholder="Describe what this summary covers..."
+                onChange={(event) => setWidgetDescription(event.target.value)}
+              />
+            </FieldRow>
+            <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+              <div className="flex items-start gap-2">
+                <span className="text-purple-500" aria-hidden>
+                  ✦
+                </span>
+                <div>
+                  <WuText size="sm" as="p" className="text-purple-700">
+                    This widget generates an AI-powered summary of all data currently on this dashboard
+                    tab, combined with your organization&apos;s context settings.
+                  </WuText>
+                </div>
+              </div>
+            </div>
+          </div>
         )
       }
 
@@ -1035,7 +1044,18 @@ export function AddWidgetModal({
       )
     }
 
-    if (step === 3 && !isSummaryFlow) {
+    if (step === 3) {
+      if (isSummaryFlow) {
+        return (
+          <SummaryAdminSettingsFields
+            values={summarySettings}
+            onChange={(patch) => setSummarySettings((current) => ({ ...current, ...patch }))}
+            dataWidgets={dataWidgetsOnTab}
+            showDataCheck
+          />
+        )
+      }
+
       return (
       <div className="space-y-5">
         {renderColumnsSet()}
@@ -1068,7 +1088,7 @@ export function AddWidgetModal({
   }
 
   return (
-    <WuModal open={open} onOpenChange={handleModalOpenChange} size="lg">
+    <WuModal open={open} onOpenChange={handleModalOpenChange} size={isSummaryFlow && step === 1 ? 'xl' : 'lg'}>
       <WuModalHeader>
         <span className="flex items-center gap-2">
           {selectedType ? getWidgetDisplayName(selectedType) : 'Add widget'}

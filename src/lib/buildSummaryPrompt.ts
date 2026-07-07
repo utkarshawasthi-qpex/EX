@@ -2,12 +2,11 @@ import {
   mockDriverAnalysisData,
   mockENPSData,
   mockHeatmapData,
-  mockOrgContext,
   mockResponseRateData,
   mockScorecardData,
   mockTimeTrendData,
 } from '@/data/mock/analyticsData'
-import { formatOrgContextForPrompt } from '@/lib/orgContextCategories'
+import { assembleAiSummaryOrgContextPrompt, createEmptyAiSummaryOrgContext } from '@/lib/aiSummaryOrgContext/budget'
 import { getOrgContextText } from '@/lib/orgContext'
 import {
   appendActionVersion,
@@ -203,7 +202,9 @@ Return ONLY valid JSON (no markdown):
 }
 
 function readOrgContextText(): string {
-  if (typeof window === 'undefined') return formatOrgContextForPrompt(mockOrgContext)
+  if (typeof window === 'undefined') {
+    return assembleAiSummaryOrgContextPrompt(createEmptyAiSummaryOrgContext())
+  }
 
   return getOrgContextText()
 }

@@ -485,14 +485,6 @@ export type OrgContextCategory =
   | 'guideline'
   | 'kpi'
 
-export type OrgContextKPI = {
-  id: ID
-  metric: string
-  currentValue: string
-  targetValue: string
-  deadline: string
-}
-
 export type OrgContextFile = {
   id: ID
   name: string
@@ -512,7 +504,39 @@ export type OrgContextNote = {
 export type OrgContext = {
   files: OrgContextFile[]
   notes: OrgContextNote[]
-  kpis: OrgContextKPI[]
+}
+
+export type AiSummaryFileSlotKey = 'policy' | 'guidelines' | 'initiative'
+
+export type AiSummaryFileRecord = {
+  name: string
+  sizeBytes: number
+  pageCount: number | null
+  extractedText: string
+  tokenEstimate: number
+  uploadedAt: string
+}
+
+export type AiSummaryOrgContext = {
+  files: Record<AiSummaryFileSlotKey, AiSummaryFileRecord | null>
+  textFields: {
+    todo: string
+    notToDo: string
+    kpis: string
+  }
+  updatedAt: string
+}
+
+export type AiSummaryOrgContextInputKey =
+  | AiSummaryFileSlotKey
+  | 'todo'
+  | 'notToDo'
+  | 'kpis'
+
+export type AiSummaryOrgContextBudgetSegment = {
+  key: AiSummaryOrgContextInputKey
+  label: string
+  tokens: number
 }
 
 export type LogoAlignment = 'left' | 'center' | 'right'

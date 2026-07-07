@@ -85,7 +85,6 @@ export function countContextByCategory(context: OrgContext): Record<OrgContextCa
   for (const note of context.notes) {
     counts[note.category] += 1
   }
-  counts.kpi += context.kpis?.length ?? 0
 
   return counts
 }
@@ -98,15 +97,6 @@ export function formatOrgContextForPrompt(context: OrgContext): string {
   }
   for (const note of context.notes) {
     parts.push(`[${getCategoryLabel(note.category)}] ${note.text}`)
-  }
-
-  if (context.kpis?.length) {
-    parts.push('KPIs to address:')
-    for (const kpi of context.kpis) {
-      parts.push(
-        `- ${kpi.metric}: currently ${kpi.currentValue}, target ${kpi.targetValue} by ${kpi.deadline}`,
-      )
-    }
   }
 
   return parts.join('\n')

@@ -32,14 +32,11 @@ export const mockOrgContext: OrgContext = {
       category: 'not_to_do',
       addedAt: '2026-06-15T11:20:00.000Z',
     },
-  ],
-  kpis: [
     {
-      id: 'kpi_1',
-      metric: 'eNPS',
-      currentValue: '-12',
-      targetValue: '+20',
-      deadline: 'Q4 2026',
+      id: 'note_3',
+      text: 'eNPS: currently -12, target +20 by Q4 2026',
+      category: 'kpi',
+      addedAt: '2026-06-16T09:00:00.000Z',
     },
   ],
 }

@@ -59,3 +59,7 @@ export function isSharedSummaryViewer(
   if (user.id === content.createdBy) return false
   return config.visibility === 'everyone'
 }
+
+export function canRateSummary(user: AppUser, content: SummaryContent): boolean {
+  return user.id === content.createdBy && !user.isImpersonating
+}

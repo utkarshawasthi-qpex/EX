@@ -19,6 +19,7 @@ import { normalizeSummaryAdminConfig } from '@/lib/normalizeSummaryConfig'
 import {
   canGenerateSummary,
   canManageVersions,
+  canRateSummary,
   canRegenerateSummary,
   isSharedSummaryViewer,
 } from '@/lib/summaryPermissions'
@@ -538,7 +539,7 @@ function SummaryWidgetInner({
         content={displayContent}
         onContentChange={handleCompanyContentChange}
         onCreateActionPlan={handleCreateActionPlan}
-        viewerUserId={currentUser.id}
+        canShowFeedback={canRateSummary(currentUser, displayContent)}
         canSeeActions={canSeeActions}
         canCreateActionPlan={canCreateActionPlan}
         showRestrictedNote={!canSeeActions && !isAdmin}
@@ -631,7 +632,7 @@ function SummaryWidgetInner({
         content={teamResolved.content}
         onContentChange={handleTeamContentChange}
         onCreateActionPlan={handleCreateActionPlan}
-        viewerUserId={currentUser.id}
+        canShowFeedback={canRateSummary(currentUser, teamResolved.content)}
         canSeeActions
         canCreateActionPlan
         canManageVersions={manageTeamVersions}

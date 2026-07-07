@@ -19,7 +19,7 @@ import {
   setActiveSummaryVersionId,
 } from '@/lib/summaryContent'
 import { cn } from '@/lib/utils'
-import type { ID, SummaryAction, SummaryContent, SummaryPriority } from '@/types'
+import type { SummaryAction, SummaryContent, SummaryPriority } from '@/types'
 
 const WuButton = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuButton })),
@@ -34,7 +34,7 @@ type SummaryWidgetSectionsProps = {
   content: SummaryContent
   onContentChange: (content: SummaryContent) => void
   onCreateActionPlan: (action: SummaryAction) => void
-  viewerUserId: ID
+  canShowFeedback?: boolean
   canSeeActions?: boolean
   canCreateActionPlan?: boolean
   showRestrictedNote?: boolean
@@ -100,7 +100,7 @@ export function SummaryWidgetSections({
   content,
   onContentChange,
   onCreateActionPlan,
-  viewerUserId,
+  canShowFeedback = false,
   canSeeActions = true,
   canCreateActionPlan = true,
   showRestrictedNote = false,
@@ -130,7 +130,15 @@ export function SummaryWidgetSections({
   const isPublishedVersion = content.publishedVersionId === activeVersionId
 
   useEffect(() => {
-    const existing = getSummaryFeedback(content.id, activeVersionId, viewerUserId)
+    if (!canShowFeedback) {
+      setFeedbackRating(null)
+      setFeedbackComment('')
+      setFeedbackSubmitted(false)
+      setShowCommentInput(false)
+      return
+    }
+
+    const existing = getSummaryFeedback(content.id, activeVersionId, content.createdBy)
     if (existing) {
       setFeedbackRating(existing.rating)
       setFeedbackComment(existing.comment ?? '')
@@ -142,7 +150,7 @@ export function SummaryWidgetSections({
     setFeedbackComment('')
     setFeedbackSubmitted(false)
     setShowCommentInput(false)
-  }, [content.id, activeVersionId, viewerUserId])
+  }, [canShowFeedback, content.id, content.createdBy, activeVersionId])
 
   function persistContent(next: SummaryContent) {
     onContentChange(next)
@@ -176,7 +184,7 @@ export function SummaryWidgetSections({
     saveSummaryFeedback({
       summaryId: content.id,
       versionId: activeVersionId,
-      userId: viewerUserId,
+      userId: content.createdBy,
       rating: feedbackRating,
       comment:
         feedbackRating === 'down' && !skipComment && feedbackComment.trim()
@@ -190,7 +198,7 @@ export function SummaryWidgetSections({
   }
 
   function resetFeedback() {
-    clearSummaryFeedback(content.id, activeVersionId, viewerUserId)
+    clearSummaryFeedback(content.id, activeVersionId, content.createdBy)
     setFeedbackRating(null)
     setFeedbackComment('')
     setFeedbackSubmitted(false)
@@ -455,59 +463,63 @@ export function SummaryWidgetSections({
         </div>
 
         <div className="flex flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-          {feedbackSubmitted ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-              <span>Thanks — feedback recorded</span>
-              <button
-                type="button"
-                className="text-blue-600 hover:underline"
-                onClick={resetFeedback}
-              >
-                Change
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-              <span>Was this summary helpful?</span>
-              <FeedbackButtons
-                feedback={feedbackRating}
-                onUp={handleFeedbackUp}
-                onDown={handleFeedbackDown}
-              />
-            </div>
-          )}
+          {canShowFeedback && (
+            <>
+              {feedbackSubmitted ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                  <span>Thanks — feedback recorded</span>
+                  <button
+                    type="button"
+                    className="text-blue-600 hover:underline"
+                    onClick={resetFeedback}
+                  >
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                  <span>Rate this summary</span>
+                  <FeedbackButtons
+                    feedback={feedbackRating}
+                    onUp={handleFeedbackUp}
+                    onDown={handleFeedbackDown}
+                  />
+                </div>
+              )}
 
-          {showCommentInput && !feedbackSubmitted && feedbackRating === 'down' && (
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={feedbackComment}
-                onChange={(event) => setFeedbackComment(event.target.value.slice(0, 200))}
-                placeholder="What could be better?"
-                className="w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
-                maxLength={200}
-              />
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="text-xs text-gray-500 hover:text-gray-700"
-                  onClick={() => submitFeedback(true)}
-                >
-                  Skip
-                </button>
-                <WuButton variant="primary" size="sm" onClick={() => submitFeedback(false)}>
-                  Submit
-                </WuButton>
-              </div>
-            </div>
-          )}
+              {showCommentInput && !feedbackSubmitted && feedbackRating === 'down' && (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={feedbackComment}
+                    onChange={(event) => setFeedbackComment(event.target.value.slice(0, 200))}
+                    placeholder="What could be better?"
+                    className="w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+                    maxLength={200}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                      onClick={() => submitFeedback(true)}
+                    >
+                      Skip
+                    </button>
+                    <WuButton variant="primary" size="sm" onClick={() => submitFeedback(false)}>
+                      Submit
+                    </WuButton>
+                  </div>
+                </div>
+              )}
 
-          {feedbackRating === 'up' && !feedbackSubmitted && (
-            <div className="flex justify-end">
-              <WuButton variant="primary" size="sm" onClick={() => submitFeedback(true)}>
-                Submit
-              </WuButton>
-            </div>
+              {feedbackRating === 'up' && !feedbackSubmitted && (
+                <div className="flex justify-end">
+                  <WuButton variant="primary" size="sm" onClick={() => submitFeedback(true)}>
+                    Submit
+                  </WuButton>
+                </div>
+              )}
+            </>
           )}
 
           <WuText size="sm" as="p" className="text-[11px] text-gray-400">

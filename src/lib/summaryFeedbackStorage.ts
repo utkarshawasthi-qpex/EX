@@ -1,6 +1,7 @@
 import type { ID, SummaryFeedbackRecord } from '@/types'
 
-const STORAGE_KEY = 'pp_summary_feedback'
+const STORAGE_KEY = 'aiSummaryFeedback'
+const LEGACY_STORAGE_KEY = 'pp_summary_feedback'
 
 function storageKey(summaryId: ID, versionId: string, userId: ID): string {
   return `${summaryId}:${versionId}:${userId}`
@@ -9,9 +10,16 @@ function storageKey(summaryId: ID, versionId: string, userId: ID): string {
 function readAll(): Record<string, SummaryFeedbackRecord> {
   if (typeof window === 'undefined') return {}
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    const raw =
+      window.localStorage.getItem(STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_STORAGE_KEY)
     if (!raw) return {}
-    return JSON.parse(raw) as Record<string, SummaryFeedbackRecord>
+    const records = JSON.parse(raw) as Record<string, SummaryFeedbackRecord>
+    if (!window.localStorage.getItem(STORAGE_KEY) && window.localStorage.getItem(LEGACY_STORAGE_KEY)) {
+      window.localStorage.setItem(STORAGE_KEY, raw)
+      window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+    }
+    return records
   } catch {
     return {}
   }

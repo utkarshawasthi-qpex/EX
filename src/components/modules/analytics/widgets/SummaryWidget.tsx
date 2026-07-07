@@ -427,8 +427,8 @@ function SummaryWidgetInner({
 
   const companyResolved = companyContent
     ? resolveSummaryContentForViewer(companyContent, {
-        canManageVersions: canManageVersions(currentUser, companyContent, isAdmin),
-        isSharedViewer: isSharedSummaryViewer(currentUser, companyContent, config, isAdmin),
+        canManageVersions: canManageVersions(currentUser, companyContent),
+        isSharedViewer: isSharedSummaryViewer(currentUser, companyContent, config),
         visibility: config.visibility,
       })
     : null
@@ -443,7 +443,7 @@ function SummaryWidgetInner({
 
   const teamResolved = teamContent
     ? resolveSummaryContentForViewer(teamContent, {
-        canManageVersions: canManageVersions(currentUser, teamContent, isAdmin),
+        canManageVersions: canManageVersions(currentUser, teamContent),
         isSharedViewer: false,
         visibility: 'private',
       })
@@ -532,7 +532,7 @@ function SummaryWidgetInner({
     }
 
     const displayContent = companyResolved.content
-    const manageVersions = canManageVersions(currentUser, companyContent, isAdmin)
+    const manageVersions = canManageVersions(currentUser, companyContent)
 
     return (
       <SummaryWidgetSections
@@ -625,7 +625,7 @@ function SummaryWidgetInner({
 
     if (!teamContent || !teamResolved) return null
 
-    const manageTeamVersions = canManageVersions(currentUser, teamContent, isAdmin)
+    const manageTeamVersions = canManageVersions(currentUser, teamContent)
 
     return (
       <SummaryWidgetSections

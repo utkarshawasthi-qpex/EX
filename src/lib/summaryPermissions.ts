@@ -41,23 +41,21 @@ export function canRegenerateSummary(
   )
 }
 
-export function canManageVersions(
-  user: AppUser,
-  content: SummaryContent,
-  isAdmin: boolean,
-): boolean {
-  return isAdmin || user.id === content.createdBy
+export function canManageVersions(user: AppUser, content: SummaryContent): boolean {
+  return (
+    user.role === 'hr_admin' &&
+    !user.isImpersonating &&
+    user.id === content.createdBy
+  )
 }
 
 export function isSharedSummaryViewer(
   user: AppUser,
   content: SummaryContent,
   config: SummaryAdminConfig,
-  isAdmin: boolean,
 ): boolean {
-  if (isAdmin) return false
-  if (user.id === content.createdBy) return false
-  return config.visibility === 'everyone'
+  if (config.visibility !== 'everyone') return false
+  return !canManageVersions(user, content)
 }
 
 export function canRateSummary(user: AppUser, content: SummaryContent): boolean {

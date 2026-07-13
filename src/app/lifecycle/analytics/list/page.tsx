@@ -329,6 +329,7 @@ export default function DashboardListPage() {
       <PageHeader
         title="Dashboards"
         description="Create and manage analytics dashboards"
+        className="bg-white"
         actions={
           isAdmin ? (
             <WuButton variant="primary" onClick={() => setIsCreateOpen(true)}>

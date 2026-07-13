@@ -413,10 +413,9 @@ export function AnalyticsPortalShell({ children }: { children: React.ReactNode }
         />
         <main
           className={cn(
-            'min-w-0 overflow-auto bg-white transition-[margin-left] duration-200 ease-in-out',
+            'h-[calc(100vh-2.5rem)] min-w-0 overflow-auto bg-white transition-[margin-left] duration-200 ease-in-out',
             sidebarExpanded ? 'ml-[240px]' : 'ml-12',
           )}
-          style={{ minHeight: 'calc(100vh - 2.5rem)' }}
         >
           {children}
         </main>

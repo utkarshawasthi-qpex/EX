@@ -471,9 +471,9 @@ export default function DashboardCanvasPage() {
   }
 
   return (
-    <div className="flex h-full min-h-[calc(100vh-2.5rem)]">
-      <main className="flex min-w-0 flex-1 flex-col bg-white">
-        <header className="relative sticky top-0 z-20 border-b border-gray-200 bg-white px-6 pt-4 pb-3">
+    <div className="flex h-full min-h-0 flex-col">
+      <main className="flex min-h-0 flex-1 flex-col bg-white">
+        <header className="z-20 shrink-0 border-b border-gray-200 bg-white px-6 pt-4 pb-3">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-2">
               <button
@@ -572,7 +572,7 @@ export default function DashboardCanvasPage() {
         </header>
 
         {capabilities && !capabilities.isOwner && (
-          <div className="border-b border-blue-100 bg-blue-50 px-4 py-1.5">
+          <div className="shrink-0 border-b border-blue-100 bg-blue-50 px-4 py-1.5">
             <p className="text-xs text-blue-600">
               👁 You&apos;re viewing a shared dashboard — export and filters are available. Contact
               the dashboard owner to make changes.
@@ -581,7 +581,7 @@ export default function DashboardCanvasPage() {
         )}
 
         {activeFilters.length > 0 && (
-          <section className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-white px-6 py-3">
+          <section className="flex shrink-0 flex-wrap items-center gap-3 border-b border-gray-200 bg-white px-6 py-3">
             <WuText size="sm" as="span" className="font-medium text-gray-700">
               Dashboard
             </WuText>
@@ -670,7 +670,7 @@ export default function DashboardCanvasPage() {
           )}
         </section>
 
-        <footer className="sticky bottom-0 z-20 border-t border-gray-200 bg-white">
+        <footer className="z-20 shrink-0 border-t border-gray-200 bg-white">
           <div className="flex h-10 items-center gap-1 overflow-x-auto px-4">
             <button
               type="button"

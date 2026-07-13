@@ -26,6 +26,7 @@ export default function OrganizationContextPage() {
       <PageHeader
         title="Org Context"
         description="Provide three tagged documents and three text fields (To-do, Not-to-do, KPI) for your AI summary."
+        className="bg-white"
       />
 
       <PageContent>

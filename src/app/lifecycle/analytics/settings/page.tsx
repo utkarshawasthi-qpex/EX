@@ -206,6 +206,7 @@ export default function PptExportTemplatesPage() {
       <PageHeader
         title="PPT Export Templates"
         description="Manage templates for PowerPoint exports"
+        className="bg-white"
         actions={
           admin ? (
             <WuButton variant="primary" onClick={() => setEditingTemplate(createTemplate())}>

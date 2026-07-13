@@ -6,7 +6,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { IWuTableColumnDef } from '@npm-questionpro/wick-ui-lib';
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContent } from '@/components/shared/PageContent';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { PageShell } from '@/components/shared/PageShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { MOCK_PROJECTS, type Project, type ProjectStatus } from '@/data/mock-projects';
@@ -214,18 +216,19 @@ export function ProjectsListPage({
   ];
 
   return (
-    <div className="p-6">
+    <PageShell>
       <PageHeader
         title="Projects"
         description={pageDescription}
-        action={
+        actions={
           <WuButton onClick={() => setIsCreateOpen(true)}>
             <span className="wm-add" /> New Project
           </WuButton>
         }
       />
 
-      <div className="flex items-center gap-3 mb-4">
+      <PageContent>
+      <div className="flex items-center gap-3">
         <WuInput
           variant="outlined"
           placeholder="Search projects..."
@@ -314,6 +317,7 @@ export function ProjectsListPage({
         variant="critical"
         onConfirm={handleArchive}
       />
-    </div>
+      </PageContent>
+    </PageShell>
   );
 }

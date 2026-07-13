@@ -21,7 +21,7 @@ export function PlaceholderPage({
 }: PlaceholderPageProps) {
   return (
     <PageShell>
-      <PageHeader title={title} description={description} sticky={false} />
+      <PageHeader title={title} description={description} />
       <PageContent>
         <WuText size="sm" as="p" className="text-gray-400">
           {description}

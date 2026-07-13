@@ -8,5 +8,5 @@ type PageShellProps = {
 }
 
 export function PageShell({ children, className }: PageShellProps) {
-  return <div className={cn('min-h-full', className)}>{children}</div>
+  return <div className={cn('flex min-h-full flex-col', className)}>{children}</div>
 }

@@ -6,7 +6,9 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib';
 import type { IWuTabItem } from '@npm-questionpro/wick-ui-lib';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { PageContent } from '@/components/shared/PageContent';
+import { PageHeader } from '@/components/shared/PageHeader';
+import { PageShell } from '@/components/shared/PageShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MOCK_PROJECTS, type Project, type ProjectStatus } from '@/data/mock-projects';
 import { formatDate } from '@/data/mock-utils';
@@ -169,19 +171,23 @@ export function ProjectDetailPage({ basePath }: ProjectDetailPageProps) {
   ];
 
   return (
-    <div className="p-6">
-      <Link
-        href={basePath}
-        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4"
-      >
-        <span className="wm-arrow-back text-base" /> Back to Projects
-      </Link>
+    <PageShell>
+      <div className="px-6 pt-4">
+        <Link
+          href={basePath}
+          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+        >
+          <span className="wm-arrow-back text-base" /> Back to Projects
+        </Link>
+      </div>
       <PageHeader
         title={project.name}
         description={project.description}
-        action={<StatusBadge status={project.status} />}
+        actions={<StatusBadge status={project.status} />}
       />
-      <WuTab items={tabs} defaultValue="overview" />
-    </div>
+      <PageContent>
+        <WuTab items={tabs} defaultValue="overview" />
+      </PageContent>
+    </PageShell>
   );
 }

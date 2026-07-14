@@ -53,7 +53,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname])
 
   useEffect(() => {
-    if (employeeMode && !pathname.startsWith('/lifecycle/analytics')) {
+    if (
+      employeeMode &&
+      !pathname.startsWith('/lifecycle/analytics') &&
+      !pathname.startsWith('/360/my-report')
+    ) {
       router.replace('/lifecycle/analytics')
     }
   }, [employeeMode, pathname, router])

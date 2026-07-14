@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
+import { getMarcusLeeUser } from '@/lib/empowerIntegration/storage'
 import { cn } from '@/lib/utils'
 import { getCurrentUser, type AppUser } from '@/lib/userContext'
 
@@ -113,6 +114,31 @@ export function TopBar({ isSidebarCollapsed, onToggleSidebar }: TopBarProps) {
     setUser(getCurrentUser())
     showToast({ variant: 'success', message: 'Returned to admin view' })
     router.push('/lifecycle/roster')
+  }
+
+  function switchDemoRole(role: 'admin' | 'marcus_360') {
+    if (typeof window === 'undefined') return
+    if (role === 'admin') {
+      window.localStorage.removeItem('pp_impersonating')
+      setUser(getCurrentUser())
+      showToast({ variant: 'success', message: 'Switched to admin view' })
+      router.push('/lifecycle/analytics/list')
+      return
+    }
+
+    const marcus = getMarcusLeeUser()
+    window.localStorage.setItem(
+      'pp_impersonating',
+      JSON.stringify({
+        id: marcus.id,
+        name: marcus.name,
+        email: marcus.email,
+        role: 'employee',
+      }),
+    )
+    setUser(getCurrentUser())
+    showToast({ variant: 'success', message: 'Viewing as Marcus Lee — 360 Subject' })
+    router.push('/360/my-report')
   }
 
   return (
@@ -231,6 +257,14 @@ export function TopBar({ isSidebarCollapsed, onToggleSidebar }: TopBarProps) {
           onClick={() => console.log('Help clicked')}
         >
           ?
+        </button>
+        <button
+          type="button"
+          className="rounded border border-white/30 px-2 py-0.5 text-[10px] text-white/90 hover:bg-white/10"
+          onClick={() => switchDemoRole('marcus_360')}
+          title="Demo: Marcus — 360 Subject"
+        >
+          Marcus — 360 Subject
         </button>
         <div className="flex size-7 items-center justify-center rounded-full border border-white/30 bg-[#071d35] text-[10px] font-semibold text-white">
           UA

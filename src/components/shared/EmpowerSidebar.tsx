@@ -10,7 +10,6 @@ const navItems = [
   { label: 'Ideation', href: '/empower/ideation', icon: 'wm-tips-and-updates' },
   { label: 'Conversations', href: '/empower/conversations', icon: 'wm-forum' },
   { label: 'Analytics', href: '/empower/analytics', icon: 'wc-analytics' },
-  { label: 'Admin', href: '/empower/admin', icon: 'wm-admin-panel-settings' },
   { label: 'Settings', href: '/empower/settings', icon: 'wc-settings' },
 ]
 

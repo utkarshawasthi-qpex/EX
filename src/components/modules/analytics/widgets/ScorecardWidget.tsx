@@ -2,8 +2,6 @@
 
 import dynamic from 'next/dynamic'
 import { useRef } from 'react'
-import { InitiativeCategoryChip } from '@/components/modules/analytics/InitiativeCategoryChip'
-import { useActiveInitiativesByCategory } from '@/components/modules/analytics/useCategoryInitiatives'
 import { mockScorecardData } from '@/data/mock/analyticsData'
 import { WidgetKebabMenu } from '@/components/modules/analytics/widgets/WidgetKebabMenu'
 import { widgetSurfaceClassName } from '@/components/modules/analytics/widgets/WidgetCardShell'
@@ -111,14 +109,6 @@ function ComparisonCell({
   )
 }
 
-const MARKER_CATEGORY_MAP: Record<string, string> = {
-  Technologies: 'cat_growth_dev',
-  Solutions: 'cat_communication',
-  Transparency: 'cat_communication',
-  'Growth & Development': 'cat_growth_dev',
-  Wellbeing: 'cat_wellbeing',
-}
-
 export function ScorecardWidget({
   onEdit,
   onDuplicate,
@@ -129,12 +119,6 @@ export function ScorecardWidget({
   onDelete?: () => void
 }) {
   const { surveyName, markers } = mockScorecardData
-  const categoryInitiatives = useActiveInitiativesByCategory([
-    'cat_growth_dev',
-    'cat_manager_rel',
-    'cat_wellbeing',
-    'cat_communication',
-  ])
   const { capabilities, onExportPpt, reportWidgetHeight } = useDashboardWidgetContext()
   const rootRef = useRef<HTMLElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
@@ -205,8 +189,6 @@ export function ScorecardWidget({
             <tbody>
               {markers.map((marker) => {
                 const isOverall = marker.name === 'Company Overall'
-                const categoryId = MARKER_CATEGORY_MAP[marker.name]
-                const initiativeIds = categoryId ? categoryInitiatives[categoryId] ?? [] : []
                 return (
                   <tr key={marker.name} className="border-b border-gray-100">
                     <td
@@ -215,18 +197,13 @@ export function ScorecardWidget({
                         isOverall ? 'font-normal text-gray-900' : 'text-gray-700',
                       )}
                     >
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="flex items-center gap-1.5">
-                          {!isOverall && (
-                            <span className="text-xs text-gray-400" aria-hidden>
-                              &gt;
-                            </span>
-                          )}
-                          {marker.name}
-                        </span>
-                        {initiativeIds.length > 0 && (
-                          <InitiativeCategoryChip count={initiativeIds.length} initiativeIds={initiativeIds} />
+                      <span className="flex items-center gap-1.5">
+                        {!isOverall && (
+                          <span className="text-xs text-gray-400" aria-hidden>
+                            &gt;
+                          </span>
                         )}
+                        {marker.name}
                       </span>
                     </td>
                     <td className="px-3 py-3 text-center text-sm text-gray-700">

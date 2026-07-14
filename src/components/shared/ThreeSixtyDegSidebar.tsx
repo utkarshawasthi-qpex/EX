@@ -9,7 +9,6 @@ const navItems = [
   { label: 'Participants', href: '/360/participants', icon: 'wm-groups' },
   { label: 'Deployment', href: '/360/deployment', icon: 'wm-send' },
   { label: 'Reports', href: '/360/reports', icon: 'wc-analytics' },
-  { label: 'My Report', href: '/360/my-report', icon: 'wm-person' },
   { label: 'Settings', href: '/360/settings', icon: 'wc-settings' },
 ]
 

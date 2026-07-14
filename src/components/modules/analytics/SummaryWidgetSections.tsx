@@ -321,7 +321,7 @@ export function SummaryWidgetSections({
                     : 'text-blue-600 hover:underline',
                 )}
               >
-                + Create action plan
+                Create action plan →
               </button>
             )}
           </div>

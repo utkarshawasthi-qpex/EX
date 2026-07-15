@@ -2,7 +2,6 @@
 
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActiveInitiativesStrip } from '@/components/modules/analytics/ActiveInitiativesStrip'
 import { CreateActionPlanModal } from '@/components/modules/analytics/CreateActionPlanModal'
 import { useDashboardWidgetContext } from '@/components/modules/analytics/DashboardWidgetContext'
 import { SummarySettingsModal } from '@/components/modules/analytics/SummarySettingsModal'
@@ -36,7 +35,7 @@ import {
   saveCachedCompanySummary,
   saveCachedManagerSummary,
 } from '@/lib/summaryStorage'
-import { resolveSummaryContentForViewer } from '@/lib/summaryContent'
+import { resolveSummaryContentForViewer, setLinkedInitiativeOnRecommendation } from '@/lib/summaryContent'
 import { canSeeCompanySummary } from '@/lib/summaryVisibility'
 import { getCurrentUser, isManagerUser } from '@/lib/userContext'
 import { cn } from '@/lib/utils'
@@ -166,7 +165,6 @@ function SummaryWidgetInner({
   const [actionPlanLink, setActionPlanLink] = useState<SurveyLink | null>(null)
   const [actionPlanCandidates, setActionPlanCandidates] = useState<SurveyLinkCandidate[]>([])
   const [actionPlanProvenance, setActionPlanProvenance] = useState<InitiativeProvenance | null>(null)
-  const [initiativesRefreshKey, setInitiativesRefreshKey] = useState(0)
 
   const [isGeneratingTeam, setIsGeneratingTeam] = useState(false)
   const [teamError, setTeamError] = useState<'api_error' | null>(null)
@@ -450,6 +448,19 @@ function SummaryWidgetInner({
     setActionPlanOpen(true)
   }
 
+  function handleActionPlanCreated(initiativeId: string, priority: SummaryPriority) {
+    if (activeTab === 'company' && config.companyContent) {
+      const normalized = normalizeSummaryContent(config.companyContent)
+      handleCompanyContentChange(setLinkedInitiativeOnRecommendation(normalized, priority, initiativeId))
+    } else if (activeTab === 'team' && myTeamCache) {
+      handleTeamContentChange(
+        setLinkedInitiativeOnRecommendation(myTeamCache.content, priority, initiativeId),
+      )
+    }
+    setActionPlanOpen(false)
+    setActionPlanAction(null)
+  }
+
   const companyContent = config.companyContent
     ? normalizeSummaryContent(config.companyContent, {
         scope: 'company',
@@ -691,8 +702,8 @@ function SummaryWidgetInner({
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
-      <div ref={rootRef} className={cn(widgetSurfaceClassName, 'min-h-0 flex-1')}>
+    <>
+      <div ref={rootRef} className={widgetSurfaceClassName}>
         <div ref={chromeRef} className="flex-shrink-0">
           <div className="flex items-start justify-between px-4 pt-3 pb-2">
             <div className="flex items-start gap-2">
@@ -796,15 +807,6 @@ function SummaryWidgetInner({
         </div>
       </div>
 
-      {(activeTab === 'company' ? isAdmin : activeTab === 'team') && (
-        <ActiveInitiativesStrip
-          scope={resolveDashboardScope(activeTab, currentUser.id)}
-          canEdit={canCreateActionPlan}
-          refreshKey={initiativesRefreshKey}
-          onUpdated={() => setInitiativesRefreshKey((k) => k + 1)}
-        />
-      )}
-
       <SummarySettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -821,9 +823,11 @@ function SummaryWidgetInner({
           linkCandidates={actionPlanCandidates}
           provenance={actionPlanProvenance}
           activeTab={activeTab}
-          onCreated={() => setInitiativesRefreshKey((k) => k + 1)}
+          onCreated={(initiativeId) =>
+            handleActionPlanCreated(initiativeId, actionPlanAction.priority)
+          }
         />
       )}
-    </div>
+    </>
   )
 }

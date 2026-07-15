@@ -82,7 +82,7 @@ export type CreateActionPlanModalProps = {
   linkCandidates?: SurveyLinkCandidate[]
   provenance: InitiativeProvenance
   activeTab: 'company' | 'team'
-  onCreated?: (id: string) => void
+  onCreated?: (initiativeId: string) => void
 }
 
 function toEmployeeOptions(): SelectOption[] {

@@ -426,6 +426,7 @@ export type SummaryAction = {
   owner: 'Manager' | 'HR' | 'Leadership'
   priority: SummaryPriority
   context: string
+  linkedInitiativeId?: string
 }
 
 export type SummaryScope = 'company' | `team:${ID}`
@@ -446,6 +447,7 @@ export type ActionVersion = {
   priority: SummaryPriority
   context: string
   generatedAt: string
+  linkedInitiativeId?: string
 }
 
 export type SummaryContent = {

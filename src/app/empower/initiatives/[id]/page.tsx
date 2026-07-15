@@ -14,6 +14,7 @@ import { formatDueDate, getGoalTitle, progressLabel } from '@/lib/empowerIntegra
 import { getInitiativeById, getSurveyDataStore, upsertInitiative } from '@/lib/empowerIntegration/storage'
 import { canSeeInitiative } from '@/lib/empowerIntegration/visibility'
 import { getCurrentUser } from '@/lib/userContext'
+import type { InitiativeProgress } from '@/types/empowerIntegration'
 
 const WuButton = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuButton })), { ssr: false })
 const WuChip = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuChip })), { ssr: false })
@@ -24,6 +25,7 @@ export default function InitiativeDetailPage() {
   const user = getCurrentUser()
   const { showToast } = useWuShowToast()
   const [confirmUnlink, setConfirmUnlink] = useState(false)
+  const [confirmDone, setConfirmDone] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   const initiative = useMemo(() => {
@@ -45,6 +47,11 @@ export default function InitiativeDetailPage() {
   const link = initiative.surveyLink
   const sourceMissing = link ? !getSurveyDataStore().ex[link.surveyId] : false
   const canUnlink = user.id === initiative.createdBy || user.id === initiative.ownerId
+  const canUpdateProgress =
+    initiative.status === 'active' &&
+    (user.id === initiative.createdBy ||
+      user.id === initiative.ownerId ||
+      initiative.contributors.includes(user.id))
   const delta =
     link?.latest?.favorability !== undefined && link.baseline.favorability !== undefined
       ? link.latest.favorability - link.baseline.favorability
@@ -60,6 +67,23 @@ export default function InitiativeDetailPage() {
     })
     showToast({ variant: 'success', message: 'Survey link removed' })
     setConfirmUnlink(false)
+    setRefreshKey((k) => k + 1)
+  }
+
+  function updateProgress(progress: InitiativeProgress) {
+    const current = getInitiativeById(params.id)
+    if (!current) return
+    const now = new Date().toISOString()
+    upsertInitiative({
+      ...current,
+      progress,
+      status: progress === 'done' ? 'completed' : current.status,
+      history: [
+        ...current.history,
+        { at: now, event: `Progress set to ${progressLabel(progress)} from initiative detail` },
+      ],
+    })
+    showToast({ variant: 'success', message: 'Initiative progress updated' })
     setRefreshKey((k) => k + 1)
   }
 
@@ -109,6 +133,26 @@ export default function InitiativeDetailPage() {
           </section>
         )}
 
+        {canUpdateProgress && (
+          <section className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
+            <WuText size="sm" as="div" className="mb-3 font-semibold text-gray-900">
+              Status
+            </WuText>
+            <div className="flex flex-wrap gap-2">
+              {(['on_track', 'stuck', 'done'] as InitiativeProgress[]).map((progress) => (
+                <WuButton
+                  key={progress}
+                  variant={initiative.progress === progress ? 'primary' : 'secondary'}
+                  size="sm"
+                  onClick={() => (progress === 'done' ? setConfirmDone(true) : updateProgress(progress))}
+                >
+                  {progressLabel(progress)}
+                </WuButton>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section>
           <WuText size="sm" as="div" className="mb-3 font-semibold text-gray-900">Tasks</WuText>
           <ul className="space-y-2">
@@ -127,6 +171,7 @@ export default function InitiativeDetailPage() {
         </section>
       </PageContent>
       <ConfirmModal open={confirmUnlink} onOpenChange={setConfirmUnlink} title="Unlink survey data?" description="The initiative will remain; only the linked survey panel is removed." confirmLabel="Unlink" variant="critical" onConfirm={handleUnlink} />
+      <ConfirmModal open={confirmDone} onOpenChange={setConfirmDone} title="Mark initiative as done?" description="This will set the initiative status to completed." confirmLabel="Mark done" onConfirm={() => { updateProgress('done'); setConfirmDone(false) }} />
     </PageShell>
   )
 }

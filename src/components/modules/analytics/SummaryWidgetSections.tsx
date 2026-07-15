@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { format } from 'date-fns'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import {
@@ -301,7 +302,14 @@ export function SummaryWidgetSections({
                 ↺
               </button>
             )}
-            {canCreateActionPlan && (
+            {displayVersion.linkedInitiativeId ? (
+              <Link
+                href={`/empower/initiatives/${displayVersion.linkedInitiativeId}`}
+                className="whitespace-nowrap text-xs font-medium text-green-700 hover:underline"
+              >
+                ✓ Action plan created — View in Empower →
+              </Link>
+            ) : canCreateActionPlan ? (
               <button
                 type="button"
                 onClick={() =>
@@ -323,7 +331,7 @@ export function SummaryWidgetSections({
               >
                 + Create action plan
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

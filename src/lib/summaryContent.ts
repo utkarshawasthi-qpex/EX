@@ -99,6 +99,7 @@ export function actionVersionToSummaryAction(version: ActionVersion): SummaryAct
     owner: version.owner,
     priority: version.priority,
     context: version.context,
+    linkedInitiativeId: version.linkedInitiativeId,
   }
 }
 
@@ -464,6 +465,22 @@ export function setActiveActionVersionId(
       [priority]: versionId,
     },
   }
+}
+
+export function setLinkedInitiativeOnRecommendation(
+  content: SummaryContent,
+  priority: SummaryPriority,
+  initiativeId: string,
+): SummaryContent {
+  const versionId = content.activeActionVersionIds[priority]
+  if (!versionId) return content
+
+  const actionVersions = { ...content.actionVersions }
+  actionVersions[priority] = actionVersions[priority].map((version) =>
+    version.versionId === versionId ? { ...version, linkedInitiativeId: initiativeId } : version,
+  )
+
+  return { ...content, actionVersions }
 }
 
 export function getSummaryVersionIndex(content: SummaryContent): number {

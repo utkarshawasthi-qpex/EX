@@ -39,8 +39,21 @@ export type SurveyLink = {
 export type InitiativeTask = {
   id: string
   text: string
+  description?: string
+  ownerId?: string
+  contributorIds?: string[]
+  dueDate?: string
   done: boolean
   source: 'ai_recommendation' | 'manual'
+  provenance?: InitiativeProvenance | null
+}
+
+export type NewTaskFormInput = {
+  text: string
+  description?: string
+  ownerId: string
+  contributorIds: string[]
+  dueDate: string
 }
 
 export type InitiativeProvenance = {

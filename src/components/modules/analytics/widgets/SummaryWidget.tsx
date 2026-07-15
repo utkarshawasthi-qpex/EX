@@ -510,8 +510,6 @@ function SummaryWidgetInner({
         setLinkedInitiativeOnRecommendation(myTeamCache.content, priority, initiativeId),
       )
     }
-    setActionPlanOpen(false)
-    setActionPlanAction(null)
   }
 
   const companyContent = config.companyContent
@@ -859,7 +857,11 @@ function SummaryWidgetInner({
       {actionPlanAction && actionPlanProvenance && (
         <CreateActionPlanModal
           open={actionPlanOpen}
-          onClose={() => setActionPlanOpen(false)}
+          onClose={() => {
+            setActionPlanOpen(false)
+            setActionPlanAction(null)
+            setActionPlanProvenance(null)
+          }}
           action={actionPlanAction}
           inheritedLink={actionPlanLink}
           linkCandidates={actionPlanCandidates}

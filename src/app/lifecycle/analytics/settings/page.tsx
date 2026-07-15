@@ -9,6 +9,8 @@ import { PageCard } from '@/components/shared/PageCard'
 import { PageContent } from '@/components/shared/PageContent'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { PageShell } from '@/components/shared/PageShell'
+import { simulateEngagement2027Close } from '@/lib/empowerIntegration/simulateCycleClose'
+import { getOrgSettings } from '@/lib/empowerIntegration/storage'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { isAdminContext } from '@/lib/userContext'
 import type { ImageLayout, LogoAlignment, PptFontConfig, PptTemplate } from '@/types'
@@ -167,10 +169,12 @@ export default function PptExportTemplatesPage() {
   const [templates, setTemplates] = useState<PptTemplate[]>([])
   const [admin, setAdmin] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<PptTemplate | null>(null)
+  const [cycleClosed, setCycleClosed] = useState(false)
 
   useEffect(() => {
     setTemplates(loadTemplates())
     setAdmin(isAdminContext())
+    setCycleClosed(getOrgSettings().engagement2027Closed === true)
   }, [])
 
   function saveTemplates(nextTemplates: PptTemplate[]) {
@@ -201,6 +205,20 @@ export default function PptExportTemplatesPage() {
     setEditingTemplate((current) => (current ? updater(current) : current))
   }
 
+  function handleSimulateCycleClose() {
+    const result = simulateEngagement2027Close()
+    if (result.alreadyClosed) {
+      setCycleClosed(true)
+      showToast({ variant: 'info', message: 'Engagement 2027 cycle was already closed.' })
+      return
+    }
+    setCycleClosed(true)
+    showToast({
+      variant: 'success',
+      message: `Simulated cycle close — ${result.updatedCount} initiative${result.updatedCount === 1 ? '' : 's'} updated.`,
+    })
+  }
+
   return (
     <PageShell>
       <PageHeader
@@ -217,6 +235,26 @@ export default function PptExportTemplatesPage() {
       />
 
       <PageContent>
+        {admin && (
+          <PageCard className="mb-6 p-4">
+            <WuHeading size="sm" className="text-gray-900">
+              Empower demo controls
+            </WuHeading>
+            <WuText size="sm" as="p" className="mt-1 text-gray-500">
+              Active initiative cap: {getOrgSettings().activeInitiativeCap}
+            </WuText>
+            <div className="mt-3">
+              <WuButton
+                variant="primary"
+                disabled={cycleClosed}
+                onClick={handleSimulateCycleClose}
+              >
+                {cycleClosed ? '2027 already closed' : '▶ Simulate: Engagement 2027 closes'}
+              </WuButton>
+            </div>
+          </PageCard>
+        )}
+
         <div className="grid grid-cols-3 gap-4">
           {templates.map((template) => (
             <PageCard key={template.id} className="p-4">

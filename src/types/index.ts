@@ -599,11 +599,20 @@ export type WidgetType =
   | 'driver_analysis'
   | 'summary'
 
+export type WidgetSurveySource = {
+  surveyId: ID
+  surveyName: string
+  surveyType: 'ex'
+  surveyCycleYear: string
+}
+
 export type DashboardWidget = {
   id: ID
   type: WidgetType
   title: string
   surveyId?: ID
+  surveySource?: WidgetSurveySource
+  appliedFilters?: Record<string, string>
   width: 'full' | 'half'
   order: number
   config?: Record<string, unknown>

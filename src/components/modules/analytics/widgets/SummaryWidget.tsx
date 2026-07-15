@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ActiveInitiativesStrip } from '@/components/modules/analytics/ActiveInitiativesStrip'
 import { CreateActionPlanModal } from '@/components/modules/analytics/CreateActionPlanModal'
 import { useDashboardWidgetContext } from '@/components/modules/analytics/DashboardWidgetContext'
 import { SummarySettingsModal } from '@/components/modules/analytics/SummarySettingsModal'
@@ -9,7 +10,11 @@ import { SummaryWidgetSections } from '@/components/modules/analytics/SummaryWid
 import { useReportWidgetHeight } from '@/components/modules/analytics/useReportWidgetHeight'
 import { WidgetKebabMenu } from '@/components/modules/analytics/widgets/WidgetKebabMenu'
 import { widgetSurfaceClassName } from '@/components/modules/analytics/widgets/WidgetCardShell'
-import { mockScorecardData } from '@/data/mock/analyticsData'
+import {
+  getSourceWidgetIdsForAction,
+  resolveDashboardScope,
+  resolveSurveyLinkForAction,
+} from '@/lib/empowerIntegration/dashboardLink'
 import {
   generateDashboardSummary,
   regenerateSingleAction,
@@ -43,6 +48,11 @@ import type {
   SummaryPriority,
   ViewerCapabilities,
 } from '@/types'
+import type {
+  InitiativeProvenance,
+  SurveyLink,
+  SurveyLinkCandidate,
+} from '@/types/empowerIntegration'
 
 const WuHeading = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuHeading })),
@@ -152,12 +162,11 @@ function SummaryWidgetInner({
   const [regeneratingActionPriority, setRegeneratingActionPriority] =
     useState<SummaryPriority | null>(null)
   const [actionPlanOpen, setActionPlanOpen] = useState(false)
-  const [actionPlanPrefill, setActionPlanPrefill] = useState({
-    title: '',
-    timeframe: '30 days',
-    owner: 'Manager',
-    surveyName: mockScorecardData.surveyName,
-  })
+  const [actionPlanAction, setActionPlanAction] = useState<SummaryAction | null>(null)
+  const [actionPlanLink, setActionPlanLink] = useState<SurveyLink | null>(null)
+  const [actionPlanCandidates, setActionPlanCandidates] = useState<SurveyLinkCandidate[]>([])
+  const [actionPlanProvenance, setActionPlanProvenance] = useState<InitiativeProvenance | null>(null)
+  const [initiativesRefreshKey, setInitiativesRefreshKey] = useState(0)
 
   const [isGeneratingTeam, setIsGeneratingTeam] = useState(false)
   const [teamError, setTeamError] = useState<'api_error' | null>(null)
@@ -166,7 +175,6 @@ function SummaryWidgetInner({
   const canGenerateTeam = canGenerateSummary(config, currentUser, isAdmin, 'team')
 
   const canSeeActions = activeTab === 'company' ? isAdmin : activeTab === 'team'
-  const canCreateActionPlan = canSeeActions
   const canRegenerateCompany = canRegenerateSummary(
     config,
     currentUser,
@@ -409,12 +417,36 @@ function SummaryWidgetInner({
   }
 
   function handleCreateActionPlan(action: SummaryAction) {
-    setActionPlanPrefill({
-      title: action.action,
-      timeframe: action.timeframe,
-      owner: action.owner,
-      surveyName: mockScorecardData.surveyName,
+    const tabScope = resolveDashboardScope(activeTab, currentUser.id)
+    const sourceWidgetIds = getSourceWidgetIdsForAction(action, dashboardWidgets)
+    const resolution = resolveSurveyLinkForAction(sourceWidgetIds, dashboardWidgets, tabScope, action)
+
+    const contentForProvenance =
+      activeTab === 'company' ? config.companyContent : myTeamCache?.content
+    const versionId =
+      contentForProvenance?.activeSummaryVersionId ??
+      contentForProvenance?.publishedVersionId ??
+      'unknown'
+    const primaryWidgetId = sourceWidgetIds[0] ?? widget.id
+
+    setActionPlanAction(action)
+    setActionPlanProvenance({
+      sourceSummaryVersionId: versionId,
+      sourceWidgetId: primaryWidgetId,
+      promptVersion: '1.0',
+      recommendationPriority: action.priority,
     })
+
+    if (resolution.type === 'auto') {
+      setActionPlanLink(resolution.link)
+      setActionPlanCandidates([])
+    } else if (resolution.type === 'confirm') {
+      setActionPlanLink(null)
+      setActionPlanCandidates(resolution.candidates)
+    } else {
+      setActionPlanLink(null)
+      setActionPlanCandidates([])
+    }
     setActionPlanOpen(true)
   }
 
@@ -451,6 +483,12 @@ function SummaryWidgetInner({
     : null
   const companyGenerating = config.isGenerating
   const companyError = config.generationError
+
+  const companySharedViewer = companyContent
+    ? isSharedSummaryViewer(currentUser, companyContent, config)
+    : false
+  const canCreateActionPlan =
+    canSeeActions && !(activeTab === 'company' && companySharedViewer) && !currentUser.isImpersonating
 
   const showCompanyWideBadge =
     !isAdmin && activeTab === 'company' && Boolean(companyContent)
@@ -758,6 +796,15 @@ function SummaryWidgetInner({
         </div>
       </div>
 
+      {(activeTab === 'company' ? isAdmin : activeTab === 'team') && (
+        <ActiveInitiativesStrip
+          scope={resolveDashboardScope(activeTab, currentUser.id)}
+          canEdit={canCreateActionPlan}
+          refreshKey={initiativesRefreshKey}
+          onUpdated={() => setInitiativesRefreshKey((k) => k + 1)}
+        />
+      )}
+
       <SummarySettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -765,11 +812,18 @@ function SummaryWidgetInner({
         onUpdate={onUpdate}
       />
 
-      <CreateActionPlanModal
-        open={actionPlanOpen}
-        onClose={() => setActionPlanOpen(false)}
-        prefill={actionPlanPrefill}
-      />
+      {actionPlanAction && actionPlanProvenance && (
+        <CreateActionPlanModal
+          open={actionPlanOpen}
+          onClose={() => setActionPlanOpen(false)}
+          action={actionPlanAction}
+          inheritedLink={actionPlanLink}
+          linkCandidates={actionPlanCandidates}
+          provenance={actionPlanProvenance}
+          activeTab={activeTab}
+          onCreated={() => setInitiativesRefreshKey((k) => k + 1)}
+        />
+      )}
     </>
   )
 }

@@ -1,9 +1,19 @@
 'use client'
 
 import { useState } from 'react'
+import { InitiativeCategoryChip } from '@/components/modules/analytics/InitiativeCategoryChip'
+import { useActiveInitiativesByCategory } from '@/components/modules/analytics/useCategoryInitiatives'
 import { mockHeatmapData } from '@/data/mock/analyticsData'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
 import { cn } from '@/lib/utils'
+
+const HEATMAP_CATEGORY_MAP: Record<string, string> = {
+  Wellbeing: 'cat_wellbeing',
+  Growth: 'cat_growth_dev',
+  'Growth & Development': 'cat_growth_dev',
+  Communication: 'cat_communication',
+  Transparency: 'cat_communication',
+}
 
 function getCellColor(score: number) {
   if (score >= 4) return 'bg-green-200 text-green-900'
@@ -22,6 +32,12 @@ export function HeatmapWidget({
 }) {
   const { surveyName, metrics, columns, scores } = mockHeatmapData
   const [mode, setMode] = useState<'mean' | 'delta'>('mean')
+  const categoryInitiatives = useActiveInitiativesByCategory([
+    'cat_growth_dev',
+    'cat_wellbeing',
+    'cat_communication',
+    'cat_manager_rel',
+  ])
 
   return (
     <WidgetCardShell
@@ -80,12 +96,20 @@ export function HeatmapWidget({
             </tr>
           </thead>
           <tbody>
-            {metrics.map((metric, rowIndex) => (
+            {metrics.map((metric, rowIndex) => {
+              const categoryId = HEATMAP_CATEGORY_MAP[metric]
+              const initiativeIds = categoryId ? categoryInitiatives[categoryId] ?? [] : []
+              return (
               <tr key={metric} className="border-b border-gray-100">
                 <td className="py-2 pr-3 text-sm text-gray-700">
-                  <span className="flex items-center gap-1">
-                    <span className="text-xs text-gray-400">&gt;</span>
-                    {metric}
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="flex items-center gap-1">
+                      <span className="text-xs text-gray-400">&gt;</span>
+                      {metric}
+                    </span>
+                    {initiativeIds.length > 0 && (
+                      <InitiativeCategoryChip count={initiativeIds.length} initiativeIds={initiativeIds} />
+                    )}
                   </span>
                 </td>
                 {scores[rowIndex]?.map((score, colIndex) => (
@@ -100,7 +124,7 @@ export function HeatmapWidget({
                   </td>
                 ))}
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>

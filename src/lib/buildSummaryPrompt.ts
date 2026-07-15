@@ -10,6 +10,7 @@ import {
 import { assembleAiSummaryOrgContextPrompt, createEmptyAiSummaryOrgContext } from '@/lib/aiSummaryOrgContext/budget'
 import {
   activeFiltersToLabels,
+  findWeakestDepartmentCategoryCell,
   getFilteredCategorySentiment,
   getFilteredENPS,
   getFilteredResponseRate,
@@ -210,6 +211,51 @@ Return ONLY valid JSON, no markdown:
 
 const TEAM_FAVORABILITY_OFFSET = 8
 
+const BANNED_SUMMARY_WORDS = [
+  'leverage',
+  'synergy',
+  'holistic',
+  'paradigm',
+  'bandwidth',
+  'utilize',
+  'facilitate',
+  'ecosystem',
+  'deliverable',
+  'actionable',
+  'disruptive',
+  'optimize',
+  'streamline',
+  'stakeholder',
+  'north star',
+  'move the needle',
+  'circle back',
+  'double down',
+  'low-hanging fruit',
+]
+
+function summaryHash(value: string): number {
+  let hash = 0
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+function pickSummaryVariant<T>(variants: T[], seed: string, slot: string): T {
+  return variants[summaryHash(`${seed}:${slot}`) % variants.length]!
+}
+
+function assertPlainLanguage(text: string): string {
+  const lower = text.toLowerCase()
+  for (const word of BANNED_SUMMARY_WORDS) {
+    if (lower.includes(word)) {
+      throw new Error(`Summary contains banned word: ${word}`)
+    }
+  }
+  return text
+}
+
 export type DashboardFacts = {
   lowestCategory: { name: string; favorable: number; respondents: number }
   highestCategory: { name: string; favorable: number; respondents: number }
@@ -234,10 +280,6 @@ function filterLabels(activeFilters: ActiveFilter[]): string[] {
 function buildFilterDescription(activeFilters: ActiveFilter[]): string | null {
   if (activeFilters.length === 0) return null
   return `${activeFilters.map((filter) => filter.value).join(', ')} respondents`
-}
-
-function meanScoreToFavorable(score: number): number {
-  return Math.round((score / 5) * 100)
 }
 
 function getScorecardCategories(
@@ -273,31 +315,6 @@ function getScorecardCategories(
         respondents: marker.respondents,
       }
     })
-}
-
-function findWorstHeatmapCell(): {
-  category: string
-  department: string
-  favorable: number
-} | null {
-  let worst: { category: string; department: string; favorable: number } | null = null
-  let minScore = Infinity
-
-  mockHeatmapData.metrics.forEach((metric, rowIndex) => {
-    mockHeatmapData.scores[rowIndex]?.forEach((score, colIndex) => {
-      const department = mockHeatmapData.columns[colIndex]?.name
-      if (!department || score >= minScore) return
-
-      minScore = score
-      worst = {
-        category: metric,
-        department,
-        favorable: meanScoreToFavorable(score),
-      }
-    })
-  })
-
-  return worst
 }
 
 function sortCategoriesByFavorability(
@@ -342,7 +359,7 @@ export function computeDashboardFacts(
   return {
     lowestCategory,
     highestCategory,
-    worstHeatmapCell: hasHeatmap ? findWorstHeatmapCell() : null,
+    worstHeatmapCell: hasHeatmap ? findWeakestDepartmentCategoryCell(activeFilters) : null,
     enps,
     responseRate,
     filterDescription: buildFilterDescription(activeFilters),
@@ -350,43 +367,98 @@ export function computeDashboardFacts(
   }
 }
 
-export function composeSummary(facts: DashboardFacts, viewType: 'company' | 'team'): string {
-  const parts: string[] = []
-
-  if (facts.filterDescription) {
-    parts.push(`Looking at ${facts.filterDescription}:`)
-  }
-
-  const scope = viewType === 'team' ? 'Your team' : 'The organization'
+export function composeSummary(
+  facts: DashboardFacts,
+  viewType: 'company' | 'team',
+  variantSeed?: string,
+): string {
+  const seed = variantSeed ?? `${Date.now()}`
+  const audience = viewType === 'team' ? 'employees on your team' : 'employees'
   const { lowestCategory, highestCategory } = facts
+  const sentences: string[] = []
 
-  parts.push(
-    `${scope} shows ${lowestCategory.name} is lowest at ${lowestCategory.favorable}% favorable (${lowestCategory.respondents} respondents).`,
-  )
-  parts.push(`${highestCategory.name} is strongest at ${highestCategory.favorable}% favorable.`)
+  const headlineVariants = [
+    () =>
+      facts.filterDescription
+        ? `Looking at ${facts.filterDescription}: ${lowestCategory.name} is the clearest problem area, with only ${lowestCategory.favorable}% of ${audience} responding favorably.`
+        : `${lowestCategory.name} is the clearest problem area, with only ${lowestCategory.favorable}% of ${audience} responding favorably.`,
+    () =>
+      facts.filterDescription
+        ? `Looking at ${facts.filterDescription}: ${lowestCategory.name} stands out as the most pressing concern — just ${lowestCategory.favorable}% responded favorably.`
+        : `${lowestCategory.name} stands out as the most pressing concern — just ${lowestCategory.favorable}% of ${audience} responded favorably.`,
+    () =>
+      facts.filterDescription
+        ? `Looking at ${facts.filterDescription}: ${lowestCategory.name} needs the most attention, with favorable responses at only ${lowestCategory.favorable}%.`
+        : `${lowestCategory.name} needs the most attention, with favorable responses at only ${lowestCategory.favorable}%.`,
+  ]
+  sentences.push(pickSummaryVariant(headlineVariants, seed, 'headline')())
 
-  if (facts.enps !== null) {
-    parts.push(`eNPS is ${facts.enps}.`)
-  }
-
-  if (facts.responseRate !== null) {
-    parts.push(`Response rate is ${facts.responseRate}%.`)
-  }
+  const contrastVariants = [
+    () =>
+      `By contrast, ${highestCategory.name} is a genuine strength at ${highestCategory.favorable}%.`,
+    () =>
+      `${highestCategory.name} is a bright spot by comparison, with ${highestCategory.favorable}% favorable responses.`,
+    () =>
+      `On the positive side, ${highestCategory.name} leads at ${highestCategory.favorable}% favorable — a clear area of strength.`,
+  ]
+  sentences.push(pickSummaryVariant(contrastVariants, seed, 'contrast')())
 
   if (facts.worstHeatmapCell) {
     const cell = facts.worstHeatmapCell
-    parts.push(
-      `The heatmap’s weakest cell is ${cell.category} in ${cell.department} at ${cell.favorable}% favorable.`,
-    )
+    const heatmapVariants = [
+      () =>
+        `This shows up again at the department level — ${cell.department} scores lowest on ${cell.category} at ${cell.favorable}%, suggesting the issue may be sharper in that team than company-wide.`,
+      () =>
+        `The pattern deepens within teams: ${cell.department} rates ${cell.category} lowest at ${cell.favorable}%, which points to a sharper gap there than across the company.`,
+      () =>
+        `Drilling into departments, ${cell.department} is the weakest on ${cell.category} at ${cell.favorable}%, hinting the problem may be concentrated in that group.`,
+    ]
+    sentences.push(pickSummaryVariant(heatmapVariants, seed, 'heatmap')())
   }
 
-  if (viewType === 'team') {
-    parts.push(`Focus next on ${lowestCategory.name} with your direct reports.`)
-  } else {
-    parts.push(`HR and managers should focus next on ${lowestCategory.name}.`)
+  if (facts.enps !== null) {
+    const enpsVariants =
+      facts.enps >= 0
+        ? [
+            () =>
+              `eNPS sits at ${facts.enps}, meaning more employees are recommending the company than discouraging others from joining.`,
+            () =>
+              `With an eNPS of ${facts.enps}, more people would recommend working here than warn others away.`,
+          ]
+        : [
+            () =>
+              `eNPS sits at ${facts.enps}, meaning more employees are actively discouraging others from joining than recommending it.`,
+            () =>
+              `An eNPS of ${facts.enps} shows more detractors than promoters — employees are more likely to warn others away than recommend the company.`,
+          ]
+    sentences.push(pickSummaryVariant(enpsVariants, seed, 'enps')())
+  } else if (facts.responseRate !== null) {
+    const responseRateVariants = [
+      () =>
+        `Survey participation reached ${facts.responseRate}%, giving these results a solid sample to act on.`,
+      () =>
+        `With a ${facts.responseRate}% response rate, the data reflects a broad enough share of the group to trust these patterns.`,
+    ]
+    sentences.push(pickSummaryVariant(responseRateVariants, seed, 'response-rate')())
   }
 
-  return parts.join(' ')
+  const closingVariants =
+    viewType === 'team'
+      ? [
+          () =>
+            `Prioritizing ${lowestCategory.name} with your direct reports over the next quarter is likely to have the broadest impact on engagement.`,
+          () =>
+            `Focusing on ${lowestCategory.name} with your team in the next quarter should yield the widest gains in how people feel about work.`,
+        ]
+      : [
+          () =>
+            `Prioritizing ${lowestCategory.name} over the next quarter is likely to have the broadest impact on engagement.`,
+          () =>
+            `Addressing ${lowestCategory.name} first in the next quarter is the most direct path to improving how employees experience work here.`,
+        ]
+  sentences.push(pickSummaryVariant(closingVariants, seed, 'closing')())
+
+  return assertPlainLanguage(sentences.join(' '))
 }
 
 function recommendationActionForCategory(
@@ -515,7 +587,7 @@ export async function generateDashboardSummary(
 
   const generatedBy = getCurrentUser().id
   const facts = computeDashboardFacts(dataWidgets, activeFilters, viewType)
-  const summary = composeSummary(facts, viewType)
+  const summary = composeSummary(facts, viewType, `${Date.now()}-${Math.random()}`)
   const actions =
     viewType === 'team'
       ? mockTeamActions(dataWidgets, activeFilters)
@@ -560,7 +632,7 @@ export async function generateSummaryOnlyRegeneration(
   await new Promise((resolve) => setTimeout(resolve, 1200))
 
   const facts = computeDashboardFacts(dataWidgets, activeFilters, viewType)
-  return composeSummary(facts, viewType)
+  return composeSummary(facts, viewType, `${Date.now()}-${Math.random()}`)
 }
 
 export async function generateRecommendationsOnlyRegeneration(

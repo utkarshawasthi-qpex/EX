@@ -4,6 +4,7 @@ import {
   CATEGORY_BASELINES,
   CATEGORY_KEYS,
   computeWeightedCategoryAggregate,
+  HEATMAP_DEPARTMENTS,
   meanFromSentimentPercentages,
   sampleCategorySentiment,
   sentimentBucketScore,
@@ -245,6 +246,53 @@ export function getFilteredCategorySentiment(
   }
 }
 
+export function getDepartmentCategorySentiment(
+  activeFilters: ActiveFilter[],
+  department: string,
+  categoryKey: CategoryKey,
+): { favorable: number; neutral: number; unfavorable: number; count: number } {
+  const withoutDepartment = activeFilters.filter((filter) => filter.fieldId !== 'department')
+  const combinedFilters: ActiveFilter[] = [
+    ...withoutDepartment,
+    { fieldId: 'department', fieldLabel: 'Department', value: department },
+  ]
+  return getFilteredCategorySentiment(combinedFilters, categoryKey)
+}
+
+export function findWeakestDepartmentCategoryCell(activeFilters: ActiveFilter[]): {
+  category: string
+  department: string
+  favorable: number
+} | null {
+  const departmentFilter = activeFilters.find((filter) => filter.fieldId === 'department')
+  const departments = departmentFilter ? [departmentFilter.value] : [...HEATMAP_DEPARTMENTS]
+
+  let weakest: { category: string; department: string; favorable: number } | null = null
+
+  for (const categoryKey of CATEGORY_KEYS) {
+    const categoryOverall =
+      activeFilters.length > 0
+        ? getFilteredCategorySentiment(activeFilters, categoryKey).favorable
+        : CATEGORY_BASELINES[categoryKey].favorable
+
+    for (const department of departments) {
+      const sentiment = getDepartmentCategorySentiment(activeFilters, department, categoryKey)
+      if (sentiment.count < ANONYMITY_THRESHOLD) continue
+      if (sentiment.favorable > categoryOverall) continue
+
+      if (!weakest || sentiment.favorable < weakest.favorable) {
+        weakest = {
+          category: CATEGORY_BASELINES[categoryKey].label,
+          department,
+          favorable: sentiment.favorable,
+        }
+      }
+    }
+  }
+
+  return weakest
+}
+
 export function getFilteredSentiment(activeFilters: ActiveFilter[]) {
   const respondents = filterRespondents(activeFilters)
   const count = respondents.length
@@ -322,12 +370,12 @@ export function buildFilteredScorecardMarkers(
   )
 
   const baseOverall = baseMarkers.find((marker) => marker.name === 'Company Overall')!
-  const filteredCount = categoryMarkers[0]?.respondents ?? 0
+  const cohortCount = respondentCount(activeFilters)
 
   return [
     {
       ...baseOverall,
-      respondents: filteredCount,
+      respondents: cohortCount,
       favorable: overall.favorable,
       neutral: overall.neutral,
       unfavorable: overall.unfavorable,

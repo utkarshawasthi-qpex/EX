@@ -5,6 +5,8 @@ export {
   buildFilteredScorecardMarkers,
   DASHBOARD_FILTER_FIELDS,
   filterRespondents,
+  findWeakestDepartmentCategoryCell,
+  getDepartmentCategorySentiment,
   getFilteredCategorySentiment,
   getFilteredENPS,
   getFilteredResponseRate,

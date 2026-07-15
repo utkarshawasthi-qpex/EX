@@ -227,7 +227,13 @@ export function buildCompanyOverallBaseline() {
       respondents: baseline.respondents,
     }
   })
-  return computeWeightedCategoryAggregate(rows)
+  const aggregate = computeWeightedCategoryAggregate(rows)
+  return {
+    favorable: aggregate.favorable,
+    neutral: aggregate.neutral,
+    unfavorable: aggregate.unfavorable,
+    mean: aggregate.mean,
+  }
 }
 
 export function heatmapCellScore(categoryKey: CategoryKey, department: string | null): number {
@@ -287,7 +293,7 @@ export function buildScorecardMarkers(totalRespondents?: number): ScorecardMarke
   return [
     {
       name: 'Company Overall',
-      respondents: totalRespondents ?? overall.respondents,
+      respondents: totalRespondents ?? 0,
       unfavorable: overall.unfavorable,
       neutral: overall.neutral,
       favorable: overall.favorable,

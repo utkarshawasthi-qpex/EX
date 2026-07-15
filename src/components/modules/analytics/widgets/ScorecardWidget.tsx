@@ -8,7 +8,7 @@ import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/Filt
 import { widgetSurfaceClassName } from '@/components/modules/analytics/widgets/WidgetCardShell'
 import { useDashboardWidgetContext } from '@/components/modules/analytics/DashboardWidgetContext'
 import { useReportWidgetHeight } from '@/components/modules/analytics/useReportWidgetHeight'
-import { getFilteredSentiment } from '@/lib/dashboardFilters'
+import { buildFilteredScorecardMarkers } from '@/lib/dashboardFilters'
 import { cn } from '@/lib/utils'
 import type { ActiveFilter } from '@/types'
 
@@ -124,16 +124,9 @@ export function ScorecardWidget({
   onDelete?: () => void
 }) {
   const { surveyName, markers: baseMarkers } = mockScorecardData
-  const sentiment = getFilteredSentiment(activeFilters)
   const markers =
     activeFilters.length > 0
-      ? baseMarkers.map((marker) => ({
-          ...marker,
-          respondents: sentiment.count,
-          favorable: sentiment.favorable,
-          neutral: sentiment.neutral,
-          unfavorable: sentiment.unfavorable,
-        }))
+      ? buildFilteredScorecardMarkers(activeFilters, baseMarkers)
       : baseMarkers
   const { capabilities, onExportPpt, reportWidgetHeight } = useDashboardWidgetContext()
   const rootRef = useRef<HTMLElement>(null)

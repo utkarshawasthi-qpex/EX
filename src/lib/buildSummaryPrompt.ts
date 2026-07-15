@@ -1,3 +1,4 @@
+import { CATEGORY_BASELINES, CATEGORY_KEYS } from '@/data/mock/categorySentimentData'
 import {
   mockDriverAnalysisData,
   mockENPSData,
@@ -9,6 +10,7 @@ import {
 import { assembleAiSummaryOrgContextPrompt, createEmptyAiSummaryOrgContext } from '@/lib/aiSummaryOrgContext/budget'
 import {
   activeFiltersToLabels,
+  getFilteredCategorySentiment,
   getFilteredENPS,
   getFilteredResponseRate,
   getFilteredSentiment,
@@ -242,23 +244,24 @@ function getScorecardCategories(
   activeFilters: ActiveFilter[],
   viewType: 'company' | 'team',
 ): Array<{ name: string; favorable: number; respondents: number }> {
-  const sentiment = getFilteredSentiment(activeFilters)
+  if (activeFilters.length > 0) {
+    return CATEGORY_KEYS.map((key) => {
+      const sentiment = getFilteredCategorySentiment(activeFilters, key)
+      let favorable = sentiment.favorable
+      if (viewType === 'team') {
+        favorable = Math.max(0, favorable - TEAM_FAVORABILITY_OFFSET)
+      }
+      return {
+        name: CATEGORY_BASELINES[key].label,
+        favorable,
+        respondents: sentiment.count,
+      }
+    })
+  }
 
   return mockScorecardData.markers
     .filter((marker) => marker.name !== 'Company Overall')
     .map((marker) => {
-      if (activeFilters.length > 0) {
-        let favorable = sentiment.favorable
-        if (viewType === 'team') {
-          favorable = Math.max(0, favorable - TEAM_FAVORABILITY_OFFSET)
-        }
-        return {
-          name: marker.name,
-          favorable,
-          respondents: sentiment.count,
-        }
-      }
-
       let favorable = marker.favorable
       if (viewType === 'team') {
         favorable = Math.max(0, favorable - TEAM_FAVORABILITY_OFFSET)

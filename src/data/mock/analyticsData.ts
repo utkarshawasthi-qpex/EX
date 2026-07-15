@@ -1,4 +1,21 @@
+import {
+  buildHeatmapScores,
+  buildScorecardMarkers,
+  HEATMAP_DEPARTMENTS,
+} from '@/data/mock/categorySentimentData'
+import { mockDashboardRespondents } from '@/data/mock/dashboardFilters'
 import type { OrgContext } from '@/types'
+
+function buildHeatmapColumns() {
+  return [
+    { name: 'Company overall', respondents: mockDashboardRespondents.length },
+    ...HEATMAP_DEPARTMENTS.map((name) => ({
+      name,
+      respondents: mockDashboardRespondents.filter((respondent) => respondent.department === name)
+        .length,
+    })),
+  ]
+}
 
 export const mockOrgContext: OrgContext = {
   files: [
@@ -43,77 +60,7 @@ export const mockOrgContext: OrgContext = {
 
 export const mockScorecardData = {
   surveyName: 'Workplace Culture',
-  markers: [
-    {
-      name: 'Company Overall',
-      respondents: 500,
-      unfavorable: 40,
-      neutral: 20,
-      favorable: 40,
-      mean: 3,
-      comparison: null,
-    },
-    {
-      name: 'Transparency',
-      respondents: 500,
-      unfavorable: 40,
-      neutral: 20,
-      favorable: 40,
-      mean: 3,
-      comparison: 0,
-      trend: 'up' as const,
-    },
-    {
-      name: 'Technologies',
-      respondents: 500,
-      unfavorable: 40,
-      neutral: 20,
-      favorable: 40,
-      mean: 3,
-      comparison: 0,
-      trend: 'up' as const,
-    },
-    {
-      name: 'Solutions',
-      respondents: 500,
-      unfavorable: 40,
-      neutral: 20,
-      favorable: 40,
-      mean: 3,
-      comparison: 0,
-      trend: 'up' as const,
-    },
-    {
-      name: 'Innovation',
-      respondents: 500,
-      unfavorable: 40,
-      neutral: 20,
-      favorable: 40,
-      mean: 3,
-      comparison: 0,
-      trend: 'up' as const,
-    },
-    {
-      name: 'Inclusion',
-      respondents: 500,
-      unfavorable: 40,
-      neutral: 20,
-      favorable: 40,
-      mean: 3,
-      comparison: 0,
-      trend: 'up' as const,
-    },
-    {
-      name: 'Growth',
-      respondents: 500,
-      unfavorable: 40,
-      neutral: 20,
-      favorable: 40,
-      mean: 3,
-      comparison: 0,
-      trend: 'up' as const,
-    },
-  ],
+  markers: buildScorecardMarkers(mockDashboardRespondents.length),
 }
 
 export const mockENPSData = {
@@ -140,30 +87,20 @@ export const mockHeatmapData = {
     'Collaboration',
     'Agility',
   ],
-  columns: [
-    { name: 'Company overall', respondents: 500 },
-    { name: 'C-Suite/Exec', respondents: 4 },
-    { name: 'Senior Vice President/Vice President', respondents: 5 },
-    { name: 'Associate Vice President/Senior Director', respondents: 4 },
-  ],
-  scores: [
-    [3, 3, 3, 3],
-    [3, 3, 3, 3],
-    [3, 3, 3, 3],
-    [3, 3, 3, 3],
-    [3, 3, 3, 3],
-    [3, 3, 3, 3],
-    [3, 3, 3, 3],
-    [3, 3, 3, 3],
-  ],
+  columns: buildHeatmapColumns(),
+  scores: buildHeatmapScores(),
 }
 
 export const mockResponseRateData = {
   surveyName: 'Workplace Culture',
   overview: { sent: 500, completed: 500, pending: 0, rate: 100 },
   byLevel: [
-    { level: 'C-Suite/Exec', sent: 4, completed: 4, pending: 0, rate: 100 },
-    { level: 'Total sum', sent: 4, completed: 4, pending: 0, rate: 100 },
+    { level: 'IC', sent: 250, completed: 205, pending: 45, rate: 82 },
+    { level: 'Manager', sent: 120, completed: 109, pending: 11, rate: 91 },
+    { level: 'Senior Manager', sent: 60, completed: 54, pending: 6, rate: 90 },
+    { level: 'Director', sent: 45, completed: 43, pending: 2, rate: 96 },
+    { level: 'VP', sent: 18, completed: 16, pending: 2, rate: 89 },
+    { level: 'C-Suite', sent: 7, completed: 7, pending: 0, rate: 100 },
   ],
 }
 

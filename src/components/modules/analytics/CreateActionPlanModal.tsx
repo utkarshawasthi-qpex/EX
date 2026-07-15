@@ -160,7 +160,6 @@ export function CreateActionPlanModal({
   useEffect(() => {
     if (!open) return
 
-    setMode(null)
     setName(action.action)
     setDescription(action.context || '')
     setOwner({ value: user.id, label: user.name })
@@ -177,7 +176,9 @@ export function CreateActionPlanModal({
 
     const scopeArg =
       tabScope.kind === 'team' ? { kind: 'team' as const, managerId: user.id } : { kind: 'org' as const }
-    setAtCap(countActiveInitiativesForScope(scopeArg) >= cap)
+    const capReached = countActiveInitiativesForScope(scopeArg) >= cap
+    setAtCap(capReached)
+    setMode(capReached ? 'existing' : null)
   }, [
     open,
     action,
@@ -331,7 +332,14 @@ export function CreateActionPlanModal({
         </button>
         <button
           type="button"
+          disabled={atCap}
+          title={
+            atCap
+              ? `Your team has ${cap} active initiatives — add this as a task to an existing one instead.`
+              : undefined
+          }
           onClick={() => {
+            if (atCap) return
             setMode('new')
             setValidationError(null)
           }}
@@ -340,6 +348,7 @@ export function CreateActionPlanModal({
             mode === 'new'
               ? 'border-blue-600 bg-blue-50 text-blue-700'
               : 'border-gray-200 text-gray-600 hover:border-gray-300',
+            atCap && 'cursor-not-allowed opacity-40',
           )}
         >
           Create a new initiative
@@ -435,6 +444,13 @@ export function CreateActionPlanModal({
           </div>
         ) : (
           <div className="space-y-4">
+            {atCap && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                Your team has reached the {cap} active initiative limit. Complete one, or add this as a
+                task to an existing initiative.
+              </div>
+            )}
+
             {renderModeToggle()}
 
             {mode === 'existing' && (
@@ -468,14 +484,8 @@ export function CreateActionPlanModal({
               </>
             )}
 
-            {mode === 'new' && (
+            {mode === 'new' && !atCap && (
               <>
-                {atCap && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                    Your team has {cap} active initiatives. Complete one, or add this as a task to an
-                    existing initiative instead.
-                  </div>
-                )}
                 {renderSharedTaskFields('Name')}
                 <WuFormGroup
                   Label="Goal"
@@ -528,7 +538,11 @@ export function CreateActionPlanModal({
               <WuButton variant="secondary" onClick={handleClose}>
                 Cancel
               </WuButton>
-              <WuButton variant="primary" onClick={handleSubmit}>
+              <WuButton
+                variant="primary"
+                onClick={handleSubmit}
+                disabled={atCap && mode === 'new'}
+              >
                 {mode === 'existing' ? 'Add task' : mode === 'new' ? 'Create initiative' : 'Continue'}
               </WuButton>
             </>

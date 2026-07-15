@@ -533,6 +533,7 @@ function SummaryWidgetInner({
   )
 
   const filtersBlockShare = activeFilters.length > 0
+  const sharingEnabled = config.visibility === 'everyone'
 
   function handleShareCompanySnapshot() {
     if (!companyContent || filtersBlockShare) return
@@ -847,10 +848,12 @@ function SummaryWidgetInner({
                     </WuText>
                   )}
                   {isAdmin &&
+                    sharingEnabled &&
                     activeTab === 'company' &&
                     companyContent &&
                     renderShareControls(companyContent, handleShareCompanySnapshot)}
-                  {canRegenerateTeam &&
+                  {sharingEnabled &&
+                    canRegenerateTeam &&
                     activeTab === 'team' &&
                     teamContent &&
                     renderShareControls(teamContent, handleShareTeamSnapshot)}
@@ -943,7 +946,7 @@ function SummaryWidgetInner({
         }}
       />
 
-      {previewContent?.sharedSnapshot && (
+      {sharingEnabled && previewContent?.sharedSnapshot && (
         <SummarySharedPreviewModal
           open={previewOpen}
           onClose={() => setPreviewOpen(false)}

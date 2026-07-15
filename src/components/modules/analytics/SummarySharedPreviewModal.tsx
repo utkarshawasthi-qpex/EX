@@ -44,13 +44,6 @@ export function SummarySharedPreviewModal({
   const snapshot = content.sharedSnapshot
   if (!snapshot) return null
 
-  const previewContent: SummaryContent = {
-    ...content,
-    summary: snapshot.summary,
-    actions: snapshot.actions,
-    isStale: false,
-  }
-
   return (
     <WuModal open={open} onOpenChange={(next) => !next && onClose()} variant="action" size="md">
       <WuModalHeader>Preview what others see</WuModalHeader>
@@ -61,34 +54,8 @@ export function SummarySharedPreviewModal({
           </div>
 
           <WuText size="sm" as="p" className="leading-relaxed text-gray-700">
-            {previewContent.summary}
+            {snapshot.summary}
           </WuText>
-
-          <div>
-            <WuText
-              size="sm"
-              as="p"
-              className="mb-2 font-semibold uppercase tracking-wide text-gray-400"
-            >
-              Recommended actions
-            </WuText>
-            <div className="space-y-2">
-              {[...previewContent.actions]
-                .sort((a, b) => a.priority - b.priority)
-                .map((action) => (
-                  <div
-                    key={action.id}
-                    className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
-                  >
-                    <p className="text-xs font-medium text-gray-800">{action.action}</p>
-                    <p className="mt-1 text-xs text-gray-400">
-                      {action.timeframe} · {action.owner}
-                      {action.context ? ` · ${action.context}` : ''}
-                    </p>
-                  </div>
-                ))}
-            </div>
-          </div>
         </div>
       </WuModalContent>
       <WuModalFooter>

@@ -691,8 +691,8 @@ function SummaryWidgetInner({
   }
 
   return (
-    <>
-      <div ref={rootRef} className={widgetSurfaceClassName}>
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+      <div ref={rootRef} className={cn(widgetSurfaceClassName, 'min-h-0 flex-1')}>
         <div ref={chromeRef} className="flex-shrink-0">
           <div className="flex items-start justify-between px-4 pt-3 pb-2">
             <div className="flex items-start gap-2">
@@ -787,7 +787,7 @@ function SummaryWidgetInner({
           )}
         </div>
 
-        <div ref={contentRef} className="shrink-0 px-4 pb-3">
+        <div ref={contentRef} className="min-h-0 flex-1 overflow-auto px-4 pb-3">
           {activeTab === 'team' && showMyTeamTab
             ? renderTeamTab()
             : showCompanyTab
@@ -824,6 +824,6 @@ function SummaryWidgetInner({
           onCreated={() => setInitiativesRefreshKey((k) => k + 1)}
         />
       )}
-    </>
+    </div>
   )
 }

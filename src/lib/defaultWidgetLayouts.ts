@@ -31,8 +31,8 @@ export function buildGridLayout(widgets: DashboardWidget[]): Layout {
       widget.layout &&
       widget.layout.w !== undefined &&
       widget.layout.h !== undefined &&
-      widget.layout.w >= 5 &&
-      widget.layout.h >= 5
+      widget.layout.w >= 1 &&
+      widget.layout.h >= 3
     ) {
       return withDefaultGridConstraints(
         {

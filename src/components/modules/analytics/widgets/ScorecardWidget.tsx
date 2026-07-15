@@ -147,7 +147,7 @@ export function ScorecardWidget({
   )
 
   return (
-    <article ref={rootRef} className={widgetSurfaceClassName}>
+    <article ref={rootRef} className={cn(widgetSurfaceClassName, 'min-h-0')}>
       <div ref={headerRef} className="flex shrink-0 items-start justify-between px-4 pb-2 pt-3">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {capabilities.canEdit && (
@@ -177,7 +177,7 @@ export function ScorecardWidget({
         />
       </div>
 
-      <div ref={contentRef} className="overflow-auto">
+      <div ref={contentRef} className="min-h-0 flex-1 overflow-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="bg-gray-50">

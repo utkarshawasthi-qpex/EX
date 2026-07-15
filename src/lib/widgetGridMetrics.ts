@@ -3,16 +3,16 @@ import type { WidgetType } from '@/types'
 
 export const WIDGET_GRID_ROW_HEIGHT = 60
 export const WIDGET_GRID_MARGIN_Y = 16
-export const WIDGET_GRID_MIN_H = 5
-export const WIDGET_GRID_MIN_W = 5
+export const WIDGET_GRID_MIN_H = 3
+export const WIDGET_GRID_MIN_W = 1
 export const WIDGET_GRID_MAX_W = 12
 /** Lowest row count when snapping measured content to the grid. */
 export const WIDGET_GRID_ABSOLUTE_MIN_H = 3
-export const SUMMARY_WIDGET_MIN_H = 10
+export const SUMMARY_WIDGET_MIN_H = 3
 export const SUMMARY_WIDGET_DEFAULT_H = 12
 
-export function getMinGridRowsForWidgetType(type: WidgetType): number {
-  return type === 'summary' ? SUMMARY_WIDGET_MIN_H : WIDGET_GRID_MIN_H
+export function getMinGridRowsForWidgetType(_type: WidgetType): number {
+  return WIDGET_GRID_MIN_H
 }
 
 /** Grid row count needed to fit content at the given pixel height. */
@@ -36,46 +36,31 @@ export function getWidgetMaxGridRows(widgetId: string, contentHeights: Record<st
 
 export function applyWidgetHeightConstraints(
   layout: Layout,
-  contentHeights: Record<string, number>,
-  widgetTypesById: Record<string, WidgetType> = {},
+  _contentHeights: Record<string, number> = {},
+  _widgetTypesById: Record<string, WidgetType> = {},
 ): Layout {
-  return layout.map((item) => {
-    const widgetType = widgetTypesById[item.i]
-    const typeMinH = widgetType ? getMinGridRowsForWidgetType(widgetType) : WIDGET_GRID_MIN_H
-    const measuredRows = getWidgetMaxGridRows(item.i, contentHeights)
-
-    if (measuredRows !== undefined) {
-      return {
-        ...item,
-        minW: WIDGET_GRID_MIN_W,
-        maxW: WIDGET_GRID_MAX_W,
-        minH: measuredRows,
-        maxH: measuredRows,
-        h: measuredRows,
-      }
-    }
-
-    return {
-      ...item,
-      minW: WIDGET_GRID_MIN_W,
-      maxW: WIDGET_GRID_MAX_W,
-      minH: typeMinH,
-      h: Math.max(item.h, typeMinH),
-      maxH: undefined,
-    }
-  })
+  return layout.map((item) => ({
+    ...item,
+    minW: WIDGET_GRID_MIN_W,
+    maxW: WIDGET_GRID_MAX_W,
+    minH: WIDGET_GRID_MIN_H,
+    maxH: undefined,
+    w: Math.max(item.w, WIDGET_GRID_MIN_W),
+    h: Math.max(item.h, WIDGET_GRID_MIN_H),
+  }))
 }
 
 export function withDefaultGridConstraints(
   item: Layout[number],
-  options?: { minH?: number },
+  _options?: { minH?: number },
 ): Layout[number] {
   return {
     ...item,
     minW: WIDGET_GRID_MIN_W,
     maxW: WIDGET_GRID_MAX_W,
-    minH: options?.minH ?? WIDGET_GRID_MIN_H,
+    minH: WIDGET_GRID_MIN_H,
     maxH: undefined,
+    w: Math.max(item.w, WIDGET_GRID_MIN_W),
+    h: Math.max(item.h, WIDGET_GRID_MIN_H),
   }
 }
-

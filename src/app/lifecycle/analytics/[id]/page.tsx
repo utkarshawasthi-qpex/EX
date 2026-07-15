@@ -235,21 +235,14 @@ export default function DashboardCanvasPage() {
       const next = applyWidgetHeightConstraints(previous, widgetContentHeights, widgetTypesById)
       const layoutChanged = next.some(
         (item, index) =>
-          item.h !== previous[index]?.h || item.maxH !== previous[index]?.maxH,
+          item.minW !== previous[index]?.minW ||
+          item.minH !== previous[index]?.minH ||
+          item.maxH !== previous[index]?.maxH,
       )
       if (!layoutChanged) return previous
-
-      try {
-        saveDashboardTabLayout(dashboardId, activeTabId, next)
-      } catch (error) {
-        console.error('Layout save failed:', error)
-      }
-
-      const tabWidgets = allTabWidgetsRef.current[activeTabId] ?? []
-      updateWidgets(activeTabId, applyLayoutToWidgets(tabWidgets, next))
       return next
     })
-  }, [activeTabId, dashboardId, layoutReady, updateWidgets, widgetContentHeights, widgetTypesById])
+  }, [layoutReady, widgetContentHeights, widgetTypesById])
 
   const handleLayoutChange = useCallback(
     (newLayout: Layout) => {
@@ -639,7 +632,7 @@ export default function DashboardCanvasPage() {
                 onDragStop={commitLayoutStop}
                 onResizeStop={commitLayoutStop}
                 draggableHandle=".widget-drag-handle"
-                resizeHandles={['se']}
+                resizeHandles={['s', 'w', 'e', 'n', 'sw', 'nw', 'se', 'ne']}
                 margin={[16, 16]}
                 containerPadding={[16, 16]}
                 isResizable={capabilities?.canEdit ?? false}

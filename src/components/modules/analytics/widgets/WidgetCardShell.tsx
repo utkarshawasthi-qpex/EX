@@ -17,7 +17,7 @@ const WuText = dynamic(
 )
 
 export const widgetSurfaceClassName =
-  'relative flex h-auto w-full flex-col overflow-hidden rounded-lg bg-white border border-gray-200'
+  'relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg bg-white border border-gray-200'
 
 type WidgetCardShellProps = {
   title: string
@@ -110,8 +110,8 @@ export function WidgetCardShell({
           />
         </div>
       </div>
-      <div className={cn('flex shrink-0 flex-col', !flushContent && 'px-4 pb-4')}>
-        <div ref={contentRef} className="flex shrink-0 flex-col">
+      <div className={cn('flex min-h-0 flex-1 flex-col', !flushContent && 'px-4 pb-4')}>
+        <div ref={contentRef} className="min-h-0 flex-1 overflow-auto">
           {children}
         </div>
       </div>

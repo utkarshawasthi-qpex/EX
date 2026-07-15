@@ -3,7 +3,10 @@
 import { useState } from 'react'
 import { mockHeatmapData } from '@/data/mock/analyticsData'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
+import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
+import { respondentCount } from '@/lib/dashboardFilters'
 import { cn } from '@/lib/utils'
+import type { ActiveFilter } from '@/types'
 
 function getCellColor(score: number) {
   if (score >= 4) return 'bg-green-200 text-green-900'
@@ -12,15 +15,22 @@ function getCellColor(score: number) {
 }
 
 export function HeatmapWidget({
+  activeFilters = [],
   onEdit,
   onDuplicate,
   onDelete,
 }: {
+  activeFilters?: ActiveFilter[]
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
 }) {
-  const { surveyName, metrics, columns, scores } = mockHeatmapData
+  const { surveyName, metrics, columns: baseColumns, scores } = mockHeatmapData
+  const count = activeFilters.length > 0 ? respondentCount(activeFilters) : null
+  const columns =
+    count !== null
+      ? baseColumns.map((column) => ({ ...column, respondents: count }))
+      : baseColumns
   const [mode, setMode] = useState<'mean' | 'delta'>('mean')
 
   return (
@@ -56,6 +66,7 @@ export function HeatmapWidget({
         </div>
       }
     >
+      <FilteredWidgetGuard activeFilters={activeFilters}>
       <div className="overflow-auto shrink-0">
         <table className="w-full min-w-[640px] border-collapse">
           <thead>
@@ -104,6 +115,7 @@ export function HeatmapWidget({
           </tbody>
         </table>
       </div>
+      </FilteredWidgetGuard>
     </WidgetCardShell>
   )
 }

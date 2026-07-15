@@ -3,6 +3,9 @@
 import dynamic from 'next/dynamic'
 import { mockTextAnalysisData } from '@/data/mock/analyticsData'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
+import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
+import { respondentCount } from '@/lib/dashboardFilters'
+import type { ActiveFilter } from '@/types'
 
 const WuChip = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuChip })),
@@ -16,18 +19,29 @@ function sentimentChipProps(sentiment: 'positive' | 'neutral' | 'negative') {
 }
 
 export function TextAnalysisWidget({
+  activeFilters = [],
   onEdit,
   onDuplicate,
   onDelete,
 }: {
+  activeFilters?: ActiveFilter[]
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
 }) {
-  const themes = [...mockTextAnalysisData.themes].sort((a, b) => b.count - a.count)
+  const baseThemes = [...mockTextAnalysisData.themes].sort((a, b) => b.count - a.count)
+  const total = activeFilters.length > 0 ? respondentCount(activeFilters) : null
+  const themes =
+    total !== null
+      ? baseThemes.map((theme) => ({
+          ...theme,
+          count: Math.max(1, Math.round((theme.count / 38) * total)),
+        }))
+      : baseThemes
 
   return (
     <WidgetCardShell title="Text analysis" onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
+      <FilteredWidgetGuard activeFilters={activeFilters}>
       <div className="shrink-0">
         <div className="flex flex-col gap-3">
         {themes.map((theme) => (
@@ -46,6 +60,7 @@ export function TextAnalysisWidget({
         ))}
         </div>
       </div>
+      </FilteredWidgetGuard>
     </WidgetCardShell>
   )
 }

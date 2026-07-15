@@ -16,6 +16,9 @@ import {
 } from 'recharts'
 import { mockDriverAnalysisData } from '@/data/mock/analyticsData'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
+import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
+import { averageFavorability } from '@/lib/dashboardFilters'
+import type { ActiveFilter } from '@/types'
 
 type DriverPoint = {
   name: string
@@ -50,25 +53,33 @@ function DriverTooltip({
 }
 
 export function DriverAnalysisWidget({
+  activeFilters = [],
   onEdit,
   onDuplicate,
   onDelete,
 }: {
+  activeFilters?: ActiveFilter[]
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
 }) {
   const { surveyName, drivers } = mockDriverAnalysisData
+  const favorabilityShift =
+    activeFilters.length > 0 ? averageFavorability(activeFilters) - 40 : 0
 
   const points: DriverPoint[] = drivers.map((driver) => ({
     name: driver.name,
-    favorability: driver.favorability,
+    favorability: Math.max(0, Math.min(100, driver.favorability + favorabilityShift)),
     impact: driver.impact,
-    fill: getQuadrantColor(driver.favorability, driver.impact),
+    fill: getQuadrantColor(
+      Math.max(0, Math.min(100, driver.favorability + favorabilityShift)),
+      driver.impact,
+    ),
   }))
 
   return (
     <WidgetCardShell title="Driver analysis" subtitle={surveyName} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
+      <FilteredWidgetGuard activeFilters={activeFilters}>
       <div className="relative h-full min-h-[180px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
@@ -98,6 +109,7 @@ export function DriverAnalysisWidget({
           <span className="flex items-end justify-end p-2 text-blue-600">Maintain</span>
         </div>
       </div>
+      </FilteredWidgetGuard>
     </WidgetCardShell>
   )
 }

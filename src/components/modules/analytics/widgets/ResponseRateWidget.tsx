@@ -2,7 +2,10 @@
 
 import { mockResponseRateData } from '@/data/mock/analyticsData'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
+import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
+import { getFilteredResponseRate } from '@/lib/dashboardFilters'
 import { cn } from '@/lib/utils'
+import type { ActiveFilter } from '@/types'
 
 function DonutChart({ rate }: { rate: number }) {
   const r = 36
@@ -33,18 +36,23 @@ function DonutChart({ rate }: { rate: number }) {
 }
 
 export function ResponseRateWidget({
+  activeFilters = [],
   onEdit,
   onDuplicate,
   onDelete,
 }: {
+  activeFilters?: ActiveFilter[]
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
 }) {
-  const { surveyName, overview, byLevel } = mockResponseRateData
+  const { surveyName, overview: baseOverview, byLevel } = mockResponseRateData
+  const overview =
+    activeFilters.length > 0 ? getFilteredResponseRate(activeFilters) : baseOverview
 
   return (
     <WidgetCardShell title="Response rate" subtitle={surveyName} flushContent onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
+      <FilteredWidgetGuard activeFilters={activeFilters}>
       <div className="shrink-0 px-4 pb-4">
       <span className="mb-4 inline-flex flex-shrink-0 rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700">
         Location
@@ -114,6 +122,7 @@ export function ResponseRateWidget({
         </table>
       </div>
       </div>
+      </FilteredWidgetGuard>
     </WidgetCardShell>
   )
 }

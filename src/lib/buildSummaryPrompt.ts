@@ -7,16 +7,11 @@ import {
   mockTimeTrendData,
 } from '@/data/mock/analyticsData'
 import { assembleAiSummaryOrgContextPrompt, createEmptyAiSummaryOrgContext } from '@/lib/aiSummaryOrgContext/budget'
+import { activeFiltersToLabels } from '@/lib/dashboardFilters'
 import { getOrgContextText } from '@/lib/orgContext'
-import {
-  appendActionVersion,
-  appendSummaryVersion,
-  buildSummaryContent,
-  getActiveActions,
-  normalizeActionsFromApi,
-} from '@/lib/summaryContent'
+import { buildSummaryContent, normalizeActionsFromApi } from '@/lib/summaryContent'
 import { getCurrentUser } from '@/lib/userContext'
-import type { DashboardWidget, SummaryAction, SummaryContent, SummaryPriority } from '@/types'
+import type { ActiveFilter, DashboardWidget, SummaryAction, SummaryContent, SummaryPriority } from '@/types'
 
 export function buildDataContext(widgets: DashboardWidget[]): string {
   const lines: string[] = []
@@ -75,22 +70,14 @@ export function buildDataContext(widgets: DashboardWidget[]): string {
   return lines.join('\n')
 }
 
-export function buildSummaryPrompt(
+export function buildFullPrompt(
   dataContext: string,
   orgContext: string,
   filters: string[],
   personalContext?: string,
   viewType: 'company' | 'team' = 'company',
-  summaryOnly = false,
+  guidance?: string,
 ): string {
-  const actionBlock = summaryOnly
-    ? ''
-    : `
-  "actions": [
-    exactly 4 items, one per priority level 1–4, sorted ascending by priority,
-    each with action, timeframe, owner, priority, context
-  ]`
-
   return `
 You are an HR analytics expert analyzing employee experience survey data for ${
     viewType === 'team' ? 'a specific team or department' : 'the entire organization'
@@ -119,20 +106,21 @@ ${dataContext}
 Provide a ${viewType === 'team' ? 'team-level' : 'organization-level'} analysis.
 Return ONLY valid JSON, no markdown:
 {
-  "summary": "Single flowing narrative paragraph combining what the data shows and why. Written as prose, not bullet points. Minimum 100 words. Plain language, no jargon."${actionBlock}
+  "summary": "Single flowing narrative paragraph combining what the data shows and why. Written as prose, not bullet points. Minimum 100 words. Plain language, no jargon.",
+  "actions": [
+    exactly 4 items, one per priority level 1–4, sorted ascending by priority,
+    each with action, timeframe, owner, priority, context
+  ]
 }
 
 Rules:
 - summary: minimum 100 words, narrative prose not bullets
-${
-  summaryOnly
-    ? '- Return ONLY the summary field. Do not include actions.'
-    : `- actions: exactly 4 items, sorted by priority (1 = highest)
+- actions: exactly 4 items, sorted by priority (1 = highest)
 - priority: 1, 2, 3, or 4 (integer) — one action per priority level
 - timeframe: "30 days", "60 days", or "90 days" only
 - owner: "Manager", "HR", or "Leadership" only
-- context: max 6 words (e.g. "Targets transparency (54)")`
-}
+- context: max 6 words (e.g. "Targets transparency (54)")
+${guidance ? `- User guidance: ${guidance}` : ''}
 - For team view: make recommendations manager-actionable
 - For company view: recommendations can involve HR/Leadership
 - Ground everything in the data provided
@@ -144,10 +132,19 @@ export function buildSummaryOnlyPrompt(
   orgContext: string,
   filters: string[],
   viewType: 'company' | 'team' = 'company',
+  guidance?: string,
 ): string {
   return `
-Generate ONLY the summary paragraph (100–150 words). Do not include actions.
-Use the same dashboard data and org context as the original summary.
+You are an expert HR analyst.
+
+Generate ONLY the summary paragraph for this dashboard.
+Do NOT include recommendations.
+
+Requirements:
+- 100 to 150 words exactly
+- Single narrative paragraph combining what the data shows AND why. No bullet points. Present tense.
+- Grounded strictly in the data provided.
+${guidance ? `User guidance: ${guidance}` : ''}
 
 ORGANIZATION CONTEXT:
 ${orgContext}
@@ -158,46 +155,49 @@ ${filters.length > 0 ? filters.join(', ') : 'None'}
 DASHBOARD DATA:
 ${dataContext}
 
-Return ONLY valid JSON (no markdown):
+View: ${viewType === 'team' ? 'team-level' : 'organization-level'}
+
+Return ONLY valid JSON, no markdown:
 { "summary": "..." }
 `.trim()
 }
 
-export function buildSingleActionPrompt(
-  priority: SummaryPriority,
-  existingActions: SummaryAction[],
-  dashboardData: string,
+export function buildRecommendationsOnlyPrompt(
+  dataContext: string,
   orgContext: string,
+  currentSummary: string,
+  filters: string[],
+  guidance?: string,
 ): string {
-  const others = existingActions
-    .filter((action) => action.priority !== priority)
-    .sort((a, b) => a.priority - b.priority)
-
-  const otherLines = others
-    .map((action) => `- P${action.priority}: ${action.action}`)
-    .join('\n')
-
   return `
-Generate ONE recommended action for priority level ${priority}.
-This action must be distinct from these existing actions:
-${otherLines}
+Generate exactly 4 recommended actions for this dashboard.
 
-Use the same dashboard data and org context as the original summary.
+The current summary paragraph is:
+'${currentSummary.replace(/'/g, "\\'")}'
+
+Your recommendations should be consistent with this summary.
 
 ORGANIZATION CONTEXT:
 ${orgContext}
 
-DASHBOARD DATA:
-${dashboardData}
+ACTIVE FILTERS:
+${filters.length > 0 ? filters.join(', ') : 'None'}
 
-Return ONLY valid JSON (no markdown):
-{
-  "action": "string starting with a strong verb",
-  "timeframe": "30 days | 60 days | 90 days",
-  "owner": "Manager | HR | Leadership",
-  "priority": ${priority},
-  "context": "max 6 words linking to a data point"
-}
+DASHBOARD DATA:
+${dataContext}
+
+Requirements:
+- Exactly 4 actions, priority 1–4
+- Each starts with a strong verb
+- No action starts with 'Consider' or 'Look into'
+- timeframe: '30 days' | '60 days' | '90 days' only
+- owner: 'Manager' | 'HR' | 'Leadership' only
+- context: max 6 words referencing a specific data point
+- Never violate any NOT TO-DO in org context
+${guidance ? `User guidance: ${guidance}` : ''}
+
+Return ONLY valid JSON, no markdown:
+{ "actions": [ ...exactly 4 items... ] }
 `.trim()
 }
 
@@ -205,7 +205,6 @@ function readOrgContextText(): string {
   if (typeof window === 'undefined') {
     return assembleAiSummaryOrgContextPrompt(createEmptyAiSummaryOrgContext())
   }
-
   return getOrgContextText()
 }
 
@@ -267,9 +266,13 @@ function mockCompanyActions(): SummaryAction[] {
   ])
 }
 
+function filterLabels(activeFilters: ActiveFilter[]): string[] {
+  return activeFiltersToLabels(activeFilters)
+}
+
 export async function generateDashboardSummary(
   dataWidgets: DashboardWidget[],
-  activeFilters: string[],
+  activeFilters: ActiveFilter[],
   options?: {
     personalContext?: string
     viewType?: 'company' | 'team'
@@ -278,10 +281,10 @@ export async function generateDashboardSummary(
   const viewType = options?.viewType ?? 'company'
   const dataContext = buildDataContext(dataWidgets)
   const orgContext = readOrgContextText()
-  void buildSummaryPrompt(
+  void buildFullPrompt(
     dataContext,
     orgContext,
-    activeFilters,
+    filterLabels(activeFilters),
     options?.personalContext,
     viewType,
   )
@@ -290,41 +293,54 @@ export async function generateDashboardSummary(
 
   const hasFilters = activeFilters.length > 0
   const generatedBy = getCurrentUser().id
-  const snapshot = dataContext.slice(0, 200)
 
   if (viewType === 'team') {
     const summary = hasFilters
       ? 'Your filtered team view shows softer favorability on enablement and communication markers, with direct reports reporting higher friction with tools and process clarity than the broader organization. Compared to company benchmarks, this cohort scores meaningfully lower on transparency and collaboration, suggesting employees may not see priorities translated into day-to-day expectations or consistent follow-through after prior pulse cycles. Organization context and team notes indicate recent change has outpaced manager-led communication, limiting visible progress on themes raised in earlier feedback. Response patterns within the filtered group remain sufficient to treat findings as actionable, though participation varies by location. Time-trend data hints at gradual recovery on inclusion markers, yet enablement gaps persist and likely suppress eNPS improvement until managers publish clearer accountability for technology fixes and workflow blockers identified in this view.'
       : 'Team-level scores trail the organization on transparency and collaboration, while enablement markers remain the weakest signals in this view. Employees appear to lack visibility into team priorities and face localized workload spikes that reduce time for coaching and feedback loops. Compared with company-wide heatmap patterns, this group reports sharper declines in agility and solutions markers, suggesting process bottlenecks are concentrated within the team rather than reflected uniformly across the enterprise. eNPS commentary highlights frustration with unclear decision ownership and uneven access to resources needed to execute on agreed priorities. Organization context notes reinforce that recent restructuring may have diluted manager bandwidth, making it harder to close loops on prior survey themes. Sustained improvement will likely require clearer weekly communication, explicit ownership for top blockers, and targeted enablement support from HR partners.'
 
-    return buildSummaryContent(summary, mockTeamActions(hasFilters), generatedBy, snapshot, {
-      scope: `team:${generatedBy}`,
-      createdBy: generatedBy,
-      visibility: 'private',
-    })
+    return buildSummaryContent(summary, mockTeamActions(hasFilters), generatedBy)
   }
 
   return buildSummaryContent(
     'Organization-wide favorability remains soft at 40%, with transparency and technology among the lowest-performing markers while eNPS continues to reflect a detractor-heavy profile compared to prior cycles. Employees appear to lack consistent visibility into organizational priorities, and survey commentary repeatedly points to friction in systems, process clarity, and follow-through after prior feedback cycles. Heatmap results show uneven performance across departments, with enablement and agility lagging collaboration improvements that emerged in the most recent quarter. Response rates remain healthy enough to treat these patterns as representative, but localized teams report sharper declines in manager communication cadence. Organization context suggests recent structural changes have outpaced leadership messaging rhythms, leaving managers without sufficient support to translate employee input into visible action plans that rebuild trust and demonstrate measurable progress.',
     mockCompanyActions(),
     generatedBy,
-    snapshot,
-    {
-      scope: 'company',
-      createdBy: generatedBy,
-      visibility: 'everyone',
-    },
   )
 }
 
-export async function generateSummaryParagraphOnly(
+export async function generateFullUpdate(
   dataWidgets: DashboardWidget[],
-  activeFilters: string[],
+  activeFilters: ActiveFilter[],
+  options?: { viewType?: 'company' | 'team'; guidance?: string },
+): Promise<{ summary: string; actions: SummaryAction[] }> {
+  const viewType = options?.viewType ?? 'company'
+  const dataContext = buildDataContext(dataWidgets)
+  const orgContext = readOrgContextText()
+  void buildFullPrompt(
+    dataContext,
+    orgContext,
+    filterLabels(activeFilters),
+    undefined,
+    viewType,
+    options?.guidance,
+  )
+
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+
+  const content = await generateDashboardSummary(dataWidgets, activeFilters, { viewType })
+  return { summary: content.summary, actions: content.actions }
+}
+
+export async function generateSummaryOnlyRegeneration(
+  dataWidgets: DashboardWidget[],
+  activeFilters: ActiveFilter[],
   viewType: 'company' | 'team' = 'company',
+  guidance?: string,
 ): Promise<string> {
   const dataContext = buildDataContext(dataWidgets)
   const orgContext = readOrgContextText()
-  void buildSummaryOnlyPrompt(dataContext, orgContext, activeFilters, viewType)
+  void buildSummaryOnlyPrompt(dataContext, orgContext, filterLabels(activeFilters), viewType, guidance)
 
   await new Promise((resolve) => setTimeout(resolve, 1200))
 
@@ -335,76 +351,81 @@ export async function generateSummaryParagraphOnly(
   return 'Updated organization summary: enterprise favorability remains constrained by transparency and technology markers, with employees seeking more consistent leadership messaging on priorities and progress. Heatmap variance across departments indicates enablement investments should be targeted rather than uniform, while collaboration scores offer a foundation to build on. Response rates support treating these findings as representative, and organization context reinforces the need to align HR and leadership action plans with KPI targets already in flight.'
 }
 
-export async function generateSingleAction(
-  priority: SummaryPriority,
-  existingActions: SummaryAction[],
+export async function generateRecommendationsOnlyRegeneration(
   dataWidgets: DashboardWidget[],
-  activeFilters: string[],
-): Promise<Omit<import('@/types').ActionVersion, 'versionId' | 'generatedAt'>> {
+  activeFilters: ActiveFilter[],
+  currentSummary: string,
+  guidance?: string,
+): Promise<SummaryAction[]> {
   const dataContext = buildDataContext(dataWidgets)
   const orgContext = readOrgContextText()
-  void buildSingleActionPrompt(priority, existingActions, dataContext, orgContext)
-  void activeFilters
+  void buildRecommendationsOnlyPrompt(
+    dataContext,
+    orgContext,
+    currentSummary,
+    filterLabels(activeFilters),
+    guidance,
+  )
+  void dataWidgets
 
-  await new Promise((resolve) => setTimeout(resolve, 1000))
+  await new Promise((resolve) => setTimeout(resolve, 1200))
 
-  const alternatives: Record<
-    SummaryPriority,
-    { action: string; timeframe: '30 days' | '60 days' | '90 days'; owner: 'Manager' | 'HR' | 'Leadership'; context: string }
-  > = {
-    1: {
-      action: 'Convene a cross-functional working session to address the top transparency gap identified in survey data.',
+  const actions = normalizeActionsFromApi([
+    {
+      action: 'Establish a fortnightly leadership update on survey themes and action progress.',
       timeframe: '30 days',
       owner: 'Leadership',
-      context: 'Closes transparency gap',
+      context: 'Improves transparency cadence',
     },
-    2: {
-      action: 'Deploy a manager toolkit for weekly team updates tied to lowest-scoring markers.',
+    {
+      action: 'Run manager workshops on closing feedback loops within 30 days.',
       timeframe: '60 days',
       owner: 'HR',
-      context: 'Supports manager cadence',
+      context: 'Builds manager capability',
     },
-    3: {
-      action: 'Audit technology workflows cited in open-text feedback and publish a fix roadmap.',
+    {
+      action: 'Prioritize top three enablement fixes with named owners and dates.',
       timeframe: '60 days',
       owner: 'Manager',
-      context: 'Targets enablement friction',
+      context: 'Targets enablement gaps',
     },
-    4: {
-      action: 'Run a follow-up pulse on transparency and enablement after action plans launch.',
+    {
+      action: 'Schedule a follow-up pulse on weakest markers after actions launch.',
       timeframe: '90 days',
       owner: 'Leadership',
-      context: 'Measures improvement impact',
+      context: 'Validates improvement impact',
     },
+  ])
+
+  if (actions.length !== 4) {
+    throw new Error('E-03: Expected exactly 4 recommendations')
   }
 
-  const alt = alternatives[priority]
-  return {
-    action: alt.action,
-    timeframe: alt.timeframe,
-    owner: alt.owner,
-    priority,
-    context: alt.context,
-  }
+  void guidance
+  return actions
 }
 
+/** @deprecated use generateSummaryOnlyRegeneration */
 export async function regenerateSummaryParagraph(
   content: SummaryContent,
   dataWidgets: DashboardWidget[],
-  activeFilters: string[],
+  activeFilters: ActiveFilter[],
   viewType: 'company' | 'team' = 'company',
 ): Promise<SummaryContent> {
-  const summary = await generateSummaryParagraphOnly(dataWidgets, activeFilters, viewType)
-  return appendSummaryVersion(content, summary)
+  void content
+  const summary = await generateSummaryOnlyRegeneration(dataWidgets, activeFilters, viewType)
+  return { ...content, summary }
 }
 
+/** @deprecated use generateRecommendationsOnlyRegeneration */
 export async function regenerateSingleAction(
   content: SummaryContent,
   priority: SummaryPriority,
   dataWidgets: DashboardWidget[],
-  activeFilters: string[],
+  activeFilters: ActiveFilter[],
 ): Promise<SummaryContent> {
-  const existingActions = getActiveActions(content)
-  const newAction = await generateSingleAction(priority, existingActions, dataWidgets, activeFilters)
-  return appendActionVersion(content, priority, newAction)
+  void priority
+  void dataWidgets
+  void activeFilters
+  return content
 }

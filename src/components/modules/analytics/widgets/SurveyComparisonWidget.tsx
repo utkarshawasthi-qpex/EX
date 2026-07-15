@@ -2,21 +2,32 @@
 
 import { mockSurveyComparisonData } from '@/data/mock/analyticsData'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
+import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
+import { averageFavorability } from '@/lib/dashboardFilters'
 import { cn } from '@/lib/utils'
+import type { ActiveFilter } from '@/types'
 
 export function SurveyComparisonWidget({
+  activeFilters = [],
   onEdit,
   onDuplicate,
   onDelete,
 }: {
+  activeFilters?: ActiveFilter[]
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
 }) {
-  const { surveys, scores } = mockSurveyComparisonData
+  const { surveys, scores: baseScores } = mockSurveyComparisonData
+  const shift = activeFilters.length > 0 ? averageFavorability(activeFilters) - 40 : 0
+  const scores = baseScores.map((row) => ({
+    ...row,
+    scores: row.scores.map((score) => Math.max(0, Math.min(100, score + shift))),
+  }))
 
   return (
     <WidgetCardShell title="Survey comparison" flushContent onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
+      <FilteredWidgetGuard activeFilters={activeFilters}>
       <div className="overflow-auto shrink-0">
         <table className="w-full border-collapse text-sm">
           <thead>
@@ -61,6 +72,7 @@ export function SurveyComparisonWidget({
           </tbody>
         </table>
       </div>
+      </FilteredWidgetGuard>
     </WidgetCardShell>
   )
 }

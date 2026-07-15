@@ -3,6 +3,8 @@
 import dynamic from 'next/dynamic'
 import { mockTextReportData } from '@/data/mock/analyticsData'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
+import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
+import type { ActiveFilter } from '@/types'
 
 const WuText = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuText })),
@@ -10,10 +12,12 @@ const WuText = dynamic(
 )
 
 export function TextReportWidget({
+  activeFilters = [],
   onEdit,
   onDuplicate,
   onDelete,
 }: {
+  activeFilters?: ActiveFilter[]
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
@@ -22,6 +26,7 @@ export function TextReportWidget({
 
   return (
     <WidgetCardShell title="Text report" subtitle={surveyName} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
+      <FilteredWidgetGuard activeFilters={activeFilters}>
       <div className="shrink-0">
         <div className="flex flex-col gap-4">
         {responses.map((response, index) => (
@@ -39,6 +44,7 @@ export function TextReportWidget({
         ))}
         </div>
       </div>
+      </FilteredWidgetGuard>
     </WidgetCardShell>
   )
 }

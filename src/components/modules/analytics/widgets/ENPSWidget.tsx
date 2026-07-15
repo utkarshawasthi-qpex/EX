@@ -4,6 +4,9 @@ import dynamic from 'next/dynamic'
 import { useState } from 'react'
 import { mockENPSData } from '@/data/mock/analyticsData'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
+import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
+import { getFilteredENPS } from '@/lib/dashboardFilters'
+import type { ActiveFilter } from '@/types'
 
 const WuHeading = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuHeading })),
@@ -68,19 +71,33 @@ function ENPSGauge({ score }: { score: number }) {
 }
 
 export function ENPSWidget({
+  activeFilters = [],
   onEdit,
   onDuplicate,
   onDelete,
 }: {
+  activeFilters?: ActiveFilter[]
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
 }) {
-  const data = mockENPSData
+  const baseData = mockENPSData
+  const filtered = activeFilters.length > 0 ? getFilteredENPS(activeFilters) : null
+  const data = filtered
+    ? {
+        ...baseData,
+        score: filtered.score,
+        respondents: filtered.respondents,
+        detractors: filtered.detractors,
+        passives: filtered.passives,
+        promoters: filtered.promoters,
+      }
+    : baseData
   const [segmentOpen, setSegmentOpen] = useState(false)
 
   return (
     <WidgetCardShell title="eNPS" showInfo onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
+      <FilteredWidgetGuard activeFilters={activeFilters}>
       <div className="shrink-0">
       <WuText size="sm" as="p" className="mb-3 flex-shrink-0 italic text-gray-500">
         {data.question}
@@ -154,6 +171,7 @@ export function ENPSWidget({
         )}
       </div>
       </div>
+      </FilteredWidgetGuard>
     </WidgetCardShell>
   )
 }

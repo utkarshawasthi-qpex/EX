@@ -12,6 +12,8 @@ import {
 } from 'recharts'
 import { mockTimeTrendData } from '@/data/mock/analyticsData'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
+import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
+import type { ActiveFilter } from '@/types'
 
 function buildChartData() {
   const { series } = mockTimeTrendData
@@ -27,10 +29,12 @@ function buildChartData() {
 }
 
 export function TimeTrendWidget({
+  activeFilters = [],
   onEdit,
   onDuplicate,
   onDelete,
 }: {
+  activeFilters?: ActiveFilter[]
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
@@ -40,6 +44,7 @@ export function TimeTrendWidget({
 
   return (
     <WidgetCardShell title="Time trend" subtitle={yLabel} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete}>
+      <FilteredWidgetGuard activeFilters={activeFilters}>
       <div className="h-full min-h-[160px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
@@ -62,6 +67,7 @@ export function TimeTrendWidget({
           </LineChart>
         </ResponsiveContainer>
       </div>
+      </FilteredWidgetGuard>
     </WidgetCardShell>
   )
 }

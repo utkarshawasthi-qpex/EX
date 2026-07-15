@@ -1,7 +1,7 @@
 'use client'
 
 import type { ComponentType } from 'react'
-import type { DashboardWidget, ViewerCapabilities, WidgetType } from '@/types'
+import type { ActiveFilter, DashboardWidget, ViewerCapabilities, WidgetType } from '@/types'
 import { DriverAnalysisWidget } from '@/components/modules/analytics/widgets/DriverAnalysisWidget'
 import { ENPSWidget } from '@/components/modules/analytics/widgets/ENPSWidget'
 import { HeatmapWidget } from '@/components/modules/analytics/widgets/HeatmapWidget'
@@ -121,7 +121,7 @@ export type WidgetComponentProps = {
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
-  activeFilters?: string[]
+  activeFilters?: ActiveFilter[]
   dashboardWidgets?: DashboardWidget[]
   capabilities?: ViewerCapabilities
 }
@@ -156,7 +156,7 @@ export function DashboardWidgetRenderer({
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
-  activeFilters?: string[]
+  activeFilters?: ActiveFilter[]
   dashboardWidgets?: DashboardWidget[]
   capabilities?: ViewerCapabilities
 }) {

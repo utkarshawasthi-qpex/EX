@@ -2,22 +2,39 @@
 
 import { mockSingleQuestionData } from '@/data/mock/analyticsData'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
+import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
+import { respondentCount } from '@/lib/dashboardFilters'
 import { cn } from '@/lib/utils'
+import type { ActiveFilter } from '@/types'
 
 function truncate(text: string, max = 60) {
   return text.length > max ? `${text.slice(0, max)}...` : text
 }
 
 export function SingleQuestionWidget({
+  activeFilters = [],
   onEdit,
   onDuplicate,
   onDelete,
 }: {
+  activeFilters?: ActiveFilter[]
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
 }) {
-  const { surveyName, questionText, answers } = mockSingleQuestionData
+  const { surveyName, questionText, answers: baseAnswers } = mockSingleQuestionData
+  const totalCount = activeFilters.length > 0 ? respondentCount(activeFilters) : null
+  const answers =
+    totalCount !== null
+      ? baseAnswers.map((answer) =>
+          answer.isTotal
+            ? { ...answer, count: totalCount, percentage: 100 }
+            : {
+                ...answer,
+                count: Math.round((answer.percentage / 100) * totalCount),
+              },
+        )
+      : baseAnswers
 
   return (
     <WidgetCardShell
@@ -33,6 +50,7 @@ export function SingleQuestionWidget({
         </>
       }
     >
+      <FilteredWidgetGuard activeFilters={activeFilters}>
       <div className="overflow-auto shrink-0">
         <table className="w-full border-collapse text-sm">
           <thead>
@@ -74,6 +92,7 @@ export function SingleQuestionWidget({
           </tbody>
         </table>
       </div>
+      </FilteredWidgetGuard>
     </WidgetCardShell>
   )
 }

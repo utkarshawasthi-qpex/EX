@@ -9,6 +9,7 @@ import 'react-grid-layout/css/styles.css'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { AddWidgetModal } from '@/components/modules/analytics/AddWidgetModal'
 import type { AddWidgetConfig } from '@/components/modules/analytics/AddWidgetModal'
+import { DashboardFilterPanel } from '@/components/modules/analytics/DashboardFilterPanel'
 import { DashboardWidgetProvider } from '@/components/modules/analytics/DashboardWidgetContext'
 import { ExportPptModal } from '@/components/modules/analytics/ExportPptModal'
 import { DashboardWidgetRenderer } from '@/components/modules/analytics/widgetRegistry'
@@ -32,9 +33,10 @@ import {
   saveDashboardWidgets,
 } from '@/lib/mockDb'
 import { seedDefaultDashboardsIfNeeded } from '@/lib/seedDashboards'
+import { activeFiltersToLabels } from '@/lib/dashboardFilters'
 import { getCurrentUser } from '@/lib/userContext'
 import { cn } from '@/lib/utils'
-import type { Dashboard, DashboardTab, DashboardWidget, WidgetType } from '@/types'
+import type { ActiveFilter, Dashboard, DashboardTab, DashboardWidget, FilterField, WidgetType } from '@/types'
 import { getDashboardCapabilities } from '@/types'
 
 const GridLayoutWithWidth = WidthProvider(ReactGridLayout)
@@ -47,27 +49,10 @@ const WuHeading = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuHeading })),
   { ssr: false },
 )
-const WuSelect = dynamic(
-  () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuSelect })),
-  { ssr: false },
-)
 const WuText = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuText })),
   { ssr: false },
 )
-
-type DepartmentOption = {
-  value: string
-  label: string
-}
-
-const DEPARTMENT_OPTIONS: DepartmentOption[] = [
-  { value: 'Business Development/Sales', label: 'Business Development/Sales' },
-  { value: 'Engineering', label: 'Engineering' },
-  { value: 'Product', label: 'Product' },
-  { value: 'HR', label: 'HR' },
-  { value: 'Operations', label: 'Operations' },
-]
 
 function createEmptyTab(order: number): DashboardTab {
   return {
@@ -121,8 +106,7 @@ export default function DashboardCanvasPage() {
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false)
   const [exportModalOpen, setExportModalOpen] = useState(false)
-  const [selectedDepartments, setSelectedDepartments] = useState<DepartmentOption[]>([])
-  const [activeFilters, setActiveFilters] = useState<string[]>([])
+  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([])
   const [widgetContentHeights, setWidgetContentHeights] = useState<Record<string, number>>({})
 
   useEffect(() => {
@@ -370,9 +354,25 @@ export default function DashboardCanvasPage() {
     setOpenTabMenuId(null)
   }
 
-  function handleDepartmentSelect(value: unknown) {
-    const selected = value as DepartmentOption | DepartmentOption[]
-    setSelectedDepartments(Array.isArray(selected) ? selected : selected ? [selected] : [])
+  function toggleFilter(field: FilterField, value: string) {
+    setActiveFilters((prev) => {
+      const exists = prev.some((filter) => filter.fieldId === field.id && filter.value === value)
+      if (exists) {
+        return prev.filter((filter) => !(filter.fieldId === field.id && filter.value === value))
+      }
+      return [
+        ...prev,
+        {
+          fieldId: field.id,
+          fieldLabel: field.label,
+          value,
+        },
+      ]
+    })
+  }
+
+  function clearAllFilters() {
+    setActiveFilters([])
   }
 
   function handleWidgetUpdate(updatedWidget: DashboardWidget) {
@@ -495,10 +495,16 @@ export default function DashboardCanvasPage() {
               )}
               <button
                 type="button"
-                className="wc-filter text-xl text-gray-400 hover:text-gray-600"
+                className="wc-filter relative text-xl text-gray-400 hover:text-gray-600"
                 onClick={() => setIsFilterOpen((open) => !open)}
                 aria-label="Filters"
-              />
+              >
+                {activeFilters.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
+                    {activeFilters.length}
+                  </span>
+                )}
+              </button>
               <button
                 type="button"
                 className="wc-downloads text-xl text-gray-400 hover:text-gray-600"
@@ -524,44 +530,47 @@ export default function DashboardCanvasPage() {
             </button>
           </div>
 
-          {isFilterOpen && (
-            <div className="absolute right-6 top-20 z-20 w-80 rounded-xl border border-gray-200 bg-white p-4 shadow-lg">
-              <WuText size="sm" as="div" className="mb-2 font-medium text-gray-700">
-                Department
-              </WuText>
-              <WuSelect
-                data={DEPARTMENT_OPTIONS}
-                accessorKey={{ value: 'value', label: 'label' }}
-                value={selectedDepartments}
-                onSelect={handleDepartmentSelect}
-                multiple
-                variant="outlined"
-              />
-              <div className="mt-4 flex justify-end gap-3">
-                <WuButton
-                  variant="secondary"
-                  onClick={() => {
-                    setSelectedDepartments([])
-                    setActiveFilters([])
-                    setIsFilterOpen(false)
-                  }}
+          {activeFilters.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 px-0 py-2">
+              {activeFilters.map((filter) => (
+                <span
+                  key={`${filter.fieldId}-${filter.value}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
                 >
-                  Clear
-                </WuButton>
-                <WuButton
-                  variant="primary"
-                  onClick={() => {
-                    setActiveFilters(
-                      selectedDepartments.map((department) => `Department: ${department.label}`),
-                    )
-                    setIsFilterOpen(false)
-                  }}
-                >
-                  Apply
-                </WuButton>
-              </div>
+                  <span className="font-medium">{filter.fieldLabel}:</span>
+                  {filter.value}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      toggleFilter(
+                        { id: filter.fieldId, label: filter.fieldLabel, values: [] },
+                        filter.value,
+                      )
+                    }
+                    className="ml-1 text-blue-400 hover:text-blue-700"
+                    aria-label={`Remove ${filter.fieldLabel} ${filter.value}`}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="text-xs text-gray-400 underline hover:text-gray-600"
+              >
+                Clear all
+              </button>
             </div>
           )}
+
+          <DashboardFilterPanel
+            open={isFilterOpen}
+            activeFilters={activeFilters}
+            onToggleFilter={toggleFilter}
+            onClearAll={clearAllFilters}
+            onClose={() => setIsFilterOpen(false)}
+          />
         </header>
 
         {capabilities && !capabilities.isOwner && (
@@ -571,34 +580,6 @@ export default function DashboardCanvasPage() {
               the dashboard owner to make changes.
             </p>
           </div>
-        )}
-
-        {activeFilters.length > 0 && (
-          <section className="flex shrink-0 flex-wrap items-center gap-3 border-b border-gray-200 bg-white px-6 py-3">
-            <WuText size="sm" as="span" className="font-medium text-gray-700">
-              Dashboard
-            </WuText>
-            {activeFilters.map((filter) => (
-              <span
-                key={filter}
-                className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700"
-              >
-                {filter}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveFilters((filters) => filters.filter((item) => item !== filter))
-                    const label = filter.replace('Department: ', '')
-                    setSelectedDepartments((departments) =>
-                      departments.filter((department) => department.label !== label),
-                    )
-                  }}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </section>
         )}
 
         <section className="min-h-0 flex-1 overflow-y-auto pb-16 pt-4">
@@ -739,7 +720,7 @@ export default function DashboardCanvasPage() {
             dashboardName={dashboard.name}
             tabName={activeTab.name}
             widgets={widgets}
-            activeFilters={activeFilters}
+            activeFilters={activeFiltersToLabels(activeFilters)}
           />
         )}
       </main>

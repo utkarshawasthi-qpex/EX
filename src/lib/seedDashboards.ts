@@ -35,15 +35,9 @@ const multiSurveyDemoSummary = buildSummaryContent(
     },
   ]),
   'emp_001',
-  'SCORECARD: Growth & Development 58%, Manager Relationship 82%. HEATMAP: Wellbeing Sales 61%.',
 )
-multiSurveyDemoSummary.summaryVersions[0].generatedAt = '2026-05-20T10:30:00.000Z'
-multiSurveyDemoSummary.publishedVersionId = multiSurveyDemoSummary.summaryVersions[0].versionId
-for (const priority of [1, 2, 3, 4] as const) {
-  if (multiSurveyDemoSummary.actionVersions[priority][0]) {
-    multiSurveyDemoSummary.actionVersions[priority][0].generatedAt = '2026-05-20T10:30:00.000Z'
-  }
-}
+multiSurveyDemoSummary.generatedAt = '2026-05-20T10:30:00.000Z'
+multiSurveyDemoSummary.lastFullUpdateAt = '2026-05-20T10:30:00.000Z'
 
 export const DEFAULT_DASHBOARD_ID = 'dash_default'
 export const MULTI_SURVEY_DASHBOARD_ID = 'dash_multi_survey'

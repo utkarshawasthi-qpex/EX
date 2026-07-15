@@ -5,7 +5,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CreateActionPlanModal } from '@/components/modules/analytics/CreateActionPlanModal'
 import { useDashboardWidgetContext } from '@/components/modules/analytics/DashboardWidgetContext'
 import { SummarySettingsModal } from '@/components/modules/analytics/SummarySettingsModal'
-import { SummaryWidgetSections } from '@/components/modules/analytics/SummaryWidgetSections'
+import {
+  SummaryRegenerateModal,
+  type RegenerateModalContext,
+} from '@/components/modules/analytics/SummaryRegenerateModal'
+import {
+  MAX_REGENERATIONS,
+  SummaryWidgetSections,
+} from '@/components/modules/analytics/SummaryWidgetSections'
 import { useReportWidgetHeight } from '@/components/modules/analytics/useReportWidgetHeight'
 import { WidgetKebabMenu } from '@/components/modules/analytics/widgets/WidgetKebabMenu'
 import { widgetSurfaceClassName } from '@/components/modules/analytics/widgets/WidgetCardShell'
@@ -16,17 +23,26 @@ import {
 } from '@/lib/empowerIntegration/dashboardLink'
 import {
   generateDashboardSummary,
-  regenerateSingleAction,
-  regenerateSummaryParagraph,
+  generateFullUpdate,
+  generateRecommendationsOnlyRegeneration,
+  generateSummaryOnlyRegeneration,
 } from '@/lib/buildSummaryPrompt'
+import { activeFiltersToLabels } from '@/lib/dashboardFilters'
 import { normalizeSummaryAdminConfig } from '@/lib/normalizeSummaryConfig'
 import {
   canGenerateSummary,
-  canManageVersions,
   canRateSummary,
   canRegenerateSummary,
   isSharedSummaryViewer,
 } from '@/lib/summaryPermissions'
+import {
+  applyFullUpdate,
+  applyRecommendationsRegeneration,
+  applySummaryRegeneration,
+  markSummaryStale,
+  resolveSummaryContentForViewer,
+  setLinkedInitiativeOnRecommendation,
+} from '@/lib/summaryContent'
 import {
   clearCachedCompanySummary,
   getCachedCompanySummary,
@@ -35,11 +51,11 @@ import {
   saveCachedCompanySummary,
   saveCachedManagerSummary,
 } from '@/lib/summaryStorage'
-import { resolveSummaryContentForViewer, setLinkedInitiativeOnRecommendation } from '@/lib/summaryContent'
 import { canSeeCompanySummary } from '@/lib/summaryVisibility'
 import { getCurrentUser, isManagerUser } from '@/lib/userContext'
 import { cn } from '@/lib/utils'
 import type {
+  ActiveFilter,
   DashboardWidget,
   ManagerSummaryCache,
   SummaryAction,
@@ -66,7 +82,7 @@ type SummaryWidgetProps = {
   widget?: DashboardWidget
   onUpdate?: (updated: DashboardWidget) => void
   onDelete?: () => void
-  activeFilters?: string[]
+  activeFilters?: ActiveFilter[]
   dashboardWidgets?: DashboardWidget[]
   capabilities?: ViewerCapabilities
   onEdit?: () => void
@@ -118,6 +134,7 @@ function SummaryWidgetInner({
   const rootRef = useRef<HTMLDivElement>(null)
   const chromeRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  const isFirstFilterRender = useRef(true)
 
   const currentUser = getCurrentUser()
   const config = normalizeSummaryAdminConfig(widget.summaryConfig!)
@@ -154,12 +171,11 @@ function SummaryWidgetInner({
     managerSummariesEnabled && currentUserIsManager && myTeamDataDiffers ? 'team' : 'company'
 
   const [activeTab, setActiveTab] = useState<'company' | 'team'>(defaultTab)
-
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [showSummaryRegenerateConfirm, setShowSummaryRegenerateConfirm] = useState(false)
+  const [regenerateModalContext, setRegenerateModalContext] =
+    useState<RegenerateModalContext | null>(null)
   const [regeneratingSummary, setRegeneratingSummary] = useState(false)
-  const [regeneratingActionPriority, setRegeneratingActionPriority] =
-    useState<SummaryPriority | null>(null)
+  const [regeneratingRecommendations, setRegeneratingRecommendations] = useState(false)
   const [actionPlanOpen, setActionPlanOpen] = useState(false)
   const [actionPlanAction, setActionPlanAction] = useState<SummaryAction | null>(null)
   const [actionPlanLink, setActionPlanLink] = useState<SurveyLink | null>(null)
@@ -178,14 +194,14 @@ function SummaryWidgetInner({
     currentUser,
     isAdmin,
     'company',
-    Boolean(config.companyContent),
+    Boolean(config.companyContent?.summary),
   )
   const canRegenerateTeam = canRegenerateSummary(
     config,
     currentUser,
     isAdmin,
     'team',
-    Boolean(myTeamCache),
+    Boolean(myTeamCache?.content.summary),
     myTeamCache?.userId,
   )
   const canRegenerate = activeTab === 'company' ? canRegenerateCompany : canRegenerateTeam
@@ -201,6 +217,7 @@ function SummaryWidgetInner({
   useEffect(() => {
     hasStartedGeneration.current = false
     hasRestoredCache.current = false
+    isFirstFilterRender.current = true
   }, [widget.id])
 
   useEffect(() => {
@@ -210,6 +227,23 @@ function SummaryWidgetInner({
       setActiveTab('company')
     }
   }, [showCompanyTab, showMyTeamTab])
+
+  useEffect(() => {
+    if (isFirstFilterRender.current) {
+      isFirstFilterRender.current = false
+      return
+    }
+
+    if (config.companyContent?.summary) {
+      const normalized = normalizeSummaryContent(config.companyContent, config.createdBy)
+      handleCompanyContentChange(markSummaryStale(normalized))
+    }
+
+    if (myTeamCache?.content.summary) {
+      handleTeamContentChange(markSummaryStale(myTeamCache.content))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilters])
 
   const generateCompanySummary = useCallback(async () => {
     if (!config) return
@@ -329,74 +363,96 @@ function SummaryWidgetInner({
     setMyTeamCache(updated)
   }
 
-  async function handleRegenerateSummaryParagraph() {
-    if (!config?.companyContent) return
-    setShowSummaryRegenerateConfirm(false)
-    setRegeneratingSummary(true)
-    try {
-      const normalized = normalizeSummaryContent(config.companyContent)
-      const updated = await regenerateSummaryParagraph(
-        normalized,
-        dataWidgets,
-        activeFilters,
-        'company',
-      )
-      handleCompanyContentChange(updated)
-    } finally {
-      setRegeneratingSummary(false)
-    }
-  }
+  async function runRegeneration(context: RegenerateModalContext, guidance: string) {
+    const viewType = activeTab === 'team' ? 'team' : 'company'
+    const currentContent =
+      activeTab === 'company'
+        ? config.companyContent
+          ? normalizeSummaryContent(config.companyContent, config.createdBy)
+          : null
+        : myTeamCache
+          ? normalizeSummaryContent(myTeamCache.content, myTeamCache.userId)
+          : null
 
-  async function handleRegenerateTeamSummaryParagraph() {
-    if (!myTeamCache) return
-    setShowSummaryRegenerateConfirm(false)
-    setRegeneratingSummary(true)
-    try {
-      const normalized = normalizeSummaryContent(myTeamCache.content)
-      const updated = await regenerateSummaryParagraph(
-        normalized,
-        dataWidgets,
-        activeFilters,
-        'team',
-      )
-      handleTeamContentChange(updated)
-    } finally {
-      setRegeneratingSummary(false)
-    }
-  }
+    if (!currentContent) return
 
-  async function handleRegenerateAction(priority: SummaryPriority) {
-    if (activeTab === 'company' && config?.companyContent) {
-      setRegeneratingActionPriority(priority)
+    if (
+      context === 'summary' &&
+      currentContent.summaryRegenerationsUsed >= MAX_REGENERATIONS
+    ) {
+      return
+    }
+
+    if (
+      context === 'recommendations' &&
+      currentContent.recsRegenerationsUsed >= MAX_REGENERATIONS
+    ) {
+      return
+    }
+
+    if (context === 'full') {
+      setRegeneratingSummary(true)
+      setRegeneratingRecommendations(true)
       try {
-        const normalized = normalizeSummaryContent(config.companyContent)
-        const updated = await regenerateSingleAction(
-          normalized,
-          priority,
-          dataWidgets,
-          activeFilters,
+        const { summary, actions } = await generateFullUpdate(dataWidgets, activeFilters, {
+          viewType,
+          guidance: guidance || undefined,
+        })
+        const updated = applyFullUpdate(
+          currentContent,
+          summary,
+          actions,
+          activeTab === 'company' ? config.createdBy : currentUser.id,
         )
-        handleCompanyContentChange(updated)
+        if (activeTab === 'company') {
+          handleCompanyContentChange(updated)
+        } else {
+          handleTeamContentChange(updated)
+        }
       } finally {
-        setRegeneratingActionPriority(null)
+        setRegeneratingSummary(false)
+        setRegeneratingRecommendations(false)
       }
       return
     }
 
-    if (activeTab === 'team' && myTeamCache) {
-      setRegeneratingActionPriority(priority)
+    if (context === 'summary') {
+      setRegeneratingSummary(true)
       try {
-        const normalized = normalizeSummaryContent(myTeamCache.content)
-        const updated = await regenerateSingleAction(
-          normalized,
-          priority,
+        const summary = await generateSummaryOnlyRegeneration(
           dataWidgets,
           activeFilters,
+          viewType,
+          guidance || undefined,
         )
-        handleTeamContentChange(updated)
+        const updated = applySummaryRegeneration(currentContent, summary)
+        if (activeTab === 'company') {
+          handleCompanyContentChange(updated)
+        } else {
+          handleTeamContentChange(updated)
+        }
       } finally {
-        setRegeneratingActionPriority(null)
+        setRegeneratingSummary(false)
       }
+      return
+    }
+
+    setRegeneratingRecommendations(true)
+    try {
+      const actions = await generateRecommendationsOnlyRegeneration(
+        dataWidgets,
+        activeFilters,
+        currentContent.summary,
+        guidance || undefined,
+      )
+      const updated = applyRecommendationsRegeneration(currentContent, actions)
+      if (activeTab === 'company') {
+        handleCompanyContentChange(updated)
+      } else {
+        handleTeamContentChange(updated)
+      }
+    } finally {
+      setRegeneratingRecommendations(false)
     }
   }
 
@@ -421,10 +477,7 @@ function SummaryWidgetInner({
 
     const contentForProvenance =
       activeTab === 'company' ? config.companyContent : myTeamCache?.content
-    const versionId =
-      contentForProvenance?.activeSummaryVersionId ??
-      contentForProvenance?.publishedVersionId ??
-      'unknown'
+    const versionId = contentForProvenance?.generatedAt ?? 'current'
     const primaryWidgetId = sourceWidgetIds[0] ?? widget.id
 
     setActionPlanAction(action)
@@ -450,7 +503,7 @@ function SummaryWidgetInner({
 
   function handleActionPlanCreated(initiativeId: string, priority: SummaryPriority) {
     if (activeTab === 'company' && config.companyContent) {
-      const normalized = normalizeSummaryContent(config.companyContent)
+      const normalized = normalizeSummaryContent(config.companyContent, config.createdBy)
       handleCompanyContentChange(setLinkedInitiativeOnRecommendation(normalized, priority, initiativeId))
     } else if (activeTab === 'team' && myTeamCache) {
       handleTeamContentChange(
@@ -462,47 +515,39 @@ function SummaryWidgetInner({
   }
 
   const companyContent = config.companyContent
-    ? normalizeSummaryContent(config.companyContent, {
-        scope: 'company',
-        createdBy: config.createdBy,
-        visibility: config.visibility,
-      })
+    ? normalizeSummaryContent(config.companyContent, config.createdBy)
     : undefined
 
   const companyResolved = companyContent
     ? resolveSummaryContentForViewer(companyContent, {
-        canManageVersions: canManageVersions(currentUser, companyContent),
-        isSharedViewer: isSharedSummaryViewer(currentUser, companyContent, config),
+        isSharedViewer: isSharedSummaryViewer(currentUser, config),
         visibility: config.visibility,
       })
     : null
 
   const teamContent = myTeamCache
-    ? normalizeSummaryContent(myTeamCache.content, {
-        scope: `team:${myTeamCache.userId}`,
-        createdBy: myTeamCache.userId,
-        visibility: 'private',
-      })
+    ? normalizeSummaryContent(myTeamCache.content, myTeamCache.userId)
     : undefined
 
   const teamResolved = teamContent
     ? resolveSummaryContentForViewer(teamContent, {
-        canManageVersions: canManageVersions(currentUser, teamContent),
         isSharedViewer: false,
         visibility: 'private',
       })
     : null
+
   const companyGenerating = config.isGenerating
   const companyError = config.generationError
 
-  const companySharedViewer = companyContent
-    ? isSharedSummaryViewer(currentUser, companyContent, config)
-    : false
+  const companySharedViewer = isSharedSummaryViewer(currentUser, config)
   const canCreateActionPlan =
     canSeeActions && !(activeTab === 'company' && companySharedViewer) && !currentUser.isImpersonating
 
   const showCompanyWideBadge =
     !isAdmin && activeTab === 'company' && Boolean(companyContent)
+
+  const activeContent =
+    activeTab === 'team' && showMyTeamTab ? teamResolved?.content : companyResolved?.content
 
   useReportWidgetHeight(
     reportWidgetHeight,
@@ -517,7 +562,8 @@ function SummaryWidgetInner({
       teamError,
       showTabRow,
       regeneratingSummary,
-      regeneratingActionPriority,
+      regeneratingRecommendations,
+      activeContent?.isStale,
     ],
   )
 
@@ -575,36 +621,27 @@ function SummaryWidgetInner({
           </div>
           <p className="mb-1 text-sm font-medium text-gray-700">Summary not yet shared</p>
           <p className="mx-auto max-w-xs text-xs text-gray-400">
-            The dashboard owner has not published a summary version for viewers yet.
+            The dashboard owner has not shared a summary for viewers yet.
           </p>
         </div>
       )
     }
 
     const displayContent = companyResolved.content
-    const manageVersions = canManageVersions(currentUser, companyContent)
 
     return (
       <SummaryWidgetSections
         content={displayContent}
         onContentChange={handleCompanyContentChange}
         onCreateActionPlan={handleCreateActionPlan}
-        canShowFeedback={canRateSummary(currentUser, displayContent)}
+        canShowFeedback={canRateSummary(currentUser, config)}
         canSeeActions={canSeeActions}
         canCreateActionPlan={canCreateActionPlan}
         showRestrictedNote={!canSeeActions && !isAdmin}
-        canManageVersions={manageVersions}
         canRegenerate={canRegenerateCompany}
-        canPublishVersion={manageVersions && config.visibility === 'everyone'}
-        publishedVersionMissing={companyResolved.publishedVersionMissing}
-        onRegenerateSummary={() => void handleRegenerateSummaryParagraph()}
-        onRegenerateAction={(priority) => void handleRegenerateAction(priority)}
+        onOpenRegenerateModal={setRegenerateModalContext}
         regeneratingSummary={regeneratingSummary}
-        regeneratingActionPriority={regeneratingActionPriority}
-        showSummaryRegenerateConfirm={showSummaryRegenerateConfirm}
-        onToggleSummaryRegenerateConfirm={() =>
-          setShowSummaryRegenerateConfirm((open) => !open)
-        }
+        regeneratingRecommendations={regeneratingRecommendations}
       />
     )
   }
@@ -637,6 +674,7 @@ function SummaryWidgetInner({
     }
 
     if (!myTeamCache) {
+      const filterLabels = activeFiltersToLabels(activeFilters)
       return (
         <div className="px-4 py-8 text-center">
           <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
@@ -648,9 +686,9 @@ function SummaryWidgetInner({
           <p className="mx-auto mb-4 max-w-xs text-xs text-gray-400">
             Based on your filtered view of this dashboard
           </p>
-          {activeFilters.length > 0 && (
+          {filterLabels.length > 0 && (
             <div className="mb-4 flex flex-wrap justify-center gap-1">
-              {activeFilters.map((filter) => (
+              {filterLabels.map((filter) => (
                 <span
                   key={filter}
                   className="rounded border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600"
@@ -660,43 +698,33 @@ function SummaryWidgetInner({
               ))}
             </div>
           )}
-            {canGenerateTeam && (
-              <button
-                type="button"
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                onClick={() => void generateTeamSummary()}
-              >
-                Generate Summary
-              </button>
-            )}
+          {canGenerateTeam && (
+            <button
+              type="button"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              onClick={() => void generateTeamSummary()}
+            >
+              Generate Summary
+            </button>
+          )}
         </div>
       )
     }
 
     if (!teamContent || !teamResolved) return null
 
-    const manageTeamVersions = canManageVersions(currentUser, teamContent)
-
     return (
       <SummaryWidgetSections
         content={teamResolved.content}
         onContentChange={handleTeamContentChange}
         onCreateActionPlan={handleCreateActionPlan}
-        canShowFeedback={canRateSummary(currentUser, teamResolved.content)}
+        canShowFeedback={canRateSummary(currentUser, config)}
         canSeeActions
         canCreateActionPlan
-        canManageVersions={manageTeamVersions}
         canRegenerate={canRegenerateTeam}
-        canPublishVersion={false}
-        publishedVersionMissing={teamResolved.publishedVersionMissing}
-        onRegenerateSummary={() => void handleRegenerateTeamSummaryParagraph()}
-        onRegenerateAction={(priority) => void handleRegenerateAction(priority)}
+        onOpenRegenerateModal={setRegenerateModalContext}
         regeneratingSummary={regeneratingSummary}
-        regeneratingActionPriority={regeneratingActionPriority}
-        showSummaryRegenerateConfirm={showSummaryRegenerateConfirm}
-        onToggleSummaryRegenerateConfirm={() =>
-          setShowSummaryRegenerateConfirm((open) => !open)
-        }
+        regeneratingRecommendations={regeneratingRecommendations}
       />
     )
   }
@@ -812,6 +840,20 @@ function SummaryWidgetInner({
         onClose={() => setSettingsOpen(false)}
         widget={widget}
         onUpdate={onUpdate}
+      />
+
+      <SummaryRegenerateModal
+        open={regenerateModalContext !== null}
+        context={regenerateModalContext}
+        summaryRegenerationsUsed={activeContent?.summaryRegenerationsUsed ?? 0}
+        recsRegenerationsUsed={activeContent?.recsRegenerationsUsed ?? 0}
+        maxRegenerations={MAX_REGENERATIONS}
+        onClose={() => setRegenerateModalContext(null)}
+        onConfirm={(guidance) => {
+          if (regenerateModalContext) {
+            void runRegeneration(regenerateModalContext, guidance)
+          }
+        }}
       />
 
       {actionPlanAction && actionPlanProvenance && (

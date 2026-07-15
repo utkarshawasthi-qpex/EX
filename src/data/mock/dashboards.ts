@@ -30,15 +30,9 @@ const pptDemoSummary = buildSummaryContent(
     },
   ]),
   'emp_001',
-  'SCORECARD DATA: Overall favorability: 40%...',
 )
-pptDemoSummary.summaryVersions[0].generatedAt = '2026-05-20T10:30:00.000Z'
-pptDemoSummary.publishedVersionId = pptDemoSummary.summaryVersions[0].versionId
-for (const priority of [1, 2, 3, 4] as const) {
-  if (pptDemoSummary.actionVersions[priority][0]) {
-    pptDemoSummary.actionVersions[priority][0].generatedAt = '2026-05-20T10:30:00.000Z'
-  }
-}
+pptDemoSummary.generatedAt = '2026-05-20T10:30:00.000Z'
+pptDemoSummary.lastFullUpdateAt = '2026-05-20T10:30:00.000Z'
 
 function widget(
   id: string,

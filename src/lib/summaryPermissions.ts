@@ -1,6 +1,6 @@
 import type { AppUser } from '@/lib/userContext'
 import { isManagerUser } from '@/lib/userContext'
-import type { SummaryAdminConfig, SummaryContent } from '@/types'
+import type { SummaryAdminConfig } from '@/types'
 
 export type SummaryTab = 'company' | 'team'
 
@@ -29,6 +29,7 @@ export function canRegenerateSummary(
   hasContent: boolean,
   teamOwnerId?: string,
 ): boolean {
+  void config
   if (!hasContent) return false
   if (activeTab === 'company') {
     return isAdmin
@@ -36,28 +37,18 @@ export function canRegenerateSummary(
   return (
     activeTab === 'team' &&
     isManagerUser(user) &&
-    config.allowEmployeeSummaries &&
     teamOwnerId === user.id
-  )
-}
-
-export function canManageVersions(user: AppUser, content: SummaryContent): boolean {
-  return (
-    user.role === 'hr_admin' &&
-    !user.isImpersonating &&
-    user.id === content.createdBy
   )
 }
 
 export function isSharedSummaryViewer(
   user: AppUser,
-  content: SummaryContent,
   config: SummaryAdminConfig,
 ): boolean {
   if (config.visibility !== 'everyone') return false
-  return !canManageVersions(user, content)
+  return !(user.role === 'hr_admin' && !user.isImpersonating && user.id === config.createdBy)
 }
 
-export function canRateSummary(user: AppUser, content: SummaryContent): boolean {
-  return user.id === content.createdBy && !user.isImpersonating
+export function canRateSummary(user: AppUser, config: SummaryAdminConfig): boolean {
+  return user.id === config.createdBy && !user.isImpersonating
 }

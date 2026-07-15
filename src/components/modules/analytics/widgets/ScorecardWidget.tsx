@@ -4,10 +4,13 @@ import dynamic from 'next/dynamic'
 import { useRef } from 'react'
 import { mockScorecardData } from '@/data/mock/analyticsData'
 import { WidgetKebabMenu } from '@/components/modules/analytics/widgets/WidgetKebabMenu'
+import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
 import { widgetSurfaceClassName } from '@/components/modules/analytics/widgets/WidgetCardShell'
 import { useDashboardWidgetContext } from '@/components/modules/analytics/DashboardWidgetContext'
 import { useReportWidgetHeight } from '@/components/modules/analytics/useReportWidgetHeight'
+import { getFilteredSentiment } from '@/lib/dashboardFilters'
 import { cn } from '@/lib/utils'
+import type { ActiveFilter } from '@/types'
 
 const WuHeading = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuHeading })),
@@ -110,15 +113,28 @@ function ComparisonCell({
 }
 
 export function ScorecardWidget({
+  activeFilters = [],
   onEdit,
   onDuplicate,
   onDelete,
 }: {
+  activeFilters?: ActiveFilter[]
   onEdit?: () => void
   onDuplicate?: () => void
   onDelete?: () => void
 }) {
-  const { surveyName, markers } = mockScorecardData
+  const { surveyName, markers: baseMarkers } = mockScorecardData
+  const sentiment = getFilteredSentiment(activeFilters)
+  const markers =
+    activeFilters.length > 0
+      ? baseMarkers.map((marker) => ({
+          ...marker,
+          respondents: sentiment.count,
+          favorable: sentiment.favorable,
+          neutral: sentiment.neutral,
+          unfavorable: sentiment.unfavorable,
+        }))
+      : baseMarkers
   const { capabilities, onExportPpt, reportWidgetHeight } = useDashboardWidgetContext()
   const rootRef = useRef<HTMLElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
@@ -162,6 +178,7 @@ export function ScorecardWidget({
       </div>
 
       <div ref={contentRef} className="min-h-0 flex-1 overflow-auto">
+        <FilteredWidgetGuard activeFilters={activeFilters}>
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="bg-gray-50">
@@ -220,6 +237,7 @@ export function ScorecardWidget({
               })}
             </tbody>
           </table>
+        </FilteredWidgetGuard>
       </div>
     </article>
   )

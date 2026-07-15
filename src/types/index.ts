@@ -414,7 +414,7 @@ export type ManagerSummaryCache = {
   userId: ID
   content: SummaryContent
   generatedAt: string
-  dataFilters: string[]
+  dataFilters: ActiveFilter[]
 }
 
 export type SummaryPriority = 1 | 2 | 3 | 4
@@ -429,45 +429,30 @@ export type SummaryAction = {
   linkedInitiativeId?: string
 }
 
-export type SummaryScope = 'company' | `team:${ID}`
-
-export type SummaryVersion = {
-  versionId: string
-  summary: string
-  generatedAt: string
-  generatedBy?: ID
-  actionSnapshots?: Partial<Record<SummaryPriority, ActionVersion>>
-}
-
-export type ActionVersion = {
-  versionId: string
-  action: string
-  timeframe: '30 days' | '60 days' | '90 days'
-  owner: 'Manager' | 'HR' | 'Leadership'
-  priority: SummaryPriority
-  context: string
-  generatedAt: string
-  linkedInitiativeId?: string
-}
-
 export type SummaryContent = {
-  id: ID
-  scope: SummaryScope
-  createdBy: ID
-  visibility: SummaryVisibilityMode
-  publishedVersionId: string | null
-  activeSummaryVersionId: string
-  activeActionVersionIds: Record<SummaryPriority, string>
-  summaryVersions: SummaryVersion[]
-  actionVersions: Record<SummaryPriority, ActionVersion[]>
-  /** @deprecated use summaryFeedbackStorage */
-  summaryFeedback?: 'up' | 'down' | null
-  /** @deprecated use summaryFeedbackStorage */
-  summaryFeedbackReason?: string | null
-  /** @deprecated use summaryFeedbackStorage */
-  actionFeedback?: Record<SummaryPriority, 'up' | 'down' | null>
-  generatedBy: ID
-  dashboardDataSnapshot: string
+  summary: string
+  actions: SummaryAction[]
+  summaryRegenerationsUsed: number
+  recsRegenerationsUsed: number
+  isStale: boolean
+  summaryFeedback: 'up' | 'down' | null
+  summaryFeedbackReason: string | null
+  actionFeedback: Record<SummaryPriority, 'up' | 'down' | null>
+  generatedBy: string
+  generatedAt: string
+  lastFullUpdateAt: string
+}
+
+export type FilterField = {
+  id: string
+  label: string
+  values: string[]
+}
+
+export type ActiveFilter = {
+  fieldId: string
+  fieldLabel: string
+  value: string
 }
 
 export type SummaryFeedbackRecord = {

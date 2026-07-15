@@ -7,7 +7,12 @@ import {
   mockTimeTrendData,
 } from '@/data/mock/analyticsData'
 import { assembleAiSummaryOrgContextPrompt, createEmptyAiSummaryOrgContext } from '@/lib/aiSummaryOrgContext/budget'
-import { activeFiltersToLabels } from '@/lib/dashboardFilters'
+import {
+  activeFiltersToLabels,
+  getFilteredENPS,
+  getFilteredResponseRate,
+  getFilteredSentiment,
+} from '@/lib/dashboardFilters'
 import { getOrgContextText } from '@/lib/orgContext'
 import { buildSummaryContent, normalizeActionsFromApi } from '@/lib/summaryContent'
 import { getCurrentUser } from '@/lib/userContext'
@@ -201,6 +206,18 @@ Return ONLY valid JSON, no markdown:
 `.trim()
 }
 
+const TEAM_FAVORABILITY_OFFSET = 8
+
+export type DashboardFacts = {
+  lowestCategory: { name: string; favorable: number; respondents: number }
+  highestCategory: { name: string; favorable: number; respondents: number }
+  worstHeatmapCell: { category: string; department: string; favorable: number } | null
+  enps: number | null
+  responseRate: number | null
+  filterDescription: string | null
+  rankedCategories: { name: string; favorable: number; respondents: number }[]
+}
+
 function readOrgContextText(): string {
   if (typeof window === 'undefined') {
     return assembleAiSummaryOrgContextPrompt(createEmptyAiSummaryOrgContext())
@@ -208,66 +225,268 @@ function readOrgContextText(): string {
   return getOrgContextText()
 }
 
-function mockTeamActions(hasFilters: boolean): SummaryAction[] {
-  return normalizeActionsFromApi([
-    {
-      action: 'Hold a team huddle to clarify priorities and assign owners for top blockers.',
-      timeframe: '30 days',
-      owner: 'Manager',
-      context: 'Targets team transparency',
-    },
-    {
-      action: 'Review open feedback themes with direct reports and publish a two-week action plan.',
-      timeframe: '30 days',
-      owner: 'Manager',
-      context: 'Supports manager follow-through',
-    },
-    {
-      action: 'Partner with HR on enablement fixes affecting your team’s lowest markers.',
-      timeframe: '60 days',
-      owner: 'Manager',
-      context: hasFilters ? 'Addresses enablement (58)' : 'Addresses enablement gaps',
-    },
-    {
-      action: 'Schedule monthly check-ins to track progress on transparency and collaboration themes.',
-      timeframe: '90 days',
-      owner: 'Manager',
-      context: 'Sustains team improvement',
-    },
-  ])
-}
-
-function mockCompanyActions(): SummaryAction[] {
-  return normalizeActionsFromApi([
-    {
-      action: 'Launch a leadership communication cadence explaining priorities, decisions, and progress.',
-      timeframe: '30 days',
-      owner: 'Leadership',
-      context: 'Targets transparency (54)',
-    },
-    {
-      action: 'Identify the top three technology blockers and assign owners for resolution.',
-      timeframe: '60 days',
-      owner: 'HR',
-      context: 'Addresses enablement (58)',
-    },
-    {
-      action: 'Publish a dashboard action tracker tied to the lowest-scoring markers.',
-      timeframe: '60 days',
-      owner: 'Manager',
-      context: 'Tracks progress over time',
-    },
-    {
-      action: 'Re-measure transparency and enablement after action plans have been communicated.',
-      timeframe: '90 days',
-      owner: 'Leadership',
-      context: 'Validates improvement impact',
-    },
-  ])
-}
-
 function filterLabels(activeFilters: ActiveFilter[]): string[] {
   return activeFiltersToLabels(activeFilters)
+}
+
+function buildFilterDescription(activeFilters: ActiveFilter[]): string | null {
+  if (activeFilters.length === 0) return null
+  return `${activeFilters.map((filter) => filter.value).join(', ')} respondents`
+}
+
+function meanScoreToFavorable(score: number): number {
+  return Math.round((score / 5) * 100)
+}
+
+function getScorecardCategories(
+  activeFilters: ActiveFilter[],
+  viewType: 'company' | 'team',
+): Array<{ name: string; favorable: number; respondents: number }> {
+  const sentiment = getFilteredSentiment(activeFilters)
+
+  return mockScorecardData.markers
+    .filter((marker) => marker.name !== 'Company Overall')
+    .map((marker) => {
+      if (activeFilters.length > 0) {
+        let favorable = sentiment.favorable
+        if (viewType === 'team') {
+          favorable = Math.max(0, favorable - TEAM_FAVORABILITY_OFFSET)
+        }
+        return {
+          name: marker.name,
+          favorable,
+          respondents: sentiment.count,
+        }
+      }
+
+      let favorable = marker.favorable
+      if (viewType === 'team') {
+        favorable = Math.max(0, favorable - TEAM_FAVORABILITY_OFFSET)
+      }
+
+      return {
+        name: marker.name,
+        favorable,
+        respondents: marker.respondents,
+      }
+    })
+}
+
+function findWorstHeatmapCell(): {
+  category: string
+  department: string
+  favorable: number
+} | null {
+  let worst: { category: string; department: string; favorable: number } | null = null
+  let minScore = Infinity
+
+  mockHeatmapData.metrics.forEach((metric, rowIndex) => {
+    mockHeatmapData.scores[rowIndex]?.forEach((score, colIndex) => {
+      const department = mockHeatmapData.columns[colIndex]?.name
+      if (!department || score >= minScore) return
+
+      minScore = score
+      worst = {
+        category: metric,
+        department,
+        favorable: meanScoreToFavorable(score),
+      }
+    })
+  })
+
+  return worst
+}
+
+function sortCategoriesByFavorability(
+  categories: Array<{ name: string; favorable: number; respondents: number }>,
+): Array<{ name: string; favorable: number; respondents: number }> {
+  return [...categories].sort((a, b) => {
+    if (a.favorable !== b.favorable) return a.favorable - b.favorable
+    return a.name.localeCompare(b.name)
+  })
+}
+
+export function computeDashboardFacts(
+  dataWidgets: DashboardWidget[],
+  activeFilters: ActiveFilter[],
+  viewType: 'company' | 'team' = 'company',
+): DashboardFacts {
+  const categories = getScorecardCategories(activeFilters, viewType)
+  const rankedCategories = sortCategoriesByFavorability(categories)
+  const lowestCategory = rankedCategories[0] ?? {
+    name: 'Unknown',
+    favorable: 0,
+    respondents: 0,
+  }
+  const highestCategory = rankedCategories[rankedCategories.length - 1] ?? lowestCategory
+
+  const hasHeatmap = dataWidgets.some((widget) => widget.type === 'heatmap')
+  const hasEnps = dataWidgets.some((widget) => widget.type === 'enps')
+  const hasResponseRate = dataWidgets.some((widget) => widget.type === 'response_rate')
+
+  const enps = hasEnps
+    ? activeFilters.length > 0
+      ? getFilteredENPS(activeFilters).score
+      : mockENPSData.score
+    : null
+
+  const responseRate = hasResponseRate
+    ? activeFilters.length > 0
+      ? getFilteredResponseRate(activeFilters).rate
+      : mockResponseRateData.overview.rate
+    : null
+
+  return {
+    lowestCategory,
+    highestCategory,
+    worstHeatmapCell: hasHeatmap ? findWorstHeatmapCell() : null,
+    enps,
+    responseRate,
+    filterDescription: buildFilterDescription(activeFilters),
+    rankedCategories,
+  }
+}
+
+export function composeSummary(facts: DashboardFacts, viewType: 'company' | 'team'): string {
+  const parts: string[] = []
+
+  if (facts.filterDescription) {
+    parts.push(`Looking at ${facts.filterDescription}:`)
+  }
+
+  const scope = viewType === 'team' ? 'Your team' : 'The organization'
+  const { lowestCategory, highestCategory } = facts
+
+  parts.push(
+    `${scope} shows ${lowestCategory.name} is lowest at ${lowestCategory.favorable}% favorable (${lowestCategory.respondents} respondents).`,
+  )
+  parts.push(`${highestCategory.name} is strongest at ${highestCategory.favorable}% favorable.`)
+
+  if (facts.enps !== null) {
+    parts.push(`eNPS is ${facts.enps}.`)
+  }
+
+  if (facts.responseRate !== null) {
+    parts.push(`Response rate is ${facts.responseRate}%.`)
+  }
+
+  if (facts.worstHeatmapCell) {
+    const cell = facts.worstHeatmapCell
+    parts.push(
+      `The heatmap’s weakest cell is ${cell.category} in ${cell.department} at ${cell.favorable}% favorable.`,
+    )
+  }
+
+  if (viewType === 'team') {
+    parts.push(`Focus next on ${lowestCategory.name} with your direct reports.`)
+  } else {
+    parts.push(`HR and managers should focus next on ${lowestCategory.name}.`)
+  }
+
+  return parts.join(' ')
+}
+
+function recommendationActionForCategory(
+  category: { name: string; favorable: number },
+  priority: 1 | 2 | 3 | 4,
+  viewType: 'company' | 'team',
+): { action: string; timeframe: SummaryAction['timeframe']; owner: SummaryAction['owner'] } {
+  if (viewType === 'team') {
+    switch (priority) {
+      case 1:
+        return {
+          action: `Meet with your team on ${category.name} and assign one owner for fixes.`,
+          timeframe: '30 days',
+          owner: 'Manager',
+        }
+      case 2:
+        return {
+          action: `Review ${category.name} feedback with direct reports and set two-week targets.`,
+          timeframe: '30 days',
+          owner: 'Manager',
+        }
+      case 3:
+        return {
+          action: `Ask HR for help on ${category.name} blockers your team flagged in the survey.`,
+          timeframe: '60 days',
+          owner: 'Manager',
+        }
+      case 4:
+        return {
+          action: `Check ${category.name} scores again after your team completes the action plan.`,
+          timeframe: '90 days',
+          owner: 'Manager',
+        }
+    }
+  }
+
+  switch (priority) {
+    case 1:
+      return {
+        action: `Run a leadership review on ${category.name} and publish a 30-day plan.`,
+        timeframe: '30 days',
+        owner: 'Leadership',
+      }
+    case 2:
+      return {
+        action: `Work with HR to fix ${category.name} issues employees raised in the survey.`,
+        timeframe: '60 days',
+        owner: 'HR',
+      }
+    case 3:
+      return {
+        action: `Have managers track ${category.name} progress in weekly team meetings.`,
+        timeframe: '60 days',
+        owner: 'Manager',
+      }
+    case 4:
+      return {
+        action: `Re-run the survey to see if ${category.name} scores improved.`,
+        timeframe: '90 days',
+        owner: 'Leadership',
+      }
+  }
+}
+
+export function composeRecommendations(
+  facts: DashboardFacts,
+  viewType: 'company' | 'team' = 'company',
+): SummaryAction[] {
+  const categories = facts.rankedCategories.slice(0, 4)
+  const priorities: SummaryPriority[] = [1, 2, 3, 4]
+
+  return normalizeActionsFromApi(
+    categories.map((category, index) => {
+      const priority = priorities[index]
+      const template = recommendationActionForCategory(category, priority, viewType)
+      return {
+        action: template.action,
+        timeframe: template.timeframe,
+        owner: template.owner,
+        context: `Targets ${category.name} (${category.favorable}%)`,
+      }
+    }),
+  )
+}
+
+function mockTeamActions(
+  dataWidgets: DashboardWidget[],
+  activeFilters: ActiveFilter[],
+): SummaryAction[] {
+  return composeRecommendations(
+    computeDashboardFacts(dataWidgets, activeFilters, 'team'),
+    'team',
+  )
+}
+
+function mockCompanyActions(
+  dataWidgets: DashboardWidget[],
+  activeFilters: ActiveFilter[],
+): SummaryAction[] {
+  return composeRecommendations(
+    computeDashboardFacts(dataWidgets, activeFilters, 'company'),
+    'company',
+  )
 }
 
 export async function generateDashboardSummary(
@@ -291,22 +510,15 @@ export async function generateDashboardSummary(
 
   await new Promise((resolve) => setTimeout(resolve, 1500))
 
-  const hasFilters = activeFilters.length > 0
   const generatedBy = getCurrentUser().id
+  const facts = computeDashboardFacts(dataWidgets, activeFilters, viewType)
+  const summary = composeSummary(facts, viewType)
+  const actions =
+    viewType === 'team'
+      ? mockTeamActions(dataWidgets, activeFilters)
+      : mockCompanyActions(dataWidgets, activeFilters)
 
-  if (viewType === 'team') {
-    const summary = hasFilters
-      ? 'Your filtered team view shows softer favorability on enablement and communication markers, with direct reports reporting higher friction with tools and process clarity than the broader organization. Compared to company benchmarks, this cohort scores meaningfully lower on transparency and collaboration, suggesting employees may not see priorities translated into day-to-day expectations or consistent follow-through after prior pulse cycles. Organization context and team notes indicate recent change has outpaced manager-led communication, limiting visible progress on themes raised in earlier feedback. Response patterns within the filtered group remain sufficient to treat findings as actionable, though participation varies by location. Time-trend data hints at gradual recovery on inclusion markers, yet enablement gaps persist and likely suppress eNPS improvement until managers publish clearer accountability for technology fixes and workflow blockers identified in this view.'
-      : 'Team-level scores trail the organization on transparency and collaboration, while enablement markers remain the weakest signals in this view. Employees appear to lack visibility into team priorities and face localized workload spikes that reduce time for coaching and feedback loops. Compared with company-wide heatmap patterns, this group reports sharper declines in agility and solutions markers, suggesting process bottlenecks are concentrated within the team rather than reflected uniformly across the enterprise. eNPS commentary highlights frustration with unclear decision ownership and uneven access to resources needed to execute on agreed priorities. Organization context notes reinforce that recent restructuring may have diluted manager bandwidth, making it harder to close loops on prior survey themes. Sustained improvement will likely require clearer weekly communication, explicit ownership for top blockers, and targeted enablement support from HR partners.'
-
-    return buildSummaryContent(summary, mockTeamActions(hasFilters), generatedBy)
-  }
-
-  return buildSummaryContent(
-    'Organization-wide favorability remains soft at 40%, with transparency and technology among the lowest-performing markers while eNPS continues to reflect a detractor-heavy profile compared to prior cycles. Employees appear to lack consistent visibility into organizational priorities, and survey commentary repeatedly points to friction in systems, process clarity, and follow-through after prior feedback cycles. Heatmap results show uneven performance across departments, with enablement and agility lagging collaboration improvements that emerged in the most recent quarter. Response rates remain healthy enough to treat these patterns as representative, but localized teams report sharper declines in manager communication cadence. Organization context suggests recent structural changes have outpaced leadership messaging rhythms, leaving managers without sufficient support to translate employee input into visible action plans that rebuild trust and demonstrate measurable progress.',
-    mockCompanyActions(),
-    generatedBy,
-  )
+  return buildSummaryContent(summary, actions, generatedBy)
 }
 
 export async function generateFullUpdate(
@@ -344,11 +556,8 @@ export async function generateSummaryOnlyRegeneration(
 
   await new Promise((resolve) => setTimeout(resolve, 1200))
 
-  if (viewType === 'team') {
-    return 'Updated team summary: filtered cohort data continues to show enablement and transparency as the primary drag on engagement, with managers needing clearer weekly communication rhythms and visible follow-through on prior pulse themes. Direct reports report uneven access to tools and decision clarity compared with company benchmarks, suggesting localized process bottlenecks rather than enterprise-wide decline. eNPS patterns within this view remain detractor-heavy, though inclusion markers show early signs of recovery when managers publish short action plans tied to specific survey themes.'
-  }
-
-  return 'Updated organization summary: enterprise favorability remains constrained by transparency and technology markers, with employees seeking more consistent leadership messaging on priorities and progress. Heatmap variance across departments indicates enablement investments should be targeted rather than uniform, while collaboration scores offer a foundation to build on. Response rates support treating these findings as representative, and organization context reinforces the need to align HR and leadership action plans with KPI targets already in flight.'
+  const facts = computeDashboardFacts(dataWidgets, activeFilters, viewType)
+  return composeSummary(facts, viewType)
 }
 
 export async function generateRecommendationsOnlyRegeneration(
@@ -356,6 +565,7 @@ export async function generateRecommendationsOnlyRegeneration(
   activeFilters: ActiveFilter[],
   currentSummary: string,
   guidance?: string,
+  viewType: 'company' | 'team' = 'company',
 ): Promise<SummaryAction[]> {
   const dataContext = buildDataContext(dataWidgets)
   const orgContext = readOrgContextText()
@@ -366,36 +576,11 @@ export async function generateRecommendationsOnlyRegeneration(
     filterLabels(activeFilters),
     guidance,
   )
-  void dataWidgets
 
   await new Promise((resolve) => setTimeout(resolve, 1200))
 
-  const actions = normalizeActionsFromApi([
-    {
-      action: 'Establish a fortnightly leadership update on survey themes and action progress.',
-      timeframe: '30 days',
-      owner: 'Leadership',
-      context: 'Improves transparency cadence',
-    },
-    {
-      action: 'Run manager workshops on closing feedback loops within 30 days.',
-      timeframe: '60 days',
-      owner: 'HR',
-      context: 'Builds manager capability',
-    },
-    {
-      action: 'Prioritize top three enablement fixes with named owners and dates.',
-      timeframe: '60 days',
-      owner: 'Manager',
-      context: 'Targets enablement gaps',
-    },
-    {
-      action: 'Schedule a follow-up pulse on weakest markers after actions launch.',
-      timeframe: '90 days',
-      owner: 'Leadership',
-      context: 'Validates improvement impact',
-    },
-  ])
+  const facts = computeDashboardFacts(dataWidgets, activeFilters, viewType)
+  const actions = composeRecommendations(facts, viewType)
 
   if (actions.length !== 4) {
     throw new Error('E-03: Expected exactly 4 recommendations')

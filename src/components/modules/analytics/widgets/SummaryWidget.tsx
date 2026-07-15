@@ -444,6 +444,7 @@ function SummaryWidgetInner({
         activeFilters,
         currentContent.summary,
         guidance || undefined,
+        viewType,
       )
       const updated = applyRecommendationsRegeneration(currentContent, actions)
       if (activeTab === 'company') {

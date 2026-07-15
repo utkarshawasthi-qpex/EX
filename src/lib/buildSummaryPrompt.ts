@@ -518,7 +518,7 @@ export async function generateDashboardSummary(
       ? mockTeamActions(dataWidgets, activeFilters)
       : mockCompanyActions(dataWidgets, activeFilters)
 
-  return buildSummaryContent(summary, actions, generatedBy)
+  return buildSummaryContent(summary, actions, generatedBy, activeFilters)
 }
 
 export async function generateFullUpdate(

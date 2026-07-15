@@ -429,12 +429,20 @@ export type SummaryAction = {
   linkedInitiativeId?: string
 }
 
+export type SummarySharedSnapshot = {
+  summary: string
+  actions: SummaryAction[]
+  sharedAt: string
+}
+
 export type SummaryContent = {
   summary: string
   actions: SummaryAction[]
   summaryRegenerationsUsed: number
   recsRegenerationsUsed: number
   isStale: boolean
+  generatedAtFilters: ActiveFilter[]
+  sharedSnapshot: SummarySharedSnapshot | null
   summaryFeedback: 'up' | 'down' | null
   summaryFeedbackReason: string | null
   actionFeedback: Record<SummaryPriority, 'up' | 'down' | null>

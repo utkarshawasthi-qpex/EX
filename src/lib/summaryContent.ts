@@ -1,4 +1,10 @@
-import type { ID, SummaryAction, SummaryContent, SummaryPriority } from '@/types'
+import type {
+  ActiveFilter,
+  ID,
+  SummaryAction,
+  SummaryContent,
+  SummaryPriority,
+} from '@/types'
 
 export const SUMMARY_PRIORITIES: SummaryPriority[] = [1, 2, 3, 4]
 
@@ -21,6 +27,79 @@ type LegacyVersionedSummary = {
   summaryFeedback?: 'up' | 'down' | null
   summaryFeedbackReason?: string | null
   actionFeedback?: Record<SummaryPriority, 'up' | 'down' | null>
+}
+
+function filterKey(filter: ActiveFilter): string {
+  return `${filter.fieldId}:${filter.value}`
+}
+
+export function filtersMatch(a: ActiveFilter[], b: ActiveFilter[]): boolean {
+  if (a.length !== b.length) return false
+  const keysA = a.map(filterKey).sort()
+  const keysB = b.map(filterKey).sort()
+  return keysA.every((key, index) => key === keysB[index])
+}
+
+export function computeIsStale(
+  activeFilters: ActiveFilter[],
+  generatedAtFilters: ActiveFilter[],
+): boolean {
+  return !filtersMatch(activeFilters, generatedAtFilters)
+}
+
+export function withComputedStaleness(
+  content: SummaryContent,
+  activeFilters: ActiveFilter[],
+): SummaryContent {
+  if (!content.summary?.length) return content
+  return {
+    ...content,
+    isStale: computeIsStale(activeFilters, content.generatedAtFilters),
+  }
+}
+
+function actionsMatchForShare(a: SummaryAction[], b: SummaryAction[]): boolean {
+  if (a.length !== b.length) return false
+  const sortedA = [...a].sort((left, right) => left.priority - right.priority)
+  const sortedB = [...b].sort((left, right) => left.priority - right.priority)
+  return sortedA.every((action, index) => {
+    const other = sortedB[index]
+    return (
+      action.action === other.action &&
+      action.timeframe === other.timeframe &&
+      action.owner === other.owner &&
+      action.priority === other.priority &&
+      action.context === other.context
+    )
+  })
+}
+
+export function liveContentMatchesSnapshot(content: SummaryContent): boolean {
+  if (!content.sharedSnapshot) return false
+  return (
+    content.summary === content.sharedSnapshot.summary &&
+    actionsMatchForShare(content.actions, content.sharedSnapshot.actions)
+  )
+}
+
+export type ShareSnapshotState = 'never_shared' | 'in_sync' | 'diverged'
+
+export function getShareSnapshotState(content: SummaryContent): ShareSnapshotState {
+  if (!content.sharedSnapshot) return 'never_shared'
+  if (liveContentMatchesSnapshot(content)) return 'in_sync'
+  return 'diverged'
+}
+
+export function shareSummarySnapshot(content: SummaryContent): SummaryContent {
+  const now = new Date().toISOString()
+  return {
+    ...content,
+    sharedSnapshot: {
+      summary: content.summary,
+      actions: content.actions.map((action) => ({ ...action })),
+      sharedAt: now,
+    },
+  }
 }
 
 export function validateActionsLength(actions: unknown[]): asserts actions is SummaryAction[] {
@@ -48,6 +127,7 @@ export function buildSummaryContent(
   summary: string,
   actions: SummaryAction[],
   generatedBy: ID,
+  generatedAtFilters: ActiveFilter[] = [],
 ): SummaryContent {
   validateActionsLength(actions)
   const now = new Date().toISOString()
@@ -59,6 +139,8 @@ export function buildSummaryContent(
     summaryRegenerationsUsed: 0,
     recsRegenerationsUsed: 0,
     isStale: false,
+    generatedAtFilters: [...generatedAtFilters],
+    sharedSnapshot: null,
     summaryFeedback: null,
     summaryFeedbackReason: null,
     actionFeedback: { ...EMPTY_ACTION_FEEDBACK },
@@ -124,6 +206,8 @@ function migrateLegacyVersioned(raw: LegacyVersionedSummary, generatedBy: ID): S
     summaryRegenerationsUsed: 0,
     recsRegenerationsUsed: 0,
     isStale: false,
+    generatedAtFilters: [],
+    sharedSnapshot: null,
     summaryFeedback: raw.summaryFeedback ?? null,
     summaryFeedbackReason: raw.summaryFeedbackReason ?? null,
     actionFeedback: { ...EMPTY_ACTION_FEEDBACK, ...raw.actionFeedback },
@@ -156,6 +240,8 @@ export function normalizeSummaryContent(raw: unknown, generatedBy = 'system'): S
       summaryRegenerationsUsed: record.summaryRegenerationsUsed ?? 0,
       recsRegenerationsUsed: record.recsRegenerationsUsed ?? 0,
       isStale: record.isStale ?? false,
+      generatedAtFilters: record.generatedAtFilters ?? [],
+      sharedSnapshot: record.sharedSnapshot ?? null,
       summaryFeedback: record.summaryFeedback ?? null,
       summaryFeedbackReason: record.summaryFeedbackReason ?? null,
       actionFeedback: { ...EMPTY_ACTION_FEEDBACK, ...record.actionFeedback },
@@ -168,16 +254,12 @@ export function normalizeSummaryContent(raw: unknown, generatedBy = 'system'): S
   return migrateLegacyVersioned(record, generatedBy)
 }
 
-export function markSummaryStale(content: SummaryContent): SummaryContent {
-  if (!content.summary?.length) return content
-  return { ...content, isStale: true }
-}
-
 export function applyFullUpdate(
   content: SummaryContent,
   summary: string,
   actions: SummaryAction[],
   generatedBy: ID,
+  activeFilters: ActiveFilter[],
 ): SummaryContent {
   const now = new Date().toISOString()
   validateActionsLength(actions)
@@ -188,18 +270,25 @@ export function applyFullUpdate(
     summaryRegenerationsUsed: 0,
     recsRegenerationsUsed: 0,
     isStale: false,
+    generatedAtFilters: [...activeFilters],
     generatedBy,
     generatedAt: now,
     lastFullUpdateAt: now,
   }
 }
 
-export function applySummaryRegeneration(content: SummaryContent, summary: string): SummaryContent {
+export function applySummaryRegeneration(
+  content: SummaryContent,
+  summary: string,
+  activeFilters: ActiveFilter[],
+): SummaryContent {
   const now = new Date().toISOString()
   return {
     ...content,
     summary,
     summaryRegenerationsUsed: content.summaryRegenerationsUsed + 1,
+    generatedAtFilters: [...activeFilters],
+    isStale: false,
     generatedAt: now,
   }
 }
@@ -207,6 +296,7 @@ export function applySummaryRegeneration(content: SummaryContent, summary: strin
 export function applyRecommendationsRegeneration(
   content: SummaryContent,
   actions: SummaryAction[],
+  activeFilters: ActiveFilter[],
 ): SummaryContent {
   validateActionsLength(actions)
   const now = new Date().toISOString()
@@ -214,6 +304,8 @@ export function applyRecommendationsRegeneration(
     ...content,
     actions: [...actions].sort((a, b) => a.priority - b.priority),
     recsRegenerationsUsed: content.recsRegenerationsUsed + 1,
+    generatedAtFilters: [...activeFilters],
+    isStale: false,
     generatedAt: now,
   }
 }
@@ -234,6 +326,7 @@ export function setLinkedInitiativeOnRecommendation(
 export type ResolvedSummaryView = {
   content: SummaryContent
   isPendingShare: boolean
+  sharedAt: string | null
 }
 
 export function resolveSummaryContentForViewer(
@@ -245,13 +338,22 @@ export function resolveSummaryContentForViewer(
 ): ResolvedSummaryView {
   const normalized = normalizeSummaryContent(content)
 
-  if (
-    options.isSharedViewer &&
-    options.visibility === 'everyone' &&
-    !normalized.summary?.trim()
-  ) {
-    return { content: normalized, isPendingShare: true }
+  if (options.isSharedViewer && options.visibility === 'everyone') {
+    if (!normalized.sharedSnapshot) {
+      return { content: normalized, isPendingShare: true, sharedAt: null }
+    }
+
+    return {
+      content: {
+        ...normalized,
+        summary: normalized.sharedSnapshot.summary,
+        actions: normalized.sharedSnapshot.actions.map((action) => ({ ...action })),
+        isStale: false,
+      },
+      isPendingShare: false,
+      sharedAt: normalized.sharedSnapshot.sharedAt,
+    }
   }
 
-  return { content: normalized, isPendingShare: false }
+  return { content: normalized, isPendingShare: false, sharedAt: null }
 }

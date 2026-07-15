@@ -29,6 +29,8 @@ type SummaryWidgetSectionsProps = {
   canCreateActionPlan?: boolean
   showRestrictedNote?: boolean
   canRegenerate?: boolean
+  isRecipientView?: boolean
+  sharedAt?: string | null
   onOpenRegenerateModal: (context: RegenerateModalContext) => void
   regeneratingSummary?: boolean
   regeneratingRecommendations?: boolean
@@ -80,6 +82,8 @@ export function SummaryWidgetSections({
   canCreateActionPlan = true,
   showRestrictedNote = false,
   canRegenerate = false,
+  isRecipientView = false,
+  sharedAt = null,
   onOpenRegenerateModal,
   regeneratingSummary = false,
   regeneratingRecommendations = false,
@@ -216,7 +220,7 @@ export function SummaryWidgetSections({
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-      {content.isStale && (
+      {content.isStale && !isRecipientView && (
         <div className="mb-3 flex flex-shrink-0 items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
           <span>⚠</span>
           <span>Filters changed. Update to reflect the current view.</span>
@@ -245,7 +249,7 @@ export function SummaryWidgetSections({
           </WuText>
         )}
 
-        {canRegenerate && !content.isStale && (
+        {canRegenerate && !isRecipientView && !content.isStale && (
           <button
             type="button"
             onClick={() => !summaryLimitReached && onOpenRegenerateModal('summary')}
@@ -305,7 +309,7 @@ export function SummaryWidgetSections({
                   .map((action) => renderActionRow(action))}
           </div>
 
-          {canRegenerate && !content.isStale && (
+          {canRegenerate && !isRecipientView && !content.isStale && (
             <button
               type="button"
               onClick={() => !recsLimitReached && onOpenRegenerateModal('recommendations')}
@@ -335,9 +339,15 @@ export function SummaryWidgetSections({
 
       <div className="mt-2 flex flex-shrink-0 flex-col gap-2 border-t border-gray-50 pt-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <WuText size="sm" as="span" className="text-gray-400">
-            Generated {format(new Date(content.generatedAt), 'MMM d, yyyy')}
-          </WuText>
+          {isRecipientView && sharedAt ? (
+            <span className="rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-500">
+              Shared • Last updated {format(new Date(sharedAt), 'MMM d, yyyy')}
+            </span>
+          ) : (
+            <WuText size="sm" as="span" className="text-gray-400">
+              Generated {format(new Date(content.generatedAt), 'MMM d, yyyy')}
+            </WuText>
+          )}
         </div>
 
         <div className="flex flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">

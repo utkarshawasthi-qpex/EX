@@ -1,8 +1,10 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import { format } from 'date-fns'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CreateActionPlanModal } from '@/components/modules/analytics/CreateActionPlanModal'
+import { SummarySharedPreviewModal } from '@/components/modules/analytics/SummarySharedPreviewModal'
 import { useDashboardWidgetContext } from '@/components/modules/analytics/DashboardWidgetContext'
 import { SummarySettingsModal } from '@/components/modules/analytics/SummarySettingsModal'
 import {
@@ -39,9 +41,11 @@ import {
   applyFullUpdate,
   applyRecommendationsRegeneration,
   applySummaryRegeneration,
-  markSummaryStale,
+  getShareSnapshotState,
   resolveSummaryContentForViewer,
   setLinkedInitiativeOnRecommendation,
+  shareSummarySnapshot,
+  withComputedStaleness,
 } from '@/lib/summaryContent'
 import {
   clearCachedCompanySummary,
@@ -134,7 +138,6 @@ function SummaryWidgetInner({
   const rootRef = useRef<HTMLDivElement>(null)
   const chromeRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const isFirstFilterRender = useRef(true)
 
   const currentUser = getCurrentUser()
   const config = normalizeSummaryAdminConfig(widget.summaryConfig!)
@@ -184,6 +187,7 @@ function SummaryWidgetInner({
 
   const [isGeneratingTeam, setIsGeneratingTeam] = useState(false)
   const [teamError, setTeamError] = useState<'api_error' | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   const canGenerateCompany = canGenerateSummary(config, currentUser, isAdmin, 'company')
   const canGenerateTeam = canGenerateSummary(config, currentUser, isAdmin, 'team')
@@ -217,7 +221,6 @@ function SummaryWidgetInner({
   useEffect(() => {
     hasStartedGeneration.current = false
     hasRestoredCache.current = false
-    isFirstFilterRender.current = true
   }, [widget.id])
 
   useEffect(() => {
@@ -227,23 +230,6 @@ function SummaryWidgetInner({
       setActiveTab('company')
     }
   }, [showCompanyTab, showMyTeamTab])
-
-  useEffect(() => {
-    if (isFirstFilterRender.current) {
-      isFirstFilterRender.current = false
-      return
-    }
-
-    if (config.companyContent?.summary) {
-      const normalized = normalizeSummaryContent(config.companyContent, config.createdBy)
-      handleCompanyContentChange(markSummaryStale(normalized))
-    }
-
-    if (myTeamCache?.content.summary) {
-      handleTeamContentChange(markSummaryStale(myTeamCache.content))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilters])
 
   const generateCompanySummary = useCallback(async () => {
     if (!config) return
@@ -403,6 +389,7 @@ function SummaryWidgetInner({
           summary,
           actions,
           activeTab === 'company' ? config.createdBy : currentUser.id,
+          activeFilters,
         )
         if (activeTab === 'company') {
           handleCompanyContentChange(updated)
@@ -425,7 +412,7 @@ function SummaryWidgetInner({
           viewType,
           guidance || undefined,
         )
-        const updated = applySummaryRegeneration(currentContent, summary)
+        const updated = applySummaryRegeneration(currentContent, summary, activeFilters)
         if (activeTab === 'company') {
           handleCompanyContentChange(updated)
         } else {
@@ -446,7 +433,7 @@ function SummaryWidgetInner({
         guidance || undefined,
         viewType,
       )
-      const updated = applyRecommendationsRegeneration(currentContent, actions)
+      const updated = applyRecommendationsRegeneration(currentContent, actions, activeFilters)
       if (activeTab === 'company') {
         handleCompanyContentChange(updated)
       } else {
@@ -535,6 +522,93 @@ function SummaryWidgetInner({
       })
     : null
 
+  const ownerCompanyLiveContent = useMemo(
+    () => (companyContent ? withComputedStaleness(companyContent, activeFilters) : undefined),
+    [companyContent, activeFilters],
+  )
+
+  const ownerTeamLiveContent = useMemo(
+    () => (teamContent ? withComputedStaleness(teamContent, activeFilters) : undefined),
+    [teamContent, activeFilters],
+  )
+
+  const filtersBlockShare = activeFilters.length > 0
+
+  function handleShareCompanySnapshot() {
+    if (!companyContent || filtersBlockShare) return
+    handleCompanyContentChange(shareSummarySnapshot(companyContent))
+  }
+
+  function handleShareTeamSnapshot() {
+    if (!teamContent || filtersBlockShare) return
+    handleTeamContentChange(shareSummarySnapshot(teamContent))
+  }
+
+  function renderShareControls(content: SummaryContent, onShare: () => void) {
+    const shareState = getShareSnapshotState(content)
+    const sharedDate = content.sharedSnapshot
+      ? format(new Date(content.sharedSnapshot.sharedAt), 'MMM d, yyyy')
+      : null
+
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {shareState === 'never_shared' && (
+          <button
+            type="button"
+            disabled={filtersBlockShare}
+            title={filtersBlockShare ? 'Clear filters to share this with others.' : undefined}
+            onClick={onShare}
+            className={cn(
+              'rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100',
+              filtersBlockShare && 'cursor-not-allowed opacity-40',
+            )}
+          >
+            Share
+          </button>
+        )}
+
+        {shareState === 'in_sync' && sharedDate && (
+          <span className="rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-500">
+            Shared • {sharedDate}
+          </span>
+        )}
+
+        {shareState === 'diverged' && (
+          <>
+            <span className="rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
+              Shared version is out of date
+            </span>
+            <button
+              type="button"
+              disabled={filtersBlockShare}
+              title={filtersBlockShare ? 'Clear filters to share this with others.' : undefined}
+              onClick={onShare}
+              className={cn(
+                'rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100',
+                filtersBlockShare && 'cursor-not-allowed opacity-40',
+              )}
+            >
+              Update shared version
+            </button>
+          </>
+        )}
+
+        {content.sharedSnapshot && (
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(true)}
+            className="text-xs text-blue-600 hover:underline"
+          >
+            Preview what others see →
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const previewContent =
+    activeTab === 'team' && teamContent ? teamContent : companyContent ?? null
+
   const companyGenerating = config.isGenerating
   const companyError = config.generationError
 
@@ -546,7 +620,11 @@ function SummaryWidgetInner({
     !isAdmin && activeTab === 'company' && Boolean(companyContent)
 
   const activeContent =
-    activeTab === 'team' && showMyTeamTab ? teamResolved?.content : companyResolved?.content
+    activeTab === 'team' && showMyTeamTab
+      ? ownerTeamLiveContent
+      : companySharedViewer
+        ? companyResolved?.content
+        : ownerCompanyLiveContent
 
   useReportWidgetHeight(
     reportWidgetHeight,
@@ -626,18 +704,22 @@ function SummaryWidgetInner({
       )
     }
 
-    const displayContent = companyResolved.content
+    const displayContent = companySharedViewer
+      ? companyResolved.content
+      : ownerCompanyLiveContent!
 
     return (
       <SummaryWidgetSections
         content={displayContent}
         onContentChange={handleCompanyContentChange}
         onCreateActionPlan={handleCreateActionPlan}
-        canShowFeedback={canRateSummary(currentUser, config)}
+        canShowFeedback={canRateSummary(currentUser, config) && !companySharedViewer}
         canSeeActions={canSeeActions}
         canCreateActionPlan={canCreateActionPlan}
         showRestrictedNote={!canSeeActions && !isAdmin}
-        canRegenerate={canRegenerateCompany}
+        canRegenerate={canRegenerateCompany && !companySharedViewer}
+        isRecipientView={companySharedViewer}
+        sharedAt={companyResolved.sharedAt}
         onOpenRegenerateModal={setRegenerateModalContext}
         regeneratingSummary={regeneratingSummary}
         regeneratingRecommendations={regeneratingRecommendations}
@@ -714,7 +796,7 @@ function SummaryWidgetInner({
 
     return (
       <SummaryWidgetSections
-        content={teamResolved.content}
+        content={ownerTeamLiveContent!}
         onContentChange={handleTeamContentChange}
         onCreateActionPlan={handleCreateActionPlan}
         canShowFeedback={canRateSummary(currentUser, config)}
@@ -764,12 +846,18 @@ function SummaryWidgetInner({
                       🔒 Private
                     </WuText>
                   )}
-                  {isAdmin && config.visibility !== 'private' && (
-                    <span className="flex items-center gap-1 rounded border border-gray-200 px-1.5 py-0.5">
-                      <span className="inline-block size-1.5 rounded-full bg-blue-400" />
-                      <WuText size="sm" as="span" className="text-gray-500">
-                        Shared
-                      </WuText>
+                  {isAdmin &&
+                    activeTab === 'company' &&
+                    companyContent &&
+                    renderShareControls(companyContent, handleShareCompanySnapshot)}
+                  {canRegenerateTeam &&
+                    activeTab === 'team' &&
+                    teamContent &&
+                    renderShareControls(teamContent, handleShareTeamSnapshot)}
+                  {companySharedViewer && activeTab === 'company' && companyResolved?.sharedAt && (
+                    <span className="rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-500">
+                      Shared • Last updated{' '}
+                      {format(new Date(companyResolved.sharedAt), 'MMM d, yyyy')}
                     </span>
                   )}
                 </div>
@@ -854,6 +942,14 @@ function SummaryWidgetInner({
           }
         }}
       />
+
+      {previewContent?.sharedSnapshot && (
+        <SummarySharedPreviewModal
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          content={previewContent}
+        />
+      )}
 
       {actionPlanAction && actionPlanProvenance && (
         <CreateActionPlanModal

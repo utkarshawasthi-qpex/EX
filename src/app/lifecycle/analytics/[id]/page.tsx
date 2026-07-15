@@ -495,7 +495,7 @@ export default function DashboardCanvasPage() {
               )}
               <button
                 type="button"
-                className="wc-filter relative text-xl text-gray-400 hover:text-gray-600"
+                className="wm-filter relative text-xl text-gray-400 hover:text-gray-600"
                 onClick={() => setIsFilterOpen((open) => !open)}
                 aria-label="Filters"
               >

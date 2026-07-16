@@ -157,13 +157,20 @@ export default function DashboardCanvasPage() {
 
   const updateWidgets = useCallback(
     (tabId: string, newWidgets: DashboardWidget[]) => {
+      let saveSucceeded = true
       setAllTabWidgets((current) => {
         const updated = { ...current, [tabId]: newWidgets }
-        saveDashboardWidgets(dashboardId, updated)
+        saveSucceeded = saveDashboardWidgets(dashboardId, updated)
         return updated
       })
+      if (!saveSucceeded) {
+        showToast({
+          variant: 'error',
+          message: 'Could not save changes — please try again.',
+        })
+      }
     },
-    [dashboardId],
+    [dashboardId, showToast],
   )
 
   const loadLayoutForTab = useCallback(
@@ -376,7 +383,17 @@ export default function DashboardCanvasPage() {
   }
 
   function handleWidgetUpdate(updatedWidget: DashboardWidget) {
-    if (!activeTabId) return
+    if (!activeTabId) {
+      console.error(
+        'handleWidgetUpdate called with no activeTabId — update was NOT saved',
+        updatedWidget,
+      )
+      showToast({
+        variant: 'error',
+        message: 'Could not save changes — please refresh and try again.',
+      })
+      return
+    }
     updateWidgets(
       activeTabId,
       widgets.map((item) => (item.id === updatedWidget.id ? updatedWidget : item)),

@@ -62,30 +62,47 @@ export function SummarySettingsModal({
     setValues(summaryAdminConfigToFields(config))
   }, [open, widget])
 
+  function safeShowToast(options: Parameters<typeof showToast>[0]) {
+    try {
+      showToast(options)
+    } catch (toastError) {
+      console.error('Failed to show toast:', toastError)
+    }
+  }
+
   function handleSave() {
     if (!widget.summaryConfig) return
 
-    const previous = normalizeSummaryAdminConfig(widget.summaryConfig)
-    const nextConfig = buildSummaryAdminConfigFromFields(values, previous.createdBy, {
-      companyContent: previous.companyContent,
-      isGenerating: previous.isGenerating,
-      generationError: previous.generationError,
-    })
+    try {
+      const previous = normalizeSummaryAdminConfig(widget.summaryConfig)
+      const nextConfig = buildSummaryAdminConfigFromFields(values, previous.createdBy, {
+        companyContent: previous.companyContent,
+        isGenerating: previous.isGenerating,
+        generationError: previous.generationError,
+      })
 
-    if (previous.visibility !== nextConfig.visibility) {
-      clearAllManagerCachesForWidget(widget.id)
+      if (previous.visibility !== nextConfig.visibility) {
+        clearAllManagerCachesForWidget(widget.id)
+      }
+
+      if (previous.allowEmployeeSummaries && !nextConfig.allowEmployeeSummaries) {
+        clearAllManagerCachesForWidget(widget.id)
+      }
+
+      onUpdate({
+        ...widget,
+        summaryConfig: nextConfig,
+      })
+      safeShowToast({ variant: 'success', message: 'Settings updated' })
+    } catch (error) {
+      console.error('Failed to save summary settings:', error)
+      safeShowToast({
+        variant: 'error',
+        message: 'Something went wrong saving settings — please try again.',
+      })
+    } finally {
+      onClose()
     }
-
-    if (previous.allowEmployeeSummaries && !nextConfig.allowEmployeeSummaries) {
-      clearAllManagerCachesForWidget(widget.id)
-    }
-
-    onUpdate({
-      ...widget,
-      summaryConfig: nextConfig,
-    })
-    showToast({ variant: 'success', message: 'Settings updated' })
-    onClose()
   }
 
   return (

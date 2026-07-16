@@ -239,14 +239,16 @@ export function getDashboardWidgets(dashboardId: ID, tabId: ID): DashboardWidget
 export function saveDashboardWidgets(
   dashboardId: ID,
   allTabWidgets: Record<string, DashboardWidget[]>,
-): void {
-  if (typeof window === 'undefined') return
+): boolean {
+  if (typeof window === 'undefined') return false
 
   try {
     const key = `pp_dashboard_${dashboardId}_widgets`
     window.localStorage.setItem(key, JSON.stringify(allTabWidgets))
+    return true
   } catch (err) {
     console.error('Failed to save widgets:', err)
+    return false
   }
 }
 

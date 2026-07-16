@@ -593,7 +593,13 @@ export async function generateDashboardSummary(
       ? mockTeamActions(dataWidgets, activeFilters)
       : mockCompanyActions(dataWidgets, activeFilters)
 
-  return buildSummaryContent(summary, actions, generatedBy, activeFilters)
+  return buildSummaryContent(
+    summary,
+    actions,
+    generatedBy,
+    activeFilters,
+    dataWidgets.map((widget) => widget.id),
+  )
 }
 
 export async function generateFullUpdate(

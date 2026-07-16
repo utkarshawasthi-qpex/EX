@@ -1,10 +1,13 @@
 import type {
   ActiveFilter,
   ID,
+  StalenessReason,
   SummaryAction,
   SummaryContent,
   SummaryPriority,
 } from '@/types'
+
+export type { StalenessReason } from '@/types'
 
 export const SUMMARY_PRIORITIES: SummaryPriority[] = [1, 2, 3, 4]
 
@@ -14,6 +17,14 @@ export const EMPTY_ACTION_FEEDBACK: Record<SummaryPriority, 'up' | 'down' | null
   3: null,
   4: null,
 }
+
+export const STALE_MESSAGES: Record<StalenessReason, string> = {
+  filters: 'Filters changed. Update to reflect the current view.',
+  widgets: 'Dashboard widgets changed. Update to reflect the current view.',
+  both: 'Filters and widgets changed. Update to reflect the current view.',
+}
+
+export const SCORECARD_HARD_GATE_MESSAGE = 'Add a scorecard widget to enable AI summaries.'
 
 type LegacyVersionedSummary = {
   summaryVersions?: Array<{ summary: string; generatedAt?: string }>
@@ -40,21 +51,48 @@ export function filtersMatch(a: ActiveFilter[], b: ActiveFilter[]): boolean {
   return keysA.every((key, index) => key === keysB[index])
 }
 
+export function widgetIdsMatch(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  const sortedA = [...a].sort()
+  const sortedB = [...b].sort()
+  return sortedA.every((id, index) => id === sortedB[index])
+}
+
+export function computeStalenessReason(
+  content: SummaryContent,
+  activeFilters: ActiveFilter[],
+  currentWidgetIds: string[],
+): StalenessReason | null {
+  const filtersChanged = !filtersMatch(activeFilters, content.generatedAtFilters)
+  const widgetsChanged = !widgetIdsMatch(currentWidgetIds, content.generatedAtWidgetIds ?? [])
+  if (filtersChanged && widgetsChanged) return 'both'
+  if (filtersChanged) return 'filters'
+  if (widgetsChanged) return 'widgets'
+  return null
+}
+
 export function computeIsStale(
   activeFilters: ActiveFilter[],
   generatedAtFilters: ActiveFilter[],
+  currentWidgetIds: string[] = [],
+  generatedAtWidgetIds: string[] = [],
 ): boolean {
-  return !filtersMatch(activeFilters, generatedAtFilters)
+  const filtersChanged = !filtersMatch(activeFilters, generatedAtFilters)
+  const widgetsChanged = !widgetIdsMatch(currentWidgetIds, generatedAtWidgetIds)
+  return filtersChanged || widgetsChanged
 }
 
 export function withComputedStaleness(
   content: SummaryContent,
   activeFilters: ActiveFilter[],
+  currentWidgetIds: string[],
 ): SummaryContent {
   if (!content.summary?.length) return content
+  const stalenessReason = computeStalenessReason(content, activeFilters, currentWidgetIds)
   return {
     ...content,
-    isStale: computeIsStale(activeFilters, content.generatedAtFilters),
+    isStale: stalenessReason !== null,
+    stalenessReason,
   }
 }
 
@@ -128,6 +166,7 @@ export function buildSummaryContent(
   actions: SummaryAction[],
   generatedBy: ID,
   generatedAtFilters: ActiveFilter[] = [],
+  generatedAtWidgetIds: string[] = [],
 ): SummaryContent {
   validateActionsLength(actions)
   const now = new Date().toISOString()
@@ -139,7 +178,9 @@ export function buildSummaryContent(
     summaryRegenerationsUsed: 0,
     recsRegenerationsUsed: 0,
     isStale: false,
+    stalenessReason: null,
     generatedAtFilters: [...generatedAtFilters],
+    generatedAtWidgetIds: [...generatedAtWidgetIds],
     sharedSnapshot: null,
     summaryFeedback: null,
     summaryFeedbackReason: null,
@@ -206,7 +247,9 @@ function migrateLegacyVersioned(raw: LegacyVersionedSummary, generatedBy: ID): S
     summaryRegenerationsUsed: 0,
     recsRegenerationsUsed: 0,
     isStale: false,
+    stalenessReason: null,
     generatedAtFilters: [],
+    generatedAtWidgetIds: [],
     sharedSnapshot: null,
     summaryFeedback: raw.summaryFeedback ?? null,
     summaryFeedbackReason: raw.summaryFeedbackReason ?? null,
@@ -240,7 +283,9 @@ export function normalizeSummaryContent(raw: unknown, generatedBy = 'system'): S
       summaryRegenerationsUsed: record.summaryRegenerationsUsed ?? 0,
       recsRegenerationsUsed: record.recsRegenerationsUsed ?? 0,
       isStale: record.isStale ?? false,
+      stalenessReason: record.stalenessReason ?? null,
       generatedAtFilters: record.generatedAtFilters ?? [],
+      generatedAtWidgetIds: record.generatedAtWidgetIds ?? [],
       sharedSnapshot: record.sharedSnapshot ?? null,
       summaryFeedback: record.summaryFeedback ?? null,
       summaryFeedbackReason: record.summaryFeedbackReason ?? null,
@@ -260,6 +305,7 @@ export function applyFullUpdate(
   actions: SummaryAction[],
   generatedBy: ID,
   activeFilters: ActiveFilter[],
+  currentWidgetIds: string[],
 ): SummaryContent {
   const now = new Date().toISOString()
   validateActionsLength(actions)
@@ -270,7 +316,9 @@ export function applyFullUpdate(
     summaryRegenerationsUsed: 0,
     recsRegenerationsUsed: 0,
     isStale: false,
+    stalenessReason: null,
     generatedAtFilters: [...activeFilters],
+    generatedAtWidgetIds: [...currentWidgetIds],
     generatedBy,
     generatedAt: now,
     lastFullUpdateAt: now,
@@ -281,6 +329,7 @@ export function applySummaryRegeneration(
   content: SummaryContent,
   summary: string,
   activeFilters: ActiveFilter[],
+  currentWidgetIds: string[],
 ): SummaryContent {
   const now = new Date().toISOString()
   return {
@@ -288,7 +337,9 @@ export function applySummaryRegeneration(
     summary,
     summaryRegenerationsUsed: content.summaryRegenerationsUsed + 1,
     generatedAtFilters: [...activeFilters],
+    generatedAtWidgetIds: [...currentWidgetIds],
     isStale: false,
+    stalenessReason: null,
     generatedAt: now,
   }
 }
@@ -297,6 +348,7 @@ export function applyRecommendationsRegeneration(
   content: SummaryContent,
   actions: SummaryAction[],
   activeFilters: ActiveFilter[],
+  currentWidgetIds: string[],
 ): SummaryContent {
   validateActionsLength(actions)
   const now = new Date().toISOString()
@@ -305,7 +357,9 @@ export function applyRecommendationsRegeneration(
     actions: [...actions].sort((a, b) => a.priority - b.priority),
     recsRegenerationsUsed: content.recsRegenerationsUsed + 1,
     generatedAtFilters: [...activeFilters],
+    generatedAtWidgetIds: [...currentWidgetIds],
     isStale: false,
+    stalenessReason: null,
     generatedAt: now,
   }
 }
@@ -349,6 +403,7 @@ export function resolveSummaryContentForViewer(
         summary: normalized.sharedSnapshot.summary,
         actions: normalized.sharedSnapshot.actions.map((action) => ({ ...action })),
         isStale: false,
+        stalenessReason: null,
       },
       isPendingShare: false,
       sharedAt: normalized.sharedSnapshot.sharedAt,

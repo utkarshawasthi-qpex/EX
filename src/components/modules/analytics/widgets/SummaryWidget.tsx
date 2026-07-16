@@ -44,6 +44,7 @@ import {
   getShareSnapshotState,
   resolveSummaryContentForViewer,
   setLinkedInitiativeOnRecommendation,
+  SCORECARD_HARD_GATE_MESSAGE,
   shareSummarySnapshot,
   withComputedStaleness,
 } from '@/lib/summaryContent'
@@ -215,6 +216,16 @@ function SummaryWidgetInner({
     [dashboardWidgets],
   )
 
+  const currentDataWidgetIds = useMemo(
+    () => dataWidgets.map((widget) => widget.id),
+    [dataWidgets],
+  )
+
+  const hasScorecardWidget = useMemo(
+    () => dashboardWidgets.some((widget) => widget.type === 'scorecard'),
+    [dashboardWidgets],
+  )
+
   const hasStartedGeneration = useRef(false)
   const hasRestoredCache = useRef(false)
 
@@ -234,7 +245,7 @@ function SummaryWidgetInner({
   const generateCompanySummary = useCallback(async () => {
     if (!config) return
 
-    if (dataWidgets.length === 0) {
+    if (!hasScorecardWidget || dataWidgets.length === 0) {
       onUpdate({
         ...widget,
         summaryConfig: {
@@ -270,7 +281,7 @@ function SummaryWidgetInner({
         },
       })
     }
-  }, [activeFilters, config, dataWidgets, onUpdate, widget])
+  }, [activeFilters, config, dataWidgets, hasScorecardWidget, onUpdate, widget])
 
   useEffect(() => {
     if (!isAdmin) return
@@ -302,6 +313,12 @@ function SummaryWidgetInner({
   const generateTeamSummary = useCallback(async () => {
     if (!config) return
 
+    if (!hasScorecardWidget || dataWidgets.length === 0) {
+      setIsGeneratingTeam(false)
+      setTeamError('api_error')
+      return
+    }
+
     setIsGeneratingTeam(true)
     setTeamError(null)
 
@@ -324,7 +341,7 @@ function SummaryWidgetInner({
       setIsGeneratingTeam(false)
       setTeamError('api_error')
     }
-  }, [activeFilters, config, currentUser.id, dataWidgets, widget.id])
+  }, [activeFilters, config, currentUser.id, dataWidgets, hasScorecardWidget, widget.id])
 
   function handleCompanyContentChange(content: SummaryContent) {
     if (!config) return
@@ -362,6 +379,8 @@ function SummaryWidgetInner({
 
     if (!currentContent) return
 
+    if (!hasScorecardWidget) return
+
     if (
       context === 'summary' &&
       currentContent.summaryRegenerationsUsed >= MAX_REGENERATIONS
@@ -390,6 +409,7 @@ function SummaryWidgetInner({
           actions,
           activeTab === 'company' ? config.createdBy : currentUser.id,
           activeFilters,
+          currentDataWidgetIds,
         )
         if (activeTab === 'company') {
           handleCompanyContentChange(updated)
@@ -412,7 +432,12 @@ function SummaryWidgetInner({
           viewType,
           guidance || undefined,
         )
-        const updated = applySummaryRegeneration(currentContent, summary, activeFilters)
+        const updated = applySummaryRegeneration(
+          currentContent,
+          summary,
+          activeFilters,
+          currentDataWidgetIds,
+        )
         if (activeTab === 'company') {
           handleCompanyContentChange(updated)
         } else {
@@ -433,7 +458,12 @@ function SummaryWidgetInner({
         guidance || undefined,
         viewType,
       )
-      const updated = applyRecommendationsRegeneration(currentContent, actions, activeFilters)
+      const updated = applyRecommendationsRegeneration(
+        currentContent,
+        actions,
+        activeFilters,
+        currentDataWidgetIds,
+      )
       if (activeTab === 'company') {
         handleCompanyContentChange(updated)
       } else {
@@ -523,29 +553,40 @@ function SummaryWidgetInner({
     : null
 
   const ownerCompanyLiveContent = useMemo(
-    () => (companyContent ? withComputedStaleness(companyContent, activeFilters) : undefined),
-    [companyContent, activeFilters],
+    () =>
+      companyContent
+        ? withComputedStaleness(companyContent, activeFilters, currentDataWidgetIds)
+        : undefined,
+    [companyContent, activeFilters, currentDataWidgetIds],
   )
 
   const ownerTeamLiveContent = useMemo(
-    () => (teamContent ? withComputedStaleness(teamContent, activeFilters) : undefined),
-    [teamContent, activeFilters],
+    () =>
+      teamContent
+        ? withComputedStaleness(teamContent, activeFilters, currentDataWidgetIds)
+        : undefined,
+    [teamContent, activeFilters, currentDataWidgetIds],
   )
 
-  const filtersBlockShare = activeFilters.length > 0
   const sharingEnabled = config.visibility === 'everyone'
+  const companyShareBlocked = ownerCompanyLiveContent?.isStale ?? false
+  const teamShareBlocked = ownerTeamLiveContent?.isStale ?? false
 
   function handleShareCompanySnapshot() {
-    if (!companyContent || filtersBlockShare) return
+    if (!companyContent || companyShareBlocked) return
     handleCompanyContentChange(shareSummarySnapshot(companyContent))
   }
 
   function handleShareTeamSnapshot() {
-    if (!teamContent || filtersBlockShare) return
+    if (!teamContent || teamShareBlocked) return
     handleTeamContentChange(shareSummarySnapshot(teamContent))
   }
 
-  function renderShareControls(content: SummaryContent, onShare: () => void) {
+  function renderShareControls(
+    content: SummaryContent,
+    onShare: () => void,
+    shareBlocked: boolean,
+  ) {
     const shareState = getShareSnapshotState(content)
     const sharedDate = content.sharedSnapshot
       ? format(new Date(content.sharedSnapshot.sharedAt), 'MMM d, yyyy')
@@ -556,12 +597,14 @@ function SummaryWidgetInner({
         {shareState === 'never_shared' && (
           <button
             type="button"
-            disabled={filtersBlockShare}
-            title={filtersBlockShare ? 'Clear filters to share this with others.' : undefined}
+            disabled={shareBlocked}
+            title={
+              shareBlocked ? 'Update this summary before sharing it with others.' : undefined
+            }
             onClick={onShare}
             className={cn(
               'rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100',
-              filtersBlockShare && 'cursor-not-allowed opacity-40',
+              shareBlocked && 'cursor-not-allowed opacity-40',
             )}
           >
             Share
@@ -581,12 +624,14 @@ function SummaryWidgetInner({
             </span>
             <button
               type="button"
-              disabled={filtersBlockShare}
-              title={filtersBlockShare ? 'Clear filters to share this with others.' : undefined}
+              disabled={shareBlocked}
+              title={
+                shareBlocked ? 'Update this summary before sharing it with others.' : undefined
+              }
               onClick={onShare}
               className={cn(
                 'rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100',
-                filtersBlockShare && 'cursor-not-allowed opacity-40',
+                shareBlocked && 'cursor-not-allowed opacity-40',
               )}
             >
               Update shared version
@@ -642,6 +687,9 @@ function SummaryWidgetInner({
       regeneratingSummary,
       regeneratingRecommendations,
       activeContent?.isStale,
+      activeContent?.stalenessReason,
+      hasScorecardWidget,
+      currentDataWidgetIds,
     ],
   )
 
@@ -658,7 +706,9 @@ function SummaryWidgetInner({
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
             <p className="mb-1 text-sm font-medium text-amber-800">No data to summarise</p>
             <p className="text-xs text-amber-700">
-              Add data widgets to this tab first — Scorecard, eNPS, or Heatmap.
+              {!hasScorecardWidget
+                ? SCORECARD_HARD_GATE_MESSAGE
+                : 'Add data widgets to this tab first — Scorecard, eNPS, or Heatmap.'}
             </p>
           </div>
         </div>
@@ -718,7 +768,8 @@ function SummaryWidgetInner({
         canSeeActions={canSeeActions}
         canCreateActionPlan={canCreateActionPlan}
         showRestrictedNote={!canSeeActions && !isAdmin}
-        canRegenerate={canRegenerateCompany && !companySharedViewer}
+        canRegenerate={canRegenerateCompany && !companySharedViewer && hasScorecardWidget}
+        hardGateActive={!hasScorecardWidget && !companySharedViewer}
         isRecipientView={companySharedViewer}
         sharedAt={companyResolved.sharedAt}
         onOpenRegenerateModal={setRegenerateModalContext}
@@ -803,7 +854,8 @@ function SummaryWidgetInner({
         canShowFeedback={canRateSummary(currentUser, config)}
         canSeeActions
         canCreateActionPlan
-        canRegenerate={canRegenerateTeam}
+        canRegenerate={canRegenerateTeam && hasScorecardWidget}
+        hardGateActive={!hasScorecardWidget}
         onOpenRegenerateModal={setRegenerateModalContext}
         regeneratingSummary={regeneratingSummary}
         regeneratingRecommendations={regeneratingRecommendations}
@@ -851,12 +903,16 @@ function SummaryWidgetInner({
                     sharingEnabled &&
                     activeTab === 'company' &&
                     companyContent &&
-                    renderShareControls(companyContent, handleShareCompanySnapshot)}
+                    renderShareControls(
+                      companyContent,
+                      handleShareCompanySnapshot,
+                      companyShareBlocked,
+                    )}
                   {sharingEnabled &&
                     canRegenerateTeam &&
                     activeTab === 'team' &&
                     teamContent &&
-                    renderShareControls(teamContent, handleShareTeamSnapshot)}
+                    renderShareControls(teamContent, handleShareTeamSnapshot, teamShareBlocked)}
                   {companySharedViewer && activeTab === 'company' && companyResolved?.sharedAt && (
                     <span className="rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-500">
                       Shared • Last updated{' '}

@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import Link from 'next/link'
 import { useState } from 'react'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
+import { SCORECARD_HARD_GATE_MESSAGE, STALE_MESSAGES } from '@/lib/summaryContent'
 import { cn } from '@/lib/utils'
 import type { RegenerateModalContext } from '@/components/modules/analytics/SummaryRegenerateModal'
 import type { SummaryAction, SummaryContent, SummaryPriority } from '@/types'
@@ -29,6 +30,8 @@ type SummaryWidgetSectionsProps = {
   canCreateActionPlan?: boolean
   showRestrictedNote?: boolean
   canRegenerate?: boolean
+  hardGateActive?: boolean
+  hardGateMessage?: string
   isRecipientView?: boolean
   sharedAt?: string | null
   onOpenRegenerateModal: (context: RegenerateModalContext) => void
@@ -82,6 +85,8 @@ export function SummaryWidgetSections({
   canCreateActionPlan = true,
   showRestrictedNote = false,
   canRegenerate = false,
+  hardGateActive = false,
+  hardGateMessage = SCORECARD_HARD_GATE_MESSAGE,
   isRecipientView = false,
   sharedAt = null,
   onOpenRegenerateModal,
@@ -220,10 +225,17 @@ export function SummaryWidgetSections({
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-      {content.isStale && !isRecipientView && (
+      {hardGateActive && !isRecipientView && (
         <div className="mb-3 flex flex-shrink-0 items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
           <span>⚠</span>
-          <span>Filters changed. Update to reflect the current view.</span>
+          <span>{hardGateMessage}</span>
+        </div>
+      )}
+
+      {!hardGateActive && content.stalenessReason && !isRecipientView && (
+        <div className="mb-3 flex flex-shrink-0 items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <span>⚠</span>
+          <span>{STALE_MESSAGES[content.stalenessReason]}</span>
           {canRegenerate && (
             <button
               type="button"

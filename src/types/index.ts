@@ -435,13 +435,17 @@ export type SummarySharedSnapshot = {
   sharedAt: string
 }
 
+export type StalenessReason = 'filters' | 'widgets' | 'both'
+
 export type SummaryContent = {
   summary: string
   actions: SummaryAction[]
   summaryRegenerationsUsed: number
   recsRegenerationsUsed: number
   isStale: boolean
+  stalenessReason?: StalenessReason | null
   generatedAtFilters: ActiveFilter[]
+  generatedAtWidgetIds: string[]
   sharedSnapshot: SummarySharedSnapshot | null
   summaryFeedback: 'up' | 'down' | null
   summaryFeedbackReason: string | null

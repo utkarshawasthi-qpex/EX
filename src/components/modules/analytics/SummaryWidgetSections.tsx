@@ -35,6 +35,7 @@ type SummaryWidgetSectionsProps = {
   isRecipientView?: boolean
   sharedAt?: string | null
   onOpenRegenerateModal: (context: RegenerateModalContext) => void
+  onStaleUpdate?: () => void
   regeneratingSummary?: boolean
   regeneratingRecommendations?: boolean
 }
@@ -90,6 +91,7 @@ export function SummaryWidgetSections({
   isRecipientView = false,
   sharedAt = null,
   onOpenRegenerateModal,
+  onStaleUpdate,
   regeneratingSummary = false,
   regeneratingRecommendations = false,
 }: SummaryWidgetSectionsProps) {
@@ -239,8 +241,13 @@ export function SummaryWidgetSections({
           {canRegenerate && (
             <button
               type="button"
-              onClick={() => onOpenRegenerateModal('full')}
-              className="ml-auto whitespace-nowrap font-medium text-amber-700 underline"
+              disabled={regeneratingSummary || regeneratingRecommendations}
+              onClick={() => onStaleUpdate?.()}
+              className={cn(
+                'ml-auto whitespace-nowrap font-medium text-amber-700 underline',
+                (regeneratingSummary || regeneratingRecommendations) &&
+                  'cursor-not-allowed opacity-50',
+              )}
             >
               Update
             </button>

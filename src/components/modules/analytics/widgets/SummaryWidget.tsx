@@ -773,6 +773,7 @@ function SummaryWidgetInner({
         isRecipientView={companySharedViewer}
         sharedAt={companyResolved.sharedAt}
         onOpenRegenerateModal={setRegenerateModalContext}
+        onStaleUpdate={() => void runRegeneration('full', '')}
         regeneratingSummary={regeneratingSummary}
         regeneratingRecommendations={regeneratingRecommendations}
       />
@@ -857,6 +858,7 @@ function SummaryWidgetInner({
         canRegenerate={canRegenerateTeam && hasScorecardWidget}
         hardGateActive={!hasScorecardWidget}
         onOpenRegenerateModal={setRegenerateModalContext}
+        onStaleUpdate={() => void runRegeneration('full', '')}
         regeneratingSummary={regeneratingSummary}
         regeneratingRecommendations={regeneratingRecommendations}
       />

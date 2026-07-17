@@ -26,7 +26,7 @@ import {
 import {
   generateDashboardSummary,
   generateFullUpdate,
-  generateRecommendationsOnlyRegeneration,
+  generateSingleRecommendation,
   generateSummaryOnlyRegeneration,
 } from '@/lib/buildSummaryPrompt'
 import { activeFiltersToLabels } from '@/lib/dashboardFilters'
@@ -39,7 +39,7 @@ import {
 } from '@/lib/summaryPermissions'
 import {
   applyFullUpdate,
-  applyRecommendationsRegeneration,
+  applySingleRecommendationRegeneration,
   applySummaryRegeneration,
   getShareSnapshotState,
   resolveSummaryContentForViewer,
@@ -179,7 +179,8 @@ function SummaryWidgetInner({
   const [regenerateModalContext, setRegenerateModalContext] =
     useState<RegenerateModalContext | null>(null)
   const [regeneratingSummary, setRegeneratingSummary] = useState(false)
-  const [regeneratingRecommendations, setRegeneratingRecommendations] = useState(false)
+  const [regeneratingActionPriority, setRegeneratingActionPriority] =
+    useState<SummaryPriority | null>(null)
   const [actionPlanOpen, setActionPlanOpen] = useState(false)
   const [actionPlanAction, setActionPlanAction] = useState<SummaryAction | null>(null)
   const [actionPlanLink, setActionPlanLink] = useState<SurveyLink | null>(null)
@@ -388,21 +389,18 @@ function SummaryWidgetInner({
       return
     }
 
-    if (
-      context === 'recommendations' &&
-      currentContent.recsRegenerationsUsed >= MAX_REGENERATIONS
-    ) {
-      return
-    }
-
     if (context === 'full') {
       setRegeneratingSummary(true)
-      setRegeneratingRecommendations(true)
       try {
-        const { summary, actions } = await generateFullUpdate(dataWidgets, activeFilters, {
-          viewType,
-          guidance: guidance || undefined,
-        })
+        const { summary, actions, allRecommendationsLocked } = await generateFullUpdate(
+          dataWidgets,
+          activeFilters,
+          currentContent.actions,
+          {
+            viewType,
+            guidance: guidance || undefined,
+          },
+        )
         const updated = applyFullUpdate(
           currentContent,
           summary,
@@ -410,6 +408,7 @@ function SummaryWidgetInner({
           activeTab === 'company' ? config.createdBy : currentUser.id,
           activeFilters,
           currentDataWidgetIds,
+          { allRecommendationsLocked },
         )
         if (activeTab === 'company') {
           handleCompanyContentChange(updated)
@@ -418,7 +417,6 @@ function SummaryWidgetInner({
         }
       } finally {
         setRegeneratingSummary(false)
-        setRegeneratingRecommendations(false)
       }
       return
     }
@@ -448,19 +446,47 @@ function SummaryWidgetInner({
       }
       return
     }
+  }
 
-    setRegeneratingRecommendations(true)
+  async function handleRegenerateSingleAction(action: SummaryAction) {
+    if (action.linkedInitiativeId) return
+
+    const viewType = activeTab === 'team' ? 'team' : 'company'
+    const currentContent =
+      activeTab === 'company'
+        ? config.companyContent
+          ? normalizeSummaryContent(config.companyContent, config.createdBy)
+          : null
+        : myTeamCache
+          ? normalizeSummaryContent(myTeamCache.content, myTeamCache.userId)
+          : null
+
+    if (!currentContent || !hasScorecardWidget) return
+
+    const liveContent = withComputedStaleness(
+      currentContent,
+      activeFilters,
+      currentDataWidgetIds,
+    )
+    if (liveContent.isStale) return
+
+    const liveAction = currentContent.actions.find((item) => item.priority === action.priority)
+    if (!liveAction || liveAction.linkedInitiativeId) return
+    if (liveAction.regenerationsUsed >= MAX_REGENERATIONS) return
+
+    setRegeneratingActionPriority(action.priority)
     try {
-      const actions = await generateRecommendationsOnlyRegeneration(
+      const replacement = await generateSingleRecommendation(
         dataWidgets,
         activeFilters,
-        currentContent.summary,
-        guidance || undefined,
+        action.priority - 1,
+        currentContent.actions,
         viewType,
       )
-      const updated = applyRecommendationsRegeneration(
+      const updated = applySingleRecommendationRegeneration(
         currentContent,
-        actions,
+        action.priority,
+        replacement,
         activeFilters,
         currentDataWidgetIds,
       )
@@ -470,7 +496,7 @@ function SummaryWidgetInner({
         handleTeamContentChange(updated)
       }
     } finally {
-      setRegeneratingRecommendations(false)
+      setRegeneratingActionPriority(null)
     }
   }
 
@@ -685,8 +711,8 @@ function SummaryWidgetInner({
       teamError,
       showTabRow,
       regeneratingSummary,
-      regeneratingRecommendations,
-      activeContent?.isStale,
+      regeneratingActionPriority,
+      activeContent?.summaryOnlyUpdateNote,
       activeContent?.stalenessReason,
       hasScorecardWidget,
       currentDataWidgetIds,
@@ -774,8 +800,9 @@ function SummaryWidgetInner({
         sharedAt={companyResolved.sharedAt}
         onOpenRegenerateModal={setRegenerateModalContext}
         onStaleUpdate={() => void runRegeneration('full', '')}
+        onRegenerateAction={(action) => void handleRegenerateSingleAction(action)}
         regeneratingSummary={regeneratingSummary}
-        regeneratingRecommendations={regeneratingRecommendations}
+        regeneratingActionPriority={regeneratingActionPriority}
       />
     )
   }
@@ -859,8 +886,9 @@ function SummaryWidgetInner({
         hardGateActive={!hasScorecardWidget}
         onOpenRegenerateModal={setRegenerateModalContext}
         onStaleUpdate={() => void runRegeneration('full', '')}
+        onRegenerateAction={(action) => void handleRegenerateSingleAction(action)}
         regeneratingSummary={regeneratingSummary}
-        regeneratingRecommendations={regeneratingRecommendations}
+        regeneratingActionPriority={regeneratingActionPriority}
       />
     )
   }
@@ -994,7 +1022,6 @@ function SummaryWidgetInner({
         open={regenerateModalContext !== null}
         context={regenerateModalContext}
         summaryRegenerationsUsed={activeContent?.summaryRegenerationsUsed ?? 0}
-        recsRegenerationsUsed={activeContent?.recsRegenerationsUsed ?? 0}
         maxRegenerations={MAX_REGENERATIONS}
         onClose={() => setRegenerateModalContext(null)}
         onConfirm={(guidance) => {

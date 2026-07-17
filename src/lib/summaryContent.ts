@@ -140,6 +140,17 @@ export function shareSummarySnapshot(content: SummaryContent): SummaryContent {
   }
 }
 
+function normalizeAction(action: SummaryAction): SummaryAction {
+  return {
+    ...action,
+    regenerationsUsed: action.regenerationsUsed ?? 0,
+  }
+}
+
+function normalizeActions(actions: SummaryAction[]): SummaryAction[] {
+  return actions.map(normalizeAction)
+}
+
 export function validateActionsLength(actions: unknown[]): asserts actions is SummaryAction[] {
   if (!Array.isArray(actions) || actions.length !== 4) {
     throw new Error('Expected exactly 4 actions')
@@ -147,7 +158,12 @@ export function validateActionsLength(actions: unknown[]): asserts actions is Su
 }
 
 export function normalizeActionsFromApi(
-  actions: Array<Omit<SummaryAction, 'id' | 'priority'> & { priority?: SummaryPriority }>,
+  actions: Array<
+    Omit<SummaryAction, 'id' | 'priority' | 'regenerationsUsed'> & {
+      priority?: SummaryPriority
+      regenerationsUsed?: number
+    }
+  >,
 ): SummaryAction[] {
   validateActionsLength(actions)
   return actions.map((raw, index) => ({
@@ -158,6 +174,7 @@ export function normalizeActionsFromApi(
     priority: (index + 1) as SummaryPriority,
     context: raw.context ?? '',
     linkedInitiativeId: raw.linkedInitiativeId,
+    regenerationsUsed: raw.regenerationsUsed ?? 0,
   }))
 }
 
@@ -174,10 +191,10 @@ export function buildSummaryContent(
 
   return {
     summary,
-    actions: sortedActions,
+    actions: normalizeActions(sortedActions),
     summaryRegenerationsUsed: 0,
-    recsRegenerationsUsed: 0,
     isStale: false,
+    summaryOnlyUpdateNote: false,
     stalenessReason: null,
     generatedAtFilters: [...generatedAtFilters],
     generatedAtWidgetIds: [...generatedAtWidgetIds],
@@ -215,6 +232,7 @@ function migrateLegacyVersioned(raw: LegacyVersionedSummary, generatedBy: ID): S
           priority,
           context: active.context,
           linkedInitiativeId: active.linkedInitiativeId,
+          regenerationsUsed: 0,
         })
       }
     }
@@ -233,6 +251,7 @@ function migrateLegacyVersioned(raw: LegacyVersionedSummary, generatedBy: ID): S
       owner: 'Manager',
       priority: p,
       context: 'Derived from survey data',
+      regenerationsUsed: 0,
     })
   }
 
@@ -243,10 +262,10 @@ function migrateLegacyVersioned(raw: LegacyVersionedSummary, generatedBy: ID): S
 
   return {
     summary: activeSummary,
-    actions: actions.slice(0, 4),
+    actions: normalizeActions(actions.slice(0, 4)),
     summaryRegenerationsUsed: 0,
-    recsRegenerationsUsed: 0,
     isStale: false,
+    summaryOnlyUpdateNote: false,
     stalenessReason: null,
     generatedAtFilters: [],
     generatedAtWidgetIds: [],
@@ -279,10 +298,10 @@ export function normalizeSummaryContent(raw: unknown, generatedBy = 'system'): S
   if ('summary' in record && Array.isArray(record.actions)) {
     return {
       summary: record.summary,
-      actions: record.actions,
+      actions: normalizeActions(record.actions),
       summaryRegenerationsUsed: record.summaryRegenerationsUsed ?? 0,
-      recsRegenerationsUsed: record.recsRegenerationsUsed ?? 0,
       isStale: record.isStale ?? false,
+      summaryOnlyUpdateNote: record.summaryOnlyUpdateNote ?? false,
       stalenessReason: record.stalenessReason ?? null,
       generatedAtFilters: record.generatedAtFilters ?? [],
       generatedAtWidgetIds: record.generatedAtWidgetIds ?? [],
@@ -306,17 +325,18 @@ export function applyFullUpdate(
   generatedBy: ID,
   activeFilters: ActiveFilter[],
   currentWidgetIds: string[],
+  options?: { allRecommendationsLocked?: boolean },
 ): SummaryContent {
   const now = new Date().toISOString()
   validateActionsLength(actions)
   return {
     ...content,
     summary,
-    actions: [...actions].sort((a, b) => a.priority - b.priority),
+    actions: normalizeActions([...actions].sort((a, b) => a.priority - b.priority)),
     summaryRegenerationsUsed: 0,
-    recsRegenerationsUsed: 0,
     isStale: false,
     stalenessReason: null,
+    summaryOnlyUpdateNote: options?.allRecommendationsLocked ?? false,
     generatedAtFilters: [...activeFilters],
     generatedAtWidgetIds: [...currentWidgetIds],
     generatedBy,
@@ -336,6 +356,7 @@ export function applySummaryRegeneration(
     ...content,
     summary,
     summaryRegenerationsUsed: content.summaryRegenerationsUsed + 1,
+    summaryOnlyUpdateNote: false,
     generatedAtFilters: [...activeFilters],
     generatedAtWidgetIds: [...currentWidgetIds],
     isStale: false,
@@ -344,18 +365,28 @@ export function applySummaryRegeneration(
   }
 }
 
-export function applyRecommendationsRegeneration(
+export function applySingleRecommendationRegeneration(
   content: SummaryContent,
-  actions: SummaryAction[],
+  priority: SummaryPriority,
+  replacement: SummaryAction,
   activeFilters: ActiveFilter[],
   currentWidgetIds: string[],
 ): SummaryContent {
-  validateActionsLength(actions)
   const now = new Date().toISOString()
   return {
     ...content,
-    actions: [...actions].sort((a, b) => a.priority - b.priority),
-    recsRegenerationsUsed: content.recsRegenerationsUsed + 1,
+    actions: content.actions.map((action) =>
+      action.priority === priority
+        ? {
+            ...replacement,
+            id: action.id,
+            priority: action.priority,
+            linkedInitiativeId: undefined,
+            regenerationsUsed: action.regenerationsUsed + 1,
+          }
+        : action,
+    ),
+    summaryOnlyUpdateNote: false,
     generatedAtFilters: [...activeFilters],
     generatedAtWidgetIds: [...currentWidgetIds],
     isStale: false,

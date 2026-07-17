@@ -28,13 +28,12 @@ const WuButton = dynamic(
   { ssr: false },
 )
 
-export type RegenerateModalContext = 'full' | 'summary' | 'recommendations'
+export type RegenerateModalContext = 'full' | 'summary'
 
 type SummaryRegenerateModalProps = {
   open: boolean
   context: RegenerateModalContext | null
   summaryRegenerationsUsed: number
-  recsRegenerationsUsed: number
   maxRegenerations: number
   onClose: () => void
   onConfirm: (guidance: string) => void
@@ -43,7 +42,6 @@ type SummaryRegenerateModalProps = {
 function getModalCopy(
   context: RegenerateModalContext,
   summaryRegenerationsUsed: number,
-  recsRegenerationsUsed: number,
   maxRegenerations: number,
 ) {
   switch (context) {
@@ -59,12 +57,6 @@ function getModalCopy(
         body: `This will generate a new summary paragraph. Your 4 recommendations will not change. ${summaryRegenerationsUsed + 1} of ${maxRegenerations} regenerations used after this.`,
         placeholder: 'e.g. Make it more concise, focus on eNPS',
       }
-    case 'recommendations':
-      return {
-        title: 'Regenerate recommendations',
-        body: `This will generate 4 new recommendations. Your summary paragraph will not change. ${recsRegenerationsUsed + 1} of ${maxRegenerations} regenerations used after this.`,
-        placeholder: 'e.g. More actionable, prioritise manager-owned actions',
-      }
   }
 }
 
@@ -72,7 +64,6 @@ export function SummaryRegenerateModal({
   open,
   context,
   summaryRegenerationsUsed,
-  recsRegenerationsUsed,
   maxRegenerations,
   onClose,
   onConfirm,
@@ -85,12 +76,7 @@ export function SummaryRegenerateModal({
 
   if (!context) return null
 
-  const copy = getModalCopy(
-    context,
-    summaryRegenerationsUsed,
-    recsRegenerationsUsed,
-    maxRegenerations,
-  )
+  const copy = getModalCopy(context, summaryRegenerationsUsed, maxRegenerations)
 
   return (
     <WuModal open={open} onOpenChange={(next) => !next && onClose()} variant="action" size="sm">

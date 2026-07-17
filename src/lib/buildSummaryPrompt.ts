@@ -461,7 +461,47 @@ export function composeSummary(
   return assertPlainLanguage(sentences.join(' '))
 }
 
+function categoryFromActionContext(context: string): string | null {
+  const match = context.match(/^Targets (.+?) \(\d+%\)$/)
+  return match ? match[1] : null
+}
+
+function usedCategoriesFromActions(
+  actions: SummaryAction[],
+  excludePriority?: SummaryPriority,
+): Set<string> {
+  const categories = actions
+    .filter((action) => action.priority !== excludePriority)
+    .map((action) => categoryFromActionContext(action.context))
+    .filter((category): category is string => Boolean(category))
+  return new Set(categories)
+}
+
 function recommendationActionForCategory(
+  category: { name: string; favorable: number },
+  priority: 1 | 2 | 3 | 4,
+  viewType: 'company' | 'team',
+  variantSeed?: string,
+): { action: string; timeframe: SummaryAction['timeframe']; owner: SummaryAction['owner'] } {
+  const seed = variantSeed ?? `${category.name}:${priority}`
+  const base = recommendationActionTemplate(category, priority, viewType)
+
+  if (!variantSeed) return base
+
+  const variantSuffix = pickSummaryVariant(
+    ['', ' with clear milestones', ' and visible follow-through', ' tied to survey feedback'],
+    seed,
+    'suffix',
+  )
+  if (!variantSuffix) return base
+
+  return {
+    ...base,
+    action: base.action.replace(/\.$/, '') + variantSuffix + '.',
+  }
+}
+
+function recommendationActionTemplate(
   category: { name: string; favorable: number },
   priority: 1 | 2 | 3 | 4,
   viewType: 'company' | 'team',
@@ -539,9 +579,99 @@ export function composeRecommendations(
         timeframe: template.timeframe,
         owner: template.owner,
         context: `Targets ${category.name} (${category.favorable}%)`,
+        regenerationsUsed: 0,
       }
     }),
   )
+}
+
+export function composeSingleRecommendation(
+  facts: DashboardFacts,
+  priority: SummaryPriority,
+  viewType: 'company' | 'team',
+  currentActions: SummaryAction[],
+  variantSeed?: string,
+): SummaryAction {
+  const usedCategories = usedCategoriesFromActions(currentActions, priority)
+  const available = facts.rankedCategories.filter((category) => !usedCategories.has(category.name))
+  const category =
+    available[0] ??
+    facts.rankedCategories.find((item) => !usedCategories.has(item.name)) ??
+    facts.rankedCategories[priority - 1] ??
+    facts.lowestCategory
+
+  const template = recommendationActionForCategory(
+    category,
+    priority,
+    viewType,
+    variantSeed ?? `${Date.now()}-${priority}`,
+  )
+
+  return {
+    id: currentActions.find((action) => action.priority === priority)?.id ?? `action_${priority}`,
+    action: template.action,
+    timeframe: template.timeframe,
+    owner: template.owner,
+    priority,
+    context: `Targets ${category.name} (${category.favorable}%)`,
+    linkedInitiativeId: undefined,
+    regenerationsUsed: 0,
+  }
+}
+
+export function mergeRecommendationsForFullUpdate(
+  existingActions: SummaryAction[],
+  facts: DashboardFacts,
+  viewType: 'company' | 'team',
+): { actions: SummaryAction[]; allRecommendationsLocked: boolean } {
+  const sorted = [...existingActions].sort((a, b) => a.priority - b.priority)
+  const allRecommendationsLocked = sorted.every((action) => Boolean(action.linkedInitiativeId))
+
+  if (allRecommendationsLocked) {
+    return { actions: sorted, allRecommendationsLocked: true }
+  }
+
+  const lockedCategories = usedCategoriesFromActions(
+    sorted.filter((action) => action.linkedInitiativeId),
+  )
+  const available = facts.rankedCategories.filter((category) => !lockedCategories.has(category.name))
+  let categoryIndex = 0
+
+  const merged = sorted.map((existing) => {
+    if (existing.linkedInitiativeId) {
+      return existing
+    }
+
+    const category =
+      available[categoryIndex] ??
+      facts.rankedCategories.find(
+        (item) =>
+          !lockedCategories.has(item.name) &&
+          !sorted.some(
+            (action) =>
+              !action.linkedInitiativeId &&
+              action.priority !== existing.priority &&
+              categoryFromActionContext(action.context) === item.name,
+          ),
+      ) ??
+      facts.rankedCategories[(existing.priority - 1) % facts.rankedCategories.length]
+
+    categoryIndex += 1
+
+    const template = recommendationActionForCategory(category, existing.priority, viewType)
+    return {
+      id: existing.id,
+      action: template.action,
+      timeframe: template.timeframe,
+      owner: template.owner,
+      priority: existing.priority,
+      context: `Targets ${category.name} (${category.favorable}%)`,
+      linkedInitiativeId: undefined,
+      regenerationsUsed: 0,
+    }
+  })
+
+  return { actions: merged, allRecommendationsLocked: false }
 }
 
 function mockTeamActions(
@@ -605,8 +735,9 @@ export async function generateDashboardSummary(
 export async function generateFullUpdate(
   dataWidgets: DashboardWidget[],
   activeFilters: ActiveFilter[],
+  currentActions: SummaryAction[],
   options?: { viewType?: 'company' | 'team'; guidance?: string },
-): Promise<{ summary: string; actions: SummaryAction[] }> {
+): Promise<{ summary: string; actions: SummaryAction[]; allRecommendationsLocked: boolean }> {
   const viewType = options?.viewType ?? 'company'
   const dataContext = buildDataContext(dataWidgets)
   const orgContext = readOrgContextText()
@@ -621,8 +752,15 @@ export async function generateFullUpdate(
 
   await new Promise((resolve) => setTimeout(resolve, 1500))
 
-  const content = await generateDashboardSummary(dataWidgets, activeFilters, { viewType })
-  return { summary: content.summary, actions: content.actions }
+  const facts = computeDashboardFacts(dataWidgets, activeFilters, viewType)
+  const summary = composeSummary(facts, viewType, `${Date.now()}-${Math.random()}`)
+  const { actions, allRecommendationsLocked } = mergeRecommendationsForFullUpdate(
+    currentActions,
+    facts,
+    viewType,
+  )
+
+  return { summary, actions, allRecommendationsLocked }
 }
 
 export async function generateSummaryOnlyRegeneration(
@@ -641,6 +779,36 @@ export async function generateSummaryOnlyRegeneration(
   return composeSummary(facts, viewType, `${Date.now()}-${Math.random()}`)
 }
 
+export async function generateSingleRecommendation(
+  dataWidgets: DashboardWidget[],
+  activeFilters: ActiveFilter[],
+  slotIndex: number,
+  currentActions: SummaryAction[],
+  viewType: 'company' | 'team' = 'company',
+): Promise<SummaryAction> {
+  const dataContext = buildDataContext(dataWidgets)
+  const orgContext = readOrgContextText()
+  void buildRecommendationsOnlyPrompt(
+    dataContext,
+    orgContext,
+    '',
+    filterLabels(activeFilters),
+  )
+
+  await new Promise((resolve) => setTimeout(resolve, 1200))
+
+  const facts = computeDashboardFacts(dataWidgets, activeFilters, viewType)
+  const priority = (slotIndex + 1) as SummaryPriority
+  return composeSingleRecommendation(
+    facts,
+    priority,
+    viewType,
+    currentActions,
+    `${Date.now()}-${Math.random()}-${priority}`,
+  )
+}
+
+/** @deprecated batch recommendation regeneration removed — use generateSingleRecommendation */
 export async function generateRecommendationsOnlyRegeneration(
   dataWidgets: DashboardWidget[],
   activeFilters: ActiveFilter[],

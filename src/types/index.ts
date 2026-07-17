@@ -427,6 +427,7 @@ export type SummaryAction = {
   priority: SummaryPriority
   context: string
   linkedInitiativeId?: string
+  regenerationsUsed: number
 }
 
 export type SummarySharedSnapshot = {
@@ -441,8 +442,8 @@ export type SummaryContent = {
   summary: string
   actions: SummaryAction[]
   summaryRegenerationsUsed: number
-  recsRegenerationsUsed: number
   isStale: boolean
+  summaryOnlyUpdateNote?: boolean
   stalenessReason?: StalenessReason | null
   generatedAtFilters: ActiveFilter[]
   generatedAtWidgetIds: string[]

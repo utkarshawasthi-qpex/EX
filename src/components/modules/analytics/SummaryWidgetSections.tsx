@@ -36,8 +36,9 @@ type SummaryWidgetSectionsProps = {
   sharedAt?: string | null
   onOpenRegenerateModal: (context: RegenerateModalContext) => void
   onStaleUpdate?: () => void
+  onRegenerateAction?: (action: SummaryAction) => void
   regeneratingSummary?: boolean
-  regeneratingRecommendations?: boolean
+  regeneratingActionPriority?: SummaryPriority | null
 }
 
 function FeedbackButtons({
@@ -92,8 +93,9 @@ export function SummaryWidgetSections({
   sharedAt = null,
   onOpenRegenerateModal,
   onStaleUpdate,
+  onRegenerateAction,
   regeneratingSummary = false,
-  regeneratingRecommendations = false,
+  regeneratingActionPriority = null,
 }: SummaryWidgetSectionsProps) {
   const { showToast } = useWuShowToast()
   const [showCommentInput, setShowCommentInput] = useState(false)
@@ -101,7 +103,6 @@ export function SummaryWidgetSections({
   const feedbackGiven = content.summaryFeedback !== null
 
   const summaryLimitReached = content.summaryRegenerationsUsed >= MAX_REGENERATIONS
-  const recsLimitReached = content.recsRegenerationsUsed >= MAX_REGENERATIONS
 
   function persistContent(next: SummaryContent) {
     onContentChange(next)
@@ -148,6 +149,25 @@ export function SummaryWidgetSections({
 
   function renderActionRow(action: SummaryAction) {
     const priority = action.priority
+    const isRegeneratingRow = regeneratingActionPriority === priority
+    const rowLimitReached = action.regenerationsUsed >= MAX_REGENERATIONS
+    const showRegenerateButton =
+      canRegenerate &&
+      !isRecipientView &&
+      !content.isStale &&
+      !action.linkedInitiativeId
+
+    if (isRegeneratingRow) {
+      return (
+        <div
+          key={action.id}
+          className="min-h-[48px] rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
+        >
+          <div className="h-3 w-3/4 animate-pulse rounded bg-gray-100" />
+          <div className="mt-2 h-2 w-1/2 animate-pulse rounded bg-gray-100" />
+        </div>
+      )
+    }
 
     return (
       <div
@@ -198,6 +218,23 @@ export function SummaryWidgetSections({
           </div>
 
           <div className="mt-0.5 flex flex-shrink-0 items-center gap-2">
+            {showRegenerateButton && (
+              <button
+                type="button"
+                aria-label={`Regenerate recommendation P${priority}`}
+                disabled={rowLimitReached}
+                title={rowLimitReached ? 'Regeneration limit reached (3/3)' : undefined}
+                onClick={() => !rowLimitReached && onRegenerateAction?.(action)}
+                className={cn(
+                  'rounded px-1 py-0.5 text-xs transition-colors',
+                  rowLimitReached
+                    ? 'cursor-not-allowed text-gray-300'
+                    : 'cursor-pointer text-gray-400 hover:text-blue-600',
+                )}
+              >
+                ↺
+              </button>
+            )}
             {action.linkedInitiativeId ? (
               <Link
                 href={`/empower/initiatives/${action.linkedInitiativeId}`}
@@ -241,11 +278,11 @@ export function SummaryWidgetSections({
           {canRegenerate && (
             <button
               type="button"
-              disabled={regeneratingSummary || regeneratingRecommendations}
+              disabled={regeneratingSummary || regeneratingActionPriority !== null}
               onClick={() => onStaleUpdate?.()}
               className={cn(
                 'ml-auto whitespace-nowrap font-medium text-amber-700 underline',
-                (regeneratingSummary || regeneratingRecommendations) &&
+                (regeneratingSummary || regeneratingActionPriority !== null) &&
                   'cursor-not-allowed opacity-50',
               )}
             >
@@ -312,41 +349,17 @@ export function SummaryWidgetSections({
             </WuText>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
-            {regeneratingRecommendations
-              ? ([1, 2, 3, 4] as SummaryPriority[]).map((priority) => (
-                  <div
-                    key={`rec-skeleton-${priority}`}
-                    className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
-                  >
-                    <div className="h-3 w-3/4 animate-pulse rounded bg-gray-100" />
-                    <div className="mt-2 h-2 w-1/2 animate-pulse rounded bg-gray-100" />
-                  </div>
-                ))
-              : [...content.actions]
-                  .sort((a, b) => a.priority - b.priority)
-                  .map((action) => renderActionRow(action))}
-          </div>
-
-          {canRegenerate && !isRecipientView && !content.isStale && (
-            <button
-              type="button"
-              onClick={() => !recsLimitReached && onOpenRegenerateModal('recommendations')}
-              disabled={recsLimitReached}
-              className={cn(
-                'mt-3 flex items-center gap-1 text-xs transition-colors',
-                recsLimitReached
-                  ? 'cursor-not-allowed text-gray-300'
-                  : 'cursor-pointer text-gray-400 hover:text-blue-600',
-              )}
-              title={recsLimitReached ? 'Regeneration limit reached (3/3)' : undefined}
-            >
-              ↺ Regenerate recommendations
-              {recsLimitReached && (
-                <span className="ml-1 text-gray-300">(3/3 used)</span>
-              )}
-            </button>
+          {content.summaryOnlyUpdateNote && (
+            <WuText size="sm" as="p" className="mb-2 text-xs text-gray-400">
+              All recommendations already have action plans — only the summary was updated.
+            </WuText>
           )}
+
+          <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+            {[...content.actions]
+              .sort((a, b) => a.priority - b.priority)
+              .map((action) => renderActionRow(action))}
+          </div>
         </>
       )}
 

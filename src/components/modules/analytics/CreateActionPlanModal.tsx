@@ -8,13 +8,10 @@ import { EMPOWER_GOALS } from '@/data/mock/empowerIntegrationSeed'
 import { mockEmployees } from '@/data/mock/employees'
 import {
   buildInheritedLinkBlock,
-  resolveDashboardScope,
 } from '@/lib/empowerIntegration/dashboardLink'
 import { parseTimeframeDays } from '@/lib/empowerIntegration/helpers'
 import {
-  countActiveInitiativesForScope,
   getInitiativeById,
-  getOrgSettings,
   upsertInitiative,
 } from '@/lib/empowerIntegration/storage'
 import { getVisibleInitiatives } from '@/lib/empowerIntegration/visibility'
@@ -140,10 +137,6 @@ export function CreateActionPlanModal({
   const [successKind, setSuccessKind] = useState<SuccessKind | null>(null)
   const [confirmLinkStep, setConfirmLinkStep] = useState(linkCandidates.length > 1)
   const [selectedLink, setSelectedLink] = useState<SurveyLink | null>(initialLink)
-  const [atCap, setAtCap] = useState(false)
-
-  const tabScope = resolveDashboardScope(activeTab, user.id)
-  const cap = getOrgSettings().activeInitiativeCap
 
   const activeInitiatives = useMemo(() => {
     return getVisibleInitiatives(user).filter((initiative) => initiative.status === 'active')
@@ -173,12 +166,7 @@ export function CreateActionPlanModal({
     setSuccessKind(null)
     setConfirmLinkStep(linkCandidates.length > 1)
     setSelectedLink(initialLink)
-
-    const scopeArg =
-      tabScope.kind === 'team' ? { kind: 'team' as const, managerId: user.id } : { kind: 'org' as const }
-    const capReached = countActiveInitiativesForScope(scopeArg) >= cap
-    setAtCap(capReached)
-    setMode(capReached ? 'existing' : null)
+    setMode(null)
   }, [
     open,
     action,
@@ -187,8 +175,6 @@ export function CreateActionPlanModal({
     user.name,
     initialLink,
     linkCandidates.length,
-    tabScope.kind,
-    cap,
   ])
 
   function handleClose() {
@@ -254,12 +240,6 @@ export function CreateActionPlanModal({
 
   function handleSubmitNew() {
     setValidationError(null)
-    if (atCap) {
-      setValidationError(
-        `Your team has ${cap} active initiatives. Complete one, or add this as a task to an existing initiative instead.`,
-      )
-      return
-    }
     const sharedError = validateSharedFields()
     if (sharedError) {
       setValidationError(sharedError)
@@ -332,14 +312,7 @@ export function CreateActionPlanModal({
         </button>
         <button
           type="button"
-          disabled={atCap}
-          title={
-            atCap
-              ? `Your team has ${cap} active initiatives — add this as a task to an existing one instead.`
-              : undefined
-          }
           onClick={() => {
-            if (atCap) return
             setMode('new')
             setValidationError(null)
           }}
@@ -348,7 +321,6 @@ export function CreateActionPlanModal({
             mode === 'new'
               ? 'border-blue-600 bg-blue-50 text-blue-700'
               : 'border-gray-200 text-gray-600 hover:border-gray-300',
-            atCap && 'cursor-not-allowed opacity-40',
           )}
         >
           Create a new initiative
@@ -444,13 +416,6 @@ export function CreateActionPlanModal({
           </div>
         ) : (
           <div className="space-y-4">
-            {atCap && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                Your team has reached the {cap} active initiative limit. Complete one, or add this as a
-                task to an existing initiative.
-              </div>
-            )}
-
             {renderModeToggle()}
 
             {mode === 'existing' && (
@@ -484,7 +449,7 @@ export function CreateActionPlanModal({
               </>
             )}
 
-            {mode === 'new' && !atCap && (
+            {mode === 'new' && (
               <>
                 {renderSharedTaskFields('Name')}
                 <WuFormGroup
@@ -538,11 +503,7 @@ export function CreateActionPlanModal({
               <WuButton variant="secondary" onClick={handleClose}>
                 Cancel
               </WuButton>
-              <WuButton
-                variant="primary"
-                onClick={handleSubmit}
-                disabled={atCap && mode === 'new'}
-              >
+              <WuButton variant="primary" onClick={handleSubmit}>
                 {mode === 'existing' ? 'Add task' : mode === 'new' ? 'Create initiative' : 'Continue'}
               </WuButton>
             </>

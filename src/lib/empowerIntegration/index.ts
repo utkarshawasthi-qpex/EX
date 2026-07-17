@@ -27,7 +27,6 @@ export { simulateEngagement2027Close } from '@/lib/empowerIntegration/simulateCy
 export { initiativeMatchesScope, toSurveyLinkScope } from '@/lib/empowerIntegration/scope'
 export {
   addNotification,
-  countActiveInitiativesForScope,
   getAllInitiativesRaw,
   getFunnelSeed,
   getInitiativeById,

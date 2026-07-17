@@ -240,9 +240,6 @@ export default function PptExportTemplatesPage() {
             <WuHeading size="sm" className="text-gray-900">
               Empower demo controls
             </WuHeading>
-            <WuText size="sm" as="p" className="mt-1 text-gray-500">
-              Active initiative cap: {getOrgSettings().activeInitiativeCap}
-            </WuText>
             <div className="mt-3">
               <WuButton
                 variant="primary"

@@ -373,33 +373,38 @@ export function composeSummary(
   variantSeed?: string,
 ): string {
   const seed = variantSeed ?? `${Date.now()}`
-  const audience = viewType === 'team' ? 'employees on your team' : 'employees'
-  const { lowestCategory, highestCategory } = facts
+  const audience = viewType === 'team' ? 'people on your team' : 'employees'
+  const { lowestCategory, highestCategory, rankedCategories } = facts
+  const secondLowest = rankedCategories[1]
   const sentences: string[] = []
 
   const headlineVariants = [
     () =>
       facts.filterDescription
-        ? `Looking at ${facts.filterDescription}: ${lowestCategory.name} is the clearest problem area, with only ${lowestCategory.favorable}% of ${audience} responding favorably.`
-        : `${lowestCategory.name} is the clearest problem area, with only ${lowestCategory.favorable}% of ${audience} responding favorably.`,
+        ? `Looking at ${facts.filterDescription}: ${lowestCategory.name} is the weakest area, with only ${lowestCategory.favorable}% of ${audience} responding favorably.`
+        : `${lowestCategory.name} is the weakest area in the current results, with only ${lowestCategory.favorable}% of ${audience} responding favorably.`,
     () =>
       facts.filterDescription
-        ? `Looking at ${facts.filterDescription}: ${lowestCategory.name} stands out as the most pressing concern — just ${lowestCategory.favorable}% responded favorably.`
-        : `${lowestCategory.name} stands out as the most pressing concern — just ${lowestCategory.favorable}% of ${audience} responded favorably.`,
-    () =>
-      facts.filterDescription
-        ? `Looking at ${facts.filterDescription}: ${lowestCategory.name} needs the most attention, with favorable responses at only ${lowestCategory.favorable}%.`
-        : `${lowestCategory.name} needs the most attention, with favorable responses at only ${lowestCategory.favorable}%.`,
+        ? `Looking at ${facts.filterDescription}: ${lowestCategory.name} needs the most attention — just ${lowestCategory.favorable}% responded favorably.`
+        : `${lowestCategory.name} needs the most attention right now — just ${lowestCategory.favorable}% of ${audience} responded favorably.`,
   ]
   sentences.push(pickSummaryVariant(headlineVariants, seed, 'headline')())
 
+  if (secondLowest && secondLowest.name !== lowestCategory.name) {
+    const secondVariants = [
+      () =>
+        `${secondLowest.name} is close behind at ${secondLowest.favorable}% favorable, so the gap is not limited to a single marker.`,
+      () =>
+        `${secondLowest.name} is also soft at ${secondLowest.favorable}% favorable, which means two related problem areas need attention together.`,
+    ]
+    sentences.push(pickSummaryVariant(secondVariants, seed, 'second')())
+  }
+
   const contrastVariants = [
     () =>
-      `By contrast, ${highestCategory.name} is a genuine strength at ${highestCategory.favorable}%.`,
+      `On the positive side, ${highestCategory.name} is a clear strength at ${highestCategory.favorable}% favorable — that is worth protecting while you fix weaker areas.`,
     () =>
-      `${highestCategory.name} is a bright spot by comparison, with ${highestCategory.favorable}% favorable responses.`,
-    () =>
-      `On the positive side, ${highestCategory.name} leads at ${highestCategory.favorable}% favorable — a clear area of strength.`,
+      `By contrast, ${highestCategory.name} leads at ${highestCategory.favorable}% favorable and shows where the experience is already working well.`,
   ]
   sentences.push(pickSummaryVariant(contrastVariants, seed, 'contrast')())
 
@@ -407,11 +412,9 @@ export function composeSummary(
     const cell = facts.worstHeatmapCell
     const heatmapVariants = [
       () =>
-        `This shows up again at the department level — ${cell.department} scores lowest on ${cell.category} at ${cell.favorable}%, suggesting the issue may be sharper in that team than company-wide.`,
+        `At the department level, ${cell.department} scores lowest on ${cell.category} at ${cell.favorable}%, so the issue may be sharper there than company-wide.`,
       () =>
-        `The pattern deepens within teams: ${cell.department} rates ${cell.category} lowest at ${cell.favorable}%, which points to a sharper gap there than across the company.`,
-      () =>
-        `Drilling into departments, ${cell.department} is the weakest on ${cell.category} at ${cell.favorable}%, hinting the problem may be concentrated in that group.`,
+        `The heatmap points to ${cell.department} as the weakest group on ${cell.category} (${cell.favorable}% favorable), which is a useful place to start targeted follow-up.`,
     ]
     sentences.push(pickSummaryVariant(heatmapVariants, seed, 'heatmap')())
   }
@@ -421,23 +424,23 @@ export function composeSummary(
       facts.enps >= 0
         ? [
             () =>
-              `eNPS sits at ${facts.enps}, meaning more employees are recommending the company than discouraging others from joining.`,
+              `eNPS sits at ${facts.enps}, so more people would recommend working here than warn others away.`,
             () =>
-              `With an eNPS of ${facts.enps}, more people would recommend working here than warn others away.`,
+              `With an eNPS of ${facts.enps}, recommendation intent is in positive territory — more promoters than detractors.`,
           ]
         : [
             () =>
-              `eNPS sits at ${facts.enps}, meaning more employees are actively discouraging others from joining than recommending it.`,
+              `eNPS sits at ${facts.enps}, meaning far more employees would discourage someone they respect from joining than would recommend the company.`,
             () =>
-              `An eNPS of ${facts.enps} shows more detractors than promoters — employees are more likely to warn others away than recommend the company.`,
+              `An eNPS of ${facts.enps} shows a detractor-heavy picture — employees are more likely to warn others away than recommend the company.`,
           ]
     sentences.push(pickSummaryVariant(enpsVariants, seed, 'enps')())
   } else if (facts.responseRate !== null) {
     const responseRateVariants = [
       () =>
-        `Survey participation reached ${facts.responseRate}%, giving these results a solid sample to act on.`,
+        `Survey participation reached ${facts.responseRate}%, so these patterns rest on a broad enough sample to act on.`,
       () =>
-        `With a ${facts.responseRate}% response rate, the data reflects a broad enough share of the group to trust these patterns.`,
+        `With a ${facts.responseRate}% response rate, the results are representative enough to treat as a real signal, not noise.`,
     ]
     sentences.push(pickSummaryVariant(responseRateVariants, seed, 'response-rate')())
   }
@@ -446,15 +449,15 @@ export function composeSummary(
     viewType === 'team'
       ? [
           () =>
-            `Prioritizing ${lowestCategory.name} with your direct reports over the next quarter is likely to have the broadest impact on engagement.`,
+            `In plain terms: focus the next quarter on ${lowestCategory.name} with your direct reports, make one visible change, and tell the team what you fixed. That sequence — listen, act, report back — is the most reliable way to improve how people experience day-to-day work on your team.`,
           () =>
-            `Focusing on ${lowestCategory.name} with your team in the next quarter should yield the widest gains in how people feel about work.`,
+            `The practical next step is to treat ${lowestCategory.name} as the team priority for the next 90 days: pick one concrete fix, assign an owner, and check progress in your regular 1:1s. Showing follow-through matters as much as the fix itself.`,
         ]
       : [
           () =>
-            `Prioritizing ${lowestCategory.name} over the next quarter is likely to have the broadest impact on engagement.`,
+            `In plain terms: fix ${lowestCategory.name} first, keep ${highestCategory.name} strong, and show employees that survey feedback led to real changes. That combination — clear priority, visible action, and a follow-up measure — is the most direct path to better engagement over the next quarter.`,
           () =>
-            `Addressing ${lowestCategory.name} first in the next quarter is the most direct path to improving how employees experience work here.`,
+            `The clearest plan for the next 90 days is to prioritize ${lowestCategory.name}, protect the strength in ${highestCategory.name}, and communicate progress openly. People trust the process more when they can see what changed after they spoke up.`,
         ]
   sentences.push(pickSummaryVariant(closingVariants, seed, 'closing')())
 
@@ -489,7 +492,7 @@ function recommendationActionForCategory(
   if (!variantSeed) return base
 
   const variantSuffix = pickSummaryVariant(
-    ['', ' with clear milestones', ' and visible follow-through', ' tied to survey feedback'],
+    ['', ' this month', ' and report progress in writing', ' before the next pulse'],
     seed,
     'suffix',
   )
@@ -506,57 +509,131 @@ function recommendationActionTemplate(
   priority: 1 | 2 | 3 | 4,
   viewType: 'company' | 'team',
 ): { action: string; timeframe: SummaryAction['timeframe']; owner: SummaryAction['owner'] } {
+  const name = category.name.toLowerCase()
+
   if (viewType === 'team') {
+    if (name.includes('technolog')) {
+      return {
+        action: `Ask your team which tools slow them down most, pick the top two, and escalate blockers to IT or HR this month.`,
+        timeframe: '30 days',
+        owner: 'Manager',
+      }
+    }
+    if (name.includes('transpar') || name.includes('communicat')) {
+      return {
+        action: `Share a short weekly written update with your team covering decisions, priorities, and open questions.`,
+        timeframe: '30 days',
+        owner: 'Manager',
+      }
+    }
+    if (name.includes('growth') || name.includes('development')) {
+      return {
+        action: `Hold a growth 1:1 with each direct report and agree on one skill goal plus one stretch task for the quarter.`,
+        timeframe: '30 days',
+        owner: 'Manager',
+      }
+    }
+    if (name.includes('wellbeing') || name.includes('inclusion')) {
+      return {
+        action: `Ask your team what would make week-to-week work feel more sustainable, then pick one change you can make within 30 days.`,
+        timeframe: '30 days',
+        owner: 'Manager',
+      }
+    }
+
     switch (priority) {
       case 1:
         return {
-          action: `Meet with your team on ${category.name} and assign one owner for fixes.`,
+          action: `Meet with your team on ${category.name}, list the top three complaints, and assign one owner for each fix.`,
           timeframe: '30 days',
           owner: 'Manager',
         }
       case 2:
         return {
-          action: `Review ${category.name} feedback with direct reports and set two-week targets.`,
+          action: `Review ${category.name} survey comments with direct reports and set two concrete targets for the next month.`,
           timeframe: '30 days',
           owner: 'Manager',
         }
       case 3:
         return {
-          action: `Ask HR for help on ${category.name} blockers your team flagged in the survey.`,
+          action: `Ask HR for help on ${category.name} blockers your team flagged that you cannot fix alone.`,
           timeframe: '60 days',
           owner: 'Manager',
         }
       case 4:
         return {
-          action: `Check ${category.name} scores again after your team completes the action plan.`,
+          action: `Check ${category.name} scores again after your team finishes the first round of fixes, and share the result.`,
           timeframe: '90 days',
           owner: 'Manager',
         }
     }
   }
 
+  if (name.includes('technolog')) {
+    return {
+      action: `List the top three tools employees struggle with, cut or replace the worst ones, and assign an owner for each fix.`,
+      timeframe: '30 days',
+      owner: 'HR',
+    }
+  }
+  if (name.includes('transpar') || name.includes('communicat')) {
+    return {
+      action: `Start a monthly all-hands with open Q&A and publish key decisions within two business days.`,
+      timeframe: '30 days',
+      owner: 'Leadership',
+    }
+  }
+  if (name.includes('growth') || name.includes('development')) {
+    return {
+      action: `Add a career-path conversation to every manager 1:1 this quarter and share a simple role-growth guide.`,
+      timeframe: '60 days',
+      owner: 'Manager',
+    }
+  }
+  if (name.includes('wellbeing')) {
+    return {
+      action: `Review wellbeing themes with affected managers and offer two concrete support options within 60 days.`,
+      timeframe: '60 days',
+      owner: 'HR',
+    }
+  }
+  if (name.includes('inclusion')) {
+    return {
+      action: `Ask managers to run one inclusion check-in in their next team meeting and capture one improvement idea per team.`,
+      timeframe: '60 days',
+      owner: 'Manager',
+    }
+  }
+  if (name.includes('innovation') || name.includes('solution')) {
+    return {
+      action: `Pick two process bottlenecks behind ${category.name} scores and assign owners to remove them within 60 days.`,
+      timeframe: '60 days',
+      owner: 'Leadership',
+    }
+  }
+
   switch (priority) {
     case 1:
       return {
-        action: `Run a leadership review on ${category.name} and publish a 30-day plan.`,
+        action: `Run a leadership review on ${category.name}, name the top three root causes, and publish a 30-day fix plan.`,
         timeframe: '30 days',
         owner: 'Leadership',
       }
     case 2:
       return {
-        action: `Work with HR to fix ${category.name} issues employees raised in the survey.`,
+        action: `Work with HR to address the ${category.name} issues employees raised most often in the survey.`,
         timeframe: '60 days',
         owner: 'HR',
       }
     case 3:
       return {
-        action: `Have managers track ${category.name} progress in weekly team meetings.`,
+        action: `Have managers track one ${category.name} action in weekly team meetings until it is done.`,
         timeframe: '60 days',
         owner: 'Manager',
       }
     case 4:
       return {
-        action: `Re-run the survey to see if ${category.name} scores improved.`,
+        action: `Re-measure ${category.name} after the first fixes ship, and share the before/after scores with employees.`,
         timeframe: '90 days',
         owner: 'Leadership',
       }

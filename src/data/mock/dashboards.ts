@@ -2,28 +2,28 @@ import type { Dashboard, DashboardWidget, WidgetType } from '@/types'
 import { buildSummaryContent, normalizeActionsFromApi } from '@/lib/summaryContent'
 
 const pptDemoSummary = buildSummaryContent(
-  'Organization-wide favorability remains soft at 40%, with transparency and technology among the lowest-performing markers while eNPS continues to reflect a detractor-heavy profile compared to prior cycles. Employees appear to lack consistent visibility into organizational priorities, and survey commentary repeatedly points to friction in systems, process clarity, and follow-through after prior feedback cycles. Heatmap results show uneven performance across departments, with enablement and agility lagging collaboration improvements that emerged in the most recent quarter. Response rates remain healthy enough to treat these patterns as representative, but localized teams report sharper declines in manager communication cadence. Organization context suggests recent structural changes have outpaced leadership messaging rhythms, leaving managers without sufficient support to translate employee input into visible action plans that rebuild trust and demonstrate measurable progress.',
+  'Technologies is the weakest area in Workplace Culture, with only 39% of employees responding favorably — nearly as many (38%) responded unfavorably. Transparency is close behind at 44% favorable, which suggests people do not feel they get clear updates on company direction or decisions that affect their work. By contrast, Inclusion is a real strength at 74% favorable, and Solutions (66%) and Innovation (61%) are solid. Growth sits in the middle at 52%, so career development is not failing outright but is not a bright spot either. eNPS is −66, meaning far more employees would discourage someone they respect from joining than would recommend the company. Together, the scores point to a practical problem: tools and day-to-day clarity are hurting experience more than culture or belonging. Fixing the lowest two markers first — and showing employees that feedback led to concrete changes — is the most direct path to rebuilding trust over the next quarter.',
   normalizeActionsFromApi([
     {
-      action: 'Launch a leadership communication cadence explaining priorities and progress.',
+      action: 'List the top three tools employees struggle with, cut or replace the worst ones, and assign an owner for each fix.',
+      timeframe: '30 days',
+      owner: 'HR',
+      context: 'Targets Technologies (39%)',
+    },
+    {
+      action: 'Start a monthly all-hands with open Q&A and publish key decisions within two business days.',
       timeframe: '30 days',
       owner: 'Leadership',
-      context: 'Targets transparency (54)',
+      context: 'Targets Transparency (44%)',
     },
     {
-      action: 'Identify the top three technology blockers and assign owners for resolution.',
-      timeframe: '60 days',
-      owner: 'HR',
-      context: 'Addresses enablement (58)',
-    },
-    {
-      action: 'Publish a dashboard action tracker tied to the lowest-scoring markers.',
+      action: 'Add a career-path conversation to every manager 1:1 this quarter and share a simple role-growth guide.',
       timeframe: '60 days',
       owner: 'Manager',
-      context: 'Tracks progress over time',
+      context: 'Targets Growth (52%)',
     },
     {
-      action: 'Re-measure transparency and enablement after action plans have been communicated.',
+      action: 'Re-survey Technologies and Transparency after the first fixes ship, and share the before/after scores with the company.',
       timeframe: '90 days',
       owner: 'Leadership',
       context: 'Validates improvement impact',

@@ -13,7 +13,6 @@ export const EMPOWER_GOALS: EmpowerGoal[] = [
 ]
 
 export const DEFAULT_ORG_SETTINGS: OrgSettings = {
-  activeInitiativeCap: 3,
   engagement2027Closed: false,
 }
 

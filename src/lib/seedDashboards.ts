@@ -7,28 +7,28 @@ import {
 } from '@/data/mock/empowerIntegrationSeed'
 
 const multiSurveyDemoSummary = buildSummaryContent(
-  'Engagement 2026 shows Growth & Development at 58% organization-wide (52% for your team), while Manager Relationship leads at 82%. Wellbeing Pulse Q3 is still collecting; Sales-filtered heatmap data flags localized wellbeing risk at 61% favorability.',
+  'Engagement 2026 shows Growth & Development as the clearest gap at 58% favorable company-wide, and lower still for your team at 52%. That means about half of people do not feel they have a clear path to learn or advance. Manager Relationship is a genuine strength at 82%, so the issue is not day-to-day management trust — it is development and progression. Communication sits in between at 64%, and Wellbeing on the annual survey is 71%. Separately, Wellbeing Pulse Q3 is still collecting responses; the Sales-filtered heatmap already shows localized risk at 61% favorable, which is weaker than the company wellbeing picture. Put together, managers should double down on growth conversations with their teams, while HR watches Sales wellbeing closely as the pulse closes. Protecting the strong manager relationship scores while fixing growth and Sales wellbeing will give the clearest lift.',
   normalizeActionsFromApi([
     {
-      action: 'Schedule monthly growth-focused 1:1s with each direct report.',
+      action: 'Hold a dedicated growth 1:1 with each direct report this month and agree on one skill goal and one stretch task.',
       timeframe: '30 days',
       owner: 'Manager',
-      context: 'Growth & Development (58%)',
+      context: 'Targets Growth & Development (58%)',
     },
     {
-      action: 'Align wellbeing support with Sales team feedback from pulse survey.',
+      action: 'Meet with Sales managers to review pulse wellbeing themes and offer two concrete support options within 60 days.',
       timeframe: '60 days',
       owner: 'HR',
-      context: 'Cross-survey synthesis: Engagement scorecard + Wellbeing heatmap (Sales)',
+      context: 'Targets Wellbeing · Sales (61%)',
     },
     {
-      action: 'Publish a communication cadence for manager relationship improvements.',
+      action: 'Publish a short monthly update from leadership covering decisions, priorities, and open questions from employees.',
       timeframe: '60 days',
       owner: 'Leadership',
-      context: 'Manager Relationship (82%)',
+      context: 'Targets Communication (64%)',
     },
     {
-      action: 'Re-measure Growth & Development after action plans are in place.',
+      action: 'After growth plans are underway, check Growth & Development scores again in the next pulse and share results with managers.',
       timeframe: '90 days',
       owner: 'Manager',
       context: 'Validates improvement impact',

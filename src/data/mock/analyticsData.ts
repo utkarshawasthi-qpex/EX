@@ -218,21 +218,24 @@ export const mockTextReportData = {
 export const mockSummaryRecommendationsData = {
   surveyName: 'Workplace Culture',
   summary:
-    'Organization-wide favorability remains soft at 40%, with transparency and technology among the lowest-performing markers while eNPS continues to reflect a detractor-heavy profile compared to prior cycles. Employees appear to lack consistent visibility into organizational priorities, and survey commentary repeatedly points to friction in systems, process clarity, and follow-through after prior feedback cycles. Heatmap results show uneven performance across departments, with enablement and agility lagging collaboration improvements that emerged in the most recent quarter. Response rates remain healthy enough to treat these patterns as representative, but localized teams report sharper declines in manager communication cadence. Organization context suggests recent structural changes have outpaced leadership messaging rhythms, leaving managers without sufficient support to translate employee input into visible action plans that rebuild trust and demonstrate measurable progress.',
+    'Technologies is the weakest area in Workplace Culture, with only 39% of employees responding favorably — nearly as many (38%) responded unfavorably. Transparency is close behind at 44% favorable, which suggests people do not feel they get clear updates on company direction or decisions that affect their work. By contrast, Inclusion is a real strength at 74% favorable, and Solutions (66%) and Innovation (61%) are solid. Growth sits in the middle at 52%, so career development is not failing outright but is not a bright spot either. eNPS is −66, meaning far more employees would discourage someone they respect from joining than would recommend the company. Together, the scores point to a practical problem: tools and day-to-day clarity are hurting experience more than culture or belonging. Fixing the lowest two markers first — and showing employees that feedback led to concrete changes — is the most direct path to rebuilding trust over the next quarter.',
   recommendations: [
     {
-      title: 'Strengthen leadership communication',
-      detail: 'Address transparency gaps with regular all-hands updates and clearer change management.',
+      title: 'Fix the worst workplace tools',
+      detail:
+        'List the top three tools employees struggle with, cut or replace the worst ones, and assign an owner for each fix within 30 days.',
       priority: 'high' as const,
     },
     {
-      title: 'Invest in agility practices',
-      detail: 'Review decision-making workflows and remove bottlenecks identified in Solutions and Agility markers.',
+      title: 'Make decisions visible',
+      detail:
+        'Start a monthly all-hands with open Q&A and publish key decisions within two business days to lift Transparency.',
       priority: 'high' as const,
     },
     {
-      title: 'Expand career development programs',
-      detail: 'Launch mentorship pairings and publish visible growth paths to improve Inclusion and Growth scores.',
+      title: 'Make career growth concrete',
+      detail:
+        'Add a career-path conversation to every manager 1:1 this quarter and share a simple role-growth guide.',
       priority: 'medium' as const,
     },
   ],

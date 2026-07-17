@@ -4,7 +4,6 @@ import {
   SEED_INITIATIVES,
   SEED_SURVEY_DATA,
 } from '@/data/mock/empowerIntegrationSeed'
-import { initiativeMatchesScope, toSurveyLinkScope } from '@/lib/empowerIntegration/scope'
 import type {
   EmpowerInitiativeRecord,
   EmpowerNotification,
@@ -142,15 +141,4 @@ export function addNotification(notification: Omit<EmpowerNotification, 'id'>): 
 
 export function getFunnelSeed(): FunnelSeed {
   return readJson(FUNNEL_KEY, SEED_FUNNEL)
-}
-
-export function countActiveInitiativesForScope(scope: {
-  kind: 'org' | 'team' | 'filter'
-  managerId?: string
-  filters?: Record<string, string>
-}): number {
-  const linkScope = toSurveyLinkScope(scope)
-  return getAllInitiativesRaw().filter(
-    (initiative) => initiative.status === 'active' && initiativeMatchesScope(initiative, linkScope),
-  ).length
 }

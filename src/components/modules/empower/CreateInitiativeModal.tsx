@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { EMPOWER_GOALS } from '@/data/mock/empowerIntegrationSeed'
 import { mockEmployees } from '@/data/mock/employees'
 import { aggregate, getExCategoriesForScope, listAccessibleExSurveys } from '@/lib/empowerIntegration/aggregate'
-import { countActiveInitiativesForScope, getOrgSettings, upsertInitiative } from '@/lib/empowerIntegration/storage'
+import { upsertInitiative } from '@/lib/empowerIntegration/storage'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { getCurrentUser, isAdminContext, isManagerUser } from '@/lib/userContext'
 import type { EmpowerInitiativeRecord, SurveyLink, SurveyLinkScope } from '@/types/empowerIntegration'
@@ -47,7 +47,6 @@ export function CreateInitiativeModal({
   const [scopeKind, setScopeKind] = useState<'org' | 'team' | 'filter'>('org')
   const [focusId, setFocusId] = useState<string | null>(null)
   const [pendingLink, setPendingLink] = useState<SurveyLink | null>(null)
-  const [capBlocked, setCapBlocked] = useState(false)
 
   const goalOptions = useMemo(() => EMPOWER_GOALS.map((g) => ({ value: g.id, label: g.title })), [])
   const employeeOptions = useMemo(() => mockEmployees.map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` })), [])
@@ -72,8 +71,6 @@ export function CreateInitiativeModal({
     setScopeKind(isManager && !isAdmin ? 'team' : 'org')
     setFocusId(null)
     setPendingLink(null)
-    const scopeArg = isManager && !isAdmin ? { kind: 'team' as const, managerId: user.id } : { kind: 'org' as const }
-    setCapBlocked(countActiveInitiativesForScope(scopeArg) >= getOrgSettings().activeInitiativeCap)
   }, [open, goalOptions, surveyOptions, user.id, user.name, isAdmin, isManager])
 
   function resolveScope(): SurveyLinkScope {
@@ -112,7 +109,6 @@ export function CreateInitiativeModal({
   }
 
   function handleCreate() {
-    if (capBlocked) return
     if (!title.trim() || !goal || !owner) return
     const now = new Date().toISOString()
     const id = `init_${Date.now()}`
@@ -145,11 +141,6 @@ export function CreateInitiativeModal({
     <WuModal open={open} onOpenChange={onOpenChange} size="md">
       <WuModalHeader>Create Initiative</WuModalHeader>
       <WuModalContent {...preventModalDismiss}>
-        {capBlocked && step === 'basics' && (
-          <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            Your team has {getOrgSettings().activeInitiativeCap} active initiatives. Complete one before creating another.
-          </div>
-        )}
         {step === 'basics' && (
           <div className="space-y-4">
             <WuFormGroup Label="Title" Input={<WuInput value={title} onChange={(e) => setTitle(e.target.value)} />} />
@@ -204,7 +195,7 @@ export function CreateInitiativeModal({
           {step === 'basics' && (
             <>
               <WuButton variant="secondary" onClick={() => onOpenChange(false)}>Cancel</WuButton>
-              <WuButton variant="primary" onClick={() => setStep('link')} disabled={capBlocked}>Next</WuButton>
+              <WuButton variant="primary" onClick={() => setStep('link')}>Next</WuButton>
             </>
           )}
           {step === 'link' && (

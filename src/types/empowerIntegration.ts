@@ -87,7 +87,6 @@ export type EmpowerInitiativeRecord = {
 }
 
 export type OrgSettings = {
-  activeInitiativeCap: number
   engagement2027Closed?: boolean
 }
 

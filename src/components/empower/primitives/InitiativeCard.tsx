@@ -46,9 +46,11 @@ export function InitiativeCard({ initiative, onClick, compact = false }: Initiat
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold text-gray-900">{initiative.name}</h3>
             {initiative.pinnedToHome && (
-              <span className="text-xs text-blue-600" title="Pinned to Home" aria-label="Pinned">
-                📌
-              </span>
+              <span
+                className="wm-pin text-sm text-[#1B87E6]"
+                title="Pinned to Home"
+                aria-label="Pinned"
+              />
             )}
           </div>
           {!compact && (
@@ -86,7 +88,7 @@ export function InitiativeCard({ initiative, onClick, compact = false }: Initiat
       </div>
 
       <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
-        <span className="flex size-6 items-center justify-center rounded-full bg-[#1B2E4A] font-semibold text-white">
+        <span className="flex size-6 items-center justify-center rounded-full bg-[#1B87E6] font-semibold text-white">
           {owner?.avatar ?? '?'}
         </span>
         <span>{owner?.name ?? 'Unknown owner'}</span>

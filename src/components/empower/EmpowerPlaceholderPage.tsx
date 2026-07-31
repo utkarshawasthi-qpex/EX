@@ -26,11 +26,11 @@ export function EmpowerPlaceholderPage({
   if (blocked) return null
 
   return (
-    <div className="min-h-full p-8">
+    <div className="min-h-full">
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
+        <h1 className="text-2xl font-semibold text-[#1B2E4A]">{title}</h1>
       </header>
-      <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-sm text-gray-400">
+      <div className="rounded border border-dashed border-[#E5E7EB] bg-[#FAFAFA] p-8 text-sm text-[#9CA3AF]">
         This screen is being built — {screenName} will render here
       </div>
     </div>

@@ -19,6 +19,8 @@ import {
 const INITIATIVES_KEY = 'pp_empower_initiatives'
 const IDEAS_KEY = 'pp_empower_ideas'
 const USERS_KEY = 'pp_empower_users'
+export const EMPOWER_SIMULATION_CHANGED_EVENT = 'pp_empower_simulation_changed'
+export const EMPOWER_OPEN_CREATE_EVENT = 'pp_empower_open_create'
 
 export const SEEDED_USERS: EmpowerUser[] = [
   { id: 'u1', name: 'Sarah Chen', role: 'admin', avatar: 'SC', dept: 'HR' },
@@ -397,6 +399,7 @@ function readStored<T>(key: string): T | null {
 function writeStored<T>(key: string, value: T): void {
   if (!canUseStorage()) return
   window.localStorage.setItem(key, JSON.stringify(value))
+  window.dispatchEvent(new Event(EMPOWER_SIMULATION_CHANGED_EVENT))
 }
 
 function ensureUsers(): EmpowerUser[] {

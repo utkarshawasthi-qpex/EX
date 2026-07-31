@@ -54,7 +54,7 @@ export function TaskRow({
       </div>
 
       <div className="hidden items-center gap-2 sm:flex">
-        <span className="flex size-6 items-center justify-center rounded-full bg-[#1B2E4A] text-[10px] font-semibold text-white">
+        <span className="flex size-6 items-center justify-center rounded-full bg-[#1B87E6] text-[10px] font-semibold text-white">
           {owner?.avatar ?? '?'}
         </span>
         <span

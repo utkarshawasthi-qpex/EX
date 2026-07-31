@@ -1,28 +1,11 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
+import { ProductSwitcher } from '@/components/shared/ProductSwitcher'
 import { cn } from '@/lib/utils'
 import { getCurrentUser, type AppUser } from '@/lib/userContext'
-
-const moduleOptions = [
-  {
-    label: 'Lifecycle Surveys',
-    href: '/lifecycle/surveys',
-    iconClassName: 'wm-assignment',
-  },
-  {
-    label: '360 Feedback',
-    href: '/360/surveys',
-    iconClassName: 'wm-360',
-  },
-  {
-    label: 'Empower',
-    href: '/empower/initiatives',
-    iconClassName: 'wm-lightbulb',
-  },
-]
 
 type TopBarProps = {
   isSidebarCollapsed: boolean
@@ -80,31 +63,13 @@ export function TopBar({ isSidebarCollapsed, onToggleSidebar }: TopBarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { showToast } = useWuShowToast()
-  const [isOpen, setIsOpen] = useState(false)
   const [user, setUser] = useState<AppUser | null>(null)
-  const switcherRef = useRef<HTMLDivElement>(null)
   const currentModuleName = getModuleName(pathname)
   const breadcrumbs = getBreadcrumbs(pathname)
 
   useEffect(() => {
     setUser(getCurrentUser())
   }, [pathname])
-
-  useEffect(() => {
-    function handleOutsideClick(event: MouseEvent) {
-      if (!switcherRef.current?.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleOutsideClick)
-    return () => document.removeEventListener('mousedown', handleOutsideClick)
-  }, [])
-
-  function navigateTo(href: string) {
-    setIsOpen(false)
-    router.push(href)
-  }
 
   function handleExitImpersonation() {
     if (typeof window !== 'undefined') {
@@ -124,63 +89,17 @@ export function TopBar({ isSidebarCollapsed, onToggleSidebar }: TopBarProps) {
           isSidebarCollapsed ? 'w-16 justify-center' : 'w-60',
         )}
       >
-        <button type="button" className="font-semibold text-white" onClick={() => navigateTo('/lifecycle/surveys')} aria-label="Home">
+        <button type="button" className="font-semibold text-white" onClick={() => router.push('/lifecycle/surveys')} aria-label="Home">
           P
         </button>
-        <div ref={switcherRef} className="relative">
-          <button
-            type="button"
-            className={cn(
-              'items-center gap-2 rounded-md px-1 py-1 text-xs font-medium text-white hover:bg-white/10',
-              isSidebarCollapsed ? 'hidden' : 'flex',
-            )}
-            onClick={() => setIsOpen((open) => !open)}
-          >
-            {currentModuleName}
-            <span className="text-xs text-white/70">▼</span>
-          </button>
-
-          {isOpen && (
-            <div className="absolute left-0 top-9 z-50 w-72 rounded-xl border border-gray-200 bg-white py-2 text-gray-900 shadow-xl">
-              <div className="flex items-center justify-between bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
-                <div className="flex items-center gap-3">
-                  <span className="wc-employees-list text-lg" aria-hidden />
-                  <span>Employee Experience</span>
-                </div>
-                <span className="text-gray-400" aria-hidden>
-                  &gt;
-                </span>
-              </div>
-
-              <div className="py-2">
-                {moduleOptions.map((option) => {
-                  const isActive = currentModuleName === option.label
-                  return (
-                    <button
-                      key={option.href}
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center justify-between border-l-2 py-2 pl-10 pr-4 text-left text-sm hover:bg-gray-50',
-                        isActive
-                          ? 'border-blue-600 font-medium text-blue-700'
-                          : 'border-transparent text-gray-700',
-                      )}
-                      onClick={() => navigateTo(option.href)}
-                    >
-                      <span className="flex items-center gap-3">
-                        <span className={cn(option.iconClassName, 'text-base')} aria-hidden />
-                        {option.label}
-                      </span>
-                      <span className={isActive ? 'text-blue-600' : 'text-gray-300'} aria-hidden>
-                        {isActive ? '✓' : '›'}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+        <ProductSwitcher
+          activeLabel={currentModuleName}
+          triggerClassName={cn(
+            'items-center gap-2 rounded-md px-1 py-1 text-xs font-medium text-white hover:bg-white/10',
+            isSidebarCollapsed ? 'hidden' : 'flex',
           )}
-        </div>
+          chevronClassName="text-xs text-white/70"
+        />
       </div>
 
       <button

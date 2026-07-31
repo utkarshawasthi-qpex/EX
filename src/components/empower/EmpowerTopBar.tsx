@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { EmpowerHeaderExtras } from '@/components/empower/EmpowerHeaderExtras'
+import { ProductSwitcher } from '@/components/shared/ProductSwitcher'
 import { getCurrentUser } from '@/lib/userContext'
 
 function toInitials(name: string): string {
@@ -27,15 +28,19 @@ export function EmpowerTopBar() {
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-4 bg-[#1B87E6] px-4">
-      <Link href="/empower" className="flex items-center gap-2 text-white">
-        <span className="flex size-6 items-center justify-center rounded bg-white text-sm font-bold text-[#1B87E6]">
-          P
-        </span>
-        <span className="text-sm font-semibold">Empower</span>
-        <span className="text-[10px] text-white/75" aria-hidden>
-          ▾
-        </span>
-      </Link>
+      <div className="flex items-center gap-2 text-white">
+        <Link href="/empower" aria-label="Empower home">
+          <span className="flex size-6 items-center justify-center rounded bg-white text-sm font-bold text-[#1B87E6]">
+            P
+          </span>
+        </Link>
+        <ProductSwitcher
+          activeLabel="Empower"
+          triggerClassName="flex items-center gap-2 rounded px-1 py-0.5 text-sm font-semibold text-white hover:bg-white/10"
+          chevron="▾"
+          chevronClassName="text-[10px] text-white/75"
+        />
+      </div>
 
       <div className="flex flex-1 items-center">
         <EmpowerHeaderExtras />

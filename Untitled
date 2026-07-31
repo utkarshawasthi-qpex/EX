@@ -1,0 +1,117 @@
+# PRD — Employee Experience Analytics
+
+## Overview
+
+**Product:** QuestionPro Employee Experience (EX) — Analytics Module
+**What it does:** Provides HR admins and managers a high-level view of active initiatives, tasks, ideas, contributor performance, and goal progress across the organisation's employee experience programs.
+**Primary users:** HR Administrators, People Managers, Organisation Admins
+**Design system:** WickUI component library — all components, typography, spacing, color tokens, and card styles must strictly follow WickUI conventions. No custom one-off components or gray container boxes outside the design system.
+
+## Key Entities
+
+- **Initiatives** — Structured programs or projects (e.g. Wellbeing Program, Continuous Listening)
+- **Tasks** — Action items within initiatives, assigned to contributors
+- **Ideas** — New suggestions submitted by employees or managers
+- **Goals** — Organisational or team-level objectives tracked within EX
+- **Contributors** — Employees or managers who complete the most tasks (leaderboard)
+- **Snapshot** — Aggregated count metrics for the current period
+
+## Primary User Actions
+
+- View snapshot metrics (active initiatives, tasks in progress, new ideas)
+- Filter analytics by time period (Last 12 months, Last 6 months, Last 30 days, Custom)
+- Export analytics data as CSV or PDF
+- Switch between Tasks and Initiatives views in Status Summary
+- Filter Status Summary by goal and status
+- View top contributors leaderboard
+- View goal distribution by percent or count
+
+---
+
+## Screens & Flows
+
+### Analytics Dashboard
+
+**URL:** /analytics
+**Purpose:** Give HR admins a single-screen overview of the health and activity of all employee experience programs — initiatives, tasks, ideas, goal progress, and contributor performance.
+**Data shown:**
+- Snapshot metrics: count of Active Initiatives, Tasks in Progress, New Ideas — for the selected time period
+- Top Contributors: ranked list of employees/managers who closed the most tasks this week; empty state when no data
+- Top Goals: donut chart of goal distribution with legend, filterable by Status (All status, Active, Completed); toggle between Percent and Count views
+- Status Summary: tabbed view (Tasks | Initiatives) with Goals filter and status filter; shows list/table of goals with Active and Completed indicators; empty state when no data
+
+**Actions:**
+- **Time period dropdown** (top right) — filters all widgets on the page to the selected period; options: Last 12 months, Last 6 months, Last 30 days, Custom range
+- **Export button** (download icon, top right) — exports current analytics view as CSV or PDF
+- **Tasks / Initiatives toggle** (Status Summary) — switches the Status Summary table between tasks data and initiatives data
+- **Goals filter** (Status Summary) — dropdown to filter by a specific goal
+- **All status filter** (Status Summary) — dropdown to filter by Active or Completed
+- **Percent / Count toggle** (Top Goals) — switches the donut chart legend values between percentage and raw count
+- **Status filter** (Top Goals) — filters goal segments shown in the donut chart
+
+---
+
+## Design Requirements
+
+### What must change (the problems to fix)
+
+**Problem 1 — Outdated card design:**
+Current cards use an old card style inconsistent with WickUI. Cards must use the WickUI `Card` component with correct border radius, shadow token (`shadow-sm`), background token (`surface-default`), and padding tokens. Card titles must use the WickUI `heading-sm` typography token — not a custom font weight or size. Metric values must use `display-md` or `heading-xl` token. Supporting labels must use `body-sm` with `text-secondary` color token.
+
+**Problem 2 — Gray box container not in design system:**
+The large gray rounded container wrapping the three top cards and the Status Summary card is not a WickUI component. Remove it entirely. Cards sit directly on the page background (`bg-surface-page`) with standard page padding. No wrapper container, no extra border, no custom background box.
+
+**Problem 3 — Outdated page layout:**
+The current layout stacks cards awkwardly with uneven heights and inconsistent spacing. The new layout must use WickUI's standard grid system:
+- Top row: 3 equal-width cards in a 3-column grid — Snapshot, Top Contributors, Top Goals
+- Bottom section: Status Summary as a full-width card
+- Consistent gap between all cards using the WickUI spacing token `gap-6`
+- Page header ("Analytics") uses WickUI `page-title` typography token, left-aligned
+- Time period dropdown and export button right-aligned in the page header row using flexbox space-between
+
+### What must stay the same (functional parity)
+
+- All 4 widgets must remain: Snapshot, Top Contributors, Top Goals, Status Summary
+- All filters and toggles must remain functional
+- Empty states must be preserved — "No Data" state with icon in Status Summary
+- Export functionality must remain
+- Top Goals donut chart with Percent/Count toggle and Status filter must remain
+- Tasks / Initiatives tab toggle in Status Summary must remain
+
+---
+
+## Component Mapping (WickUI)
+
+| UI Element | WickUI Component / Token |
+|---|---|
+| Page background | `bg-surface-page` |
+| Card | `Card` component — `surface-default` bg, `shadow-sm`, `rounded-lg` |
+| Card title ("Snapshot", "Top Contributors") | `heading-sm` token, `text-primary` color |
+| Metric numbers (0, 0, 0) | `display-md` or `heading-xl` token, `text-brand` or `text-primary` color |
+| Metric labels ("Active initiatives") | `body-sm` token, `text-secondary` color |
+| Page title ("Analytics") | `page-title` token |
+| Time period dropdown | WickUI `Select` component |
+| Export button | WickUI `Button` — `variant="ghost"` with icon |
+| Tasks / Initiatives toggle | WickUI `SegmentedControl` or `Tabs` component |
+| Goals / Status dropdowns | WickUI `Select` component |
+| Percent / Count radio | WickUI `RadioGroup` component |
+| Donut chart | WickUI `DonutChart` or existing chart component |
+| Empty state | WickUI `EmptyState` component with icon + label |
+| Page padding | `px-8 py-6` using WickUI spacing scale |
+| Card gap | `gap-6` |
+| Top row grid | `grid grid-cols-3 gap-6` |
+
+---
+
+## Terminology
+
+| Term | Definition |
+|------|------------|
+| Initiative | A structured employee experience program or project (e.g. Wellbeing, Continuous Listening) |
+| Task | An action item within an initiative, assigned to a contributor |
+| Idea | A suggestion submitted by an employee or manager within the EX platform |
+| Goal | An organisational or team-level objective tracked within EX programs |
+| Contributor | An employee or manager ranked by number of tasks completed |
+| Snapshot | Summary count of key metrics for the selected time period |
+| Status Summary | A tabbed table view showing the status of goals broken down by tasks or initiatives |
+| WickUI | QuestionPro's internal design system — the single source of truth for all UI components, tokens, and patterns |

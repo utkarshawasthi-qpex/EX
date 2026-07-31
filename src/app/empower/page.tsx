@@ -1,5 +1,5 @@
-import { EmpowerHomeContent } from '@/components/empower/EmpowerHomeContent'
+import { PlaceholderPage } from '@/components/shared/PlaceholderPage'
 
 export default function EmpowerHomePage() {
-  return <EmpowerHomeContent />
+  return <PlaceholderPage title="Empower" />
 }

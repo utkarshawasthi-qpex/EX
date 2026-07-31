@@ -1,5 +1,5 @@
-import { EmpowerPlaceholderPage } from '@/components/empower/EmpowerPlaceholderPage'
+import { PlaceholderPage } from '@/components/shared/PlaceholderPage'
 
 export default function EmpowerSettingsPage() {
-  return <EmpowerPlaceholderPage title="Settings" screenName="Empower Settings" adminOnly />
+  return <PlaceholderPage title="Settings" />
 }

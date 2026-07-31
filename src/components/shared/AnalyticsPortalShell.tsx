@@ -404,7 +404,7 @@ export function AnalyticsPortalShell({ children }: { children: React.ReactNode }
 
   return (
     <div className="flex min-h-screen flex-col">
-      <TopBar isSidebarCollapsed onToggleSidebar={() => {}} />
+      <TopBar isSidebarCollapsed={!sidebarExpanded} onToggleSidebar={toggleSidebar} />
       <div className="relative min-h-0 flex-1">
         <AnalyticsSidebar
           pathname={pathname}

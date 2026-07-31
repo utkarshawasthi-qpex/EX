@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { EMPOWER_WORKSPACES } from '@/data/mock-empower';
+import { EMPOWER_WORKSPACES } from '@/data/empower-shell';
 
 const WuSelect = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuSelect })),

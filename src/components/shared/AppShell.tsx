@@ -4,7 +4,6 @@ import dynamic from 'next/dynamic'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { AnalyticsPortalShell } from '@/components/shared/AnalyticsPortalShell'
-import { EmpowerSidebar } from '@/components/shared/EmpowerSidebar'
 import { LifecycleSidebar } from '@/components/shared/LifecycleSidebar'
 import { ThreeSixtyDegSidebar } from '@/components/shared/ThreeSixtyDegSidebar'
 import { TopBar } from '@/components/shared/TopBar'
@@ -17,7 +16,6 @@ const WuToast = dynamic(
 
 function CurrentSidebar({ pathname, collapsed }: { pathname: string; collapsed: boolean }) {
   if (pathname.startsWith('/360')) return <ThreeSixtyDegSidebar collapsed={collapsed} />
-  if (pathname.startsWith('/empower')) return <EmpowerSidebar collapsed={collapsed} />
   return <LifecycleSidebar collapsed={collapsed} />
 }
 
@@ -47,18 +45,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [employeeMode, setEmployeeMode] = useState(false)
   const isFullPageEditor = /^\/lifecycle\/surveys\/[^/]+\/edit$/.test(pathname)
   const isAnalyticsPortal = pathname.startsWith('/lifecycle/analytics')
+  const isEmpower = pathname.startsWith('/empower')
 
   useEffect(() => {
     setEmployeeMode(isEmployeeContext())
   }, [pathname])
 
   useEffect(() => {
-    if (employeeMode && !pathname.startsWith('/lifecycle/analytics')) {
+    if (employeeMode && !isEmpower && !pathname.startsWith('/lifecycle/analytics')) {
       router.replace('/lifecycle/analytics')
     }
-  }, [employeeMode, pathname, router])
+  }, [employeeMode, isEmpower, pathname, router])
 
-  if (pathname === '/login' || isFullPageEditor) {
+  // Empower ships its own three-column product shell in src/app/empower/layout.tsx.
+  if (pathname === '/login' || isFullPageEditor || isEmpower) {
     return (
       <>
         <WuToast />

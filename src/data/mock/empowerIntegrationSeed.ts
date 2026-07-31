@@ -110,6 +110,20 @@ export const SEED_SURVEY_DATA: SurveyDataStore = {
   },
 }
 
+const SEED_NOW = new Date()
+
+function daysAgo(days: number): string {
+  return new Date(SEED_NOW.getTime() - days * 86400000).toISOString().split('T')[0]
+}
+
+function daysFromNow(days: number): string {
+  return new Date(SEED_NOW.getTime() + days * 86400000).toISOString().split('T')[0]
+}
+
+function timestampDaysAgo(days: number): string {
+  return new Date(SEED_NOW.getTime() - days * 86400000).toISOString()
+}
+
 export const SEED_INITIATIVES: EmpowerInitiativeRecord[] = [
   {
     id: 'init_linked_awaiting',
@@ -121,9 +135,18 @@ export const SEED_INITIATIVES: EmpowerInitiativeRecord[] = [
     createdBy: 'emp_002',
     ownerId: 'emp_002',
     contributors: ['emp_003'],
-    dueDate: '2026-09-30',
-    createdAt: '2026-05-01T10:00:00.000Z',
-    tasks: [{ id: 'task_1', text: 'Draft conversation guide', done: true, source: 'manual' }],
+    dueDate: daysFromNow(60),
+    createdAt: timestampDaysAgo(14),
+    tasks: [
+      {
+        id: 'task_1',
+        text: 'Draft conversation guide',
+        ownerId: 'emp_002',
+        dueDate: daysFromNow(7),
+        done: true,
+        source: 'manual',
+      },
+    ],
     provenance: null,
     surveyLink: {
       surveyId: ENGAGEMENT_SURVEY_ID,
@@ -131,10 +154,10 @@ export const SEED_INITIATIVES: EmpowerInitiativeRecord[] = [
       cycleLabel: '2026 Annual',
       scope: { kind: 'team', managerId: 'emp_002' },
       focus: { kind: 'category', id: 'cat_growth_dev', label: 'Growth & Development' },
-      baseline: { favorability: 52, respondentCount: 14, capturedAt: '2026-04-15T00:00:00.000Z', surveyStatus: 'closed' },
+      baseline: { favorability: 52, respondentCount: 14, capturedAt: timestampDaysAgo(14), surveyStatus: 'closed' },
       latest: null,
     },
-    history: [{ at: '2026-05-01T10:00:00.000Z', event: 'Initiative created' }],
+    history: [{ at: timestampDaysAgo(14), event: 'Initiative created' }],
   },
   {
     id: 'init_linked_delta',
@@ -145,10 +168,19 @@ export const SEED_INITIATIVES: EmpowerInitiativeRecord[] = [
     progress: 'on_track',
     createdBy: 'emp_001',
     ownerId: 'emp_002',
-    contributors: [],
-    dueDate: '2026-08-15',
-    createdAt: '2026-04-20T14:00:00.000Z',
-    tasks: [],
+    contributors: ['emp_001'],
+    dueDate: daysFromNow(45),
+    createdAt: timestampDaysAgo(30),
+    tasks: [
+      {
+        id: 'task_3',
+        text: 'Publish the weekly async update template',
+        ownerId: 'emp_001',
+        dueDate: daysFromNow(3),
+        done: false,
+        source: 'manual',
+      },
+    ],
     provenance: null,
     surveyLink: {
       surveyId: ENGAGEMENT_SURVEY_ID,
@@ -156,15 +188,15 @@ export const SEED_INITIATIVES: EmpowerInitiativeRecord[] = [
       cycleLabel: '2026 Annual',
       scope: { kind: 'org' },
       focus: { kind: 'category', id: 'cat_communication', label: 'Communication' },
-      baseline: { favorability: 64, respondentCount: 248, capturedAt: '2026-04-15T00:00:00.000Z', surveyStatus: 'closed' },
+      baseline: { favorability: 64, respondentCount: 248, capturedAt: timestampDaysAgo(30), surveyStatus: 'closed' },
       latest: {
         favorability: 69,
         respondentCount: 256,
         sourceSurveyId: ENGAGEMENT_2027_ID,
-        computedAt: '2026-06-01T09:00:00.000Z',
+        computedAt: timestampDaysAgo(5),
       },
     },
-    history: [{ at: '2026-04-20T14:00:00.000Z', event: 'Initiative created' }],
+    history: [{ at: timestampDaysAgo(30), event: 'Initiative created' }],
   },
   {
     id: 'init_unlinked',
@@ -175,13 +207,22 @@ export const SEED_INITIATIVES: EmpowerInitiativeRecord[] = [
     progress: 'stuck',
     createdBy: 'emp_002',
     ownerId: 'emp_002',
-    contributors: [],
-    dueDate: '2026-10-01',
-    createdAt: '2026-05-15T09:00:00.000Z',
-    tasks: [{ id: 'task_2', text: 'Define recognition criteria', done: false, source: 'manual' }],
+    contributors: ['emp_001'],
+    dueDate: daysFromNow(30),
+    createdAt: timestampDaysAgo(8),
+    tasks: [
+      {
+        id: 'task_2',
+        text: 'Define recognition criteria',
+        ownerId: 'emp_001',
+        dueDate: daysAgo(2),
+        done: false,
+        source: 'manual',
+      },
+    ],
     provenance: null,
     surveyLink: null,
-    history: [{ at: '2026-05-15T09:00:00.000Z', event: 'Initiative created' }],
+    history: [{ at: timestampDaysAgo(8), event: 'Initiative created' }],
   },
 ]
 

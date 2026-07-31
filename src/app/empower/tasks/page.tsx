@@ -1,5 +1,5 @@
-import { PlaceholderPage } from '@/components/shared/PlaceholderPage'
+import { EmpowerComingSoon } from '@/components/empower/EmpowerComingSoon'
 
 export default function EmpowerTasksPage() {
-  return <PlaceholderPage title="Tasks" />
+  return <EmpowerComingSoon title="My Tasks" />
 }

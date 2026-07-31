@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { EmpowerShell } from '@/components/empower/EmpowerShell'
 import { AuthChecking } from '@/components/shared/AuthChecking'
 
 export default function EmpowerLayout({ children }: { children: React.ReactNode }) {
@@ -22,5 +23,5 @@ export default function EmpowerLayout({ children }: { children: React.ReactNode 
     return <AuthChecking />
   }
 
-  return children
+  return <EmpowerShell>{children}</EmpowerShell>
 }

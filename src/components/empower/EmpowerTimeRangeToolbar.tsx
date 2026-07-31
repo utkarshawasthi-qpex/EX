@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib';
-import { EMPOWER_TIME_RANGES } from '@/data/mock-empower';
+import { EMPOWER_TIME_RANGES } from '@/data/empower-shell';
 
 const WuButton = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuButton })),

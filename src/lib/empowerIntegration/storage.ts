@@ -1,5 +1,7 @@
+import { mockEmployees } from '@/data/mock/employees'
 import {
   DEFAULT_ORG_SETTINGS,
+  EMPOWER_GOALS,
   SEED_FUNNEL,
   SEED_INITIATIVES,
   SEED_SURVEY_DATA,
@@ -8,6 +10,7 @@ import type {
   EmpowerInitiativeRecord,
   EmpowerNotification,
   FunnelSeed,
+  InitiativeTask,
   OrgSettings,
   SurveyDataStore,
 } from '@/types/empowerIntegration'
@@ -17,7 +20,7 @@ const ORG_SETTINGS_KEY = 'pp_org_settings'
 const SURVEY_DATA_KEY = 'pp_survey_data'
 const NOTIFICATIONS_KEY = 'pp_notifications'
 const FUNNEL_KEY = 'pp_funnel_seed'
-const SEEDED_KEY = 'pp_empower_ex_seeded'
+const SEEDED_KEY = 'pp_empower_ex_seeded_v2'
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -141,4 +144,82 @@ export function addNotification(notification: Omit<EmpowerNotification, 'id'>): 
 
 export function getFunnelSeed(): FunnelSeed {
   return readJson(FUNNEL_KEY, SEED_FUNNEL)
+}
+
+export type UpcomingTask = {
+  task: InitiativeTask
+  initiative: EmpowerInitiativeRecord
+}
+
+export type HomeAnalytics = {
+  activeInitiatives: number
+  tasksInProgress: number
+  newIdeas: number
+  topGoals: { goalId: string; label: string; count: number }[]
+  topContributors: { id: string; name: string; initials: string; taskCount: number }[]
+}
+
+function employeeName(employeeId: string): string {
+  const employee = mockEmployees.find((item) => item.id === employeeId)
+  return employee ? `${employee.firstName} ${employee.lastName}` : employeeId
+}
+
+function employeeInitials(employeeId: string): string {
+  const employee = mockEmployees.find((item) => item.id === employeeId)
+  if (!employee) return employeeId.slice(0, 2).toUpperCase()
+  return `${employee.firstName[0] ?? ''}${employee.lastName[0] ?? ''}`.toUpperCase()
+}
+
+export function getUpcomingTasksForUser(
+  userId: string,
+  initiatives: EmpowerInitiativeRecord[],
+): UpcomingTask[] {
+  return initiatives
+    .flatMap((initiative) => initiative.tasks.map((task) => ({ task, initiative })))
+    .filter(({ task }) => !task.done && task.ownerId === userId)
+    .sort((left, right) => {
+      if (!left.task.dueDate) return 1
+      if (!right.task.dueDate) return -1
+      return left.task.dueDate.localeCompare(right.task.dueDate)
+    })
+}
+
+export function computeHomeAnalytics(
+  userId: string,
+  initiatives: EmpowerInitiativeRecord[],
+): HomeAnalytics {
+  const allTasks = initiatives.flatMap((initiative) => initiative.tasks)
+
+  const goalCounts = new Map<string, number>()
+  for (const initiative of initiatives) {
+    goalCounts.set(initiative.goalId, (goalCounts.get(initiative.goalId) ?? 0) + 1)
+  }
+
+  const closedTaskCounts = new Map<string, number>()
+  for (const task of allTasks) {
+    if (!task.done || !task.ownerId) continue
+    closedTaskCounts.set(task.ownerId, (closedTaskCounts.get(task.ownerId) ?? 0) + 1)
+  }
+
+  return {
+    activeInitiatives: initiatives.filter((initiative) => initiative.status === 'active').length,
+    tasksInProgress: allTasks.filter((task) => !task.done && task.ownerId === userId).length,
+    newIdeas: 0,
+    topGoals: [...goalCounts.entries()]
+      .map(([goalId, count]) => ({
+        goalId,
+        label: EMPOWER_GOALS.find((goal) => goal.id === goalId)?.title ?? goalId,
+        count,
+      }))
+      .sort((left, right) => right.count - left.count),
+    topContributors: [...closedTaskCounts.entries()]
+      .map(([id, taskCount]) => ({
+        id,
+        name: employeeName(id),
+        initials: employeeInitials(id),
+        taskCount,
+      }))
+      .sort((left, right) => right.taskCount - left.taskCount)
+      .slice(0, 3),
+  }
 }

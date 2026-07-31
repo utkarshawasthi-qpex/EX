@@ -1,5 +1,5 @@
-import { PlaceholderPage } from '@/components/shared/PlaceholderPage'
+import { EmpowerPlaceholderPage } from '@/components/empower/EmpowerPlaceholderPage'
 
 export default function EmpowerIdeationPage() {
-  return <PlaceholderPage title="Ideation" />
+  return <EmpowerPlaceholderPage title="Ideation" screenName="Ideation" />
 }

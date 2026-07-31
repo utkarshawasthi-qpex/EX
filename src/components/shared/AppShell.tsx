@@ -47,18 +47,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [employeeMode, setEmployeeMode] = useState(false)
   const isFullPageEditor = /^\/lifecycle\/surveys\/[^/]+\/edit$/.test(pathname)
   const isAnalyticsPortal = pathname.startsWith('/lifecycle/analytics')
+  const isEmpower = pathname.startsWith('/empower')
 
   useEffect(() => {
     setEmployeeMode(isEmployeeContext())
   }, [pathname])
 
   useEffect(() => {
-    if (employeeMode && !pathname.startsWith('/lifecycle/analytics')) {
+    if (employeeMode && !isEmpower && !pathname.startsWith('/lifecycle/analytics')) {
       router.replace('/lifecycle/analytics')
     }
-  }, [employeeMode, pathname, router])
+  }, [employeeMode, isEmpower, pathname, router])
 
   if (pathname === '/login' || isFullPageEditor) {
+    return (
+      <>
+        <WuToast />
+        {children}
+      </>
+    )
+  }
+
+  if (isEmpower) {
     return (
       <>
         <WuToast />

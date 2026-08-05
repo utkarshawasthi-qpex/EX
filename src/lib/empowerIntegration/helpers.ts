@@ -27,6 +27,12 @@ export function formatDueDate(date: string | undefined): string {
   }
 }
 
+export const INITIATIVE_TYPE_OPTIONS: { value: InitiativeType; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'upstream', label: 'Upstream' },
+  { value: 'downstream', label: 'Downstream' },
+]
+
 export function initiativeTypeLabel(type: InitiativeType | undefined): string {
   if (type === 'upstream') return 'Upstream'
   if (type === 'downstream') return 'Downstream'

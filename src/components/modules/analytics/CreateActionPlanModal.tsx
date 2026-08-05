@@ -9,7 +9,7 @@ import { mockEmployees } from '@/data/mock/employees'
 import {
   buildInheritedLinkBlock,
 } from '@/lib/empowerIntegration/dashboardLink'
-import { parseTimeframeDays } from '@/lib/empowerIntegration/helpers'
+import { INITIATIVE_TYPE_OPTIONS, parseTimeframeDays } from '@/lib/empowerIntegration/helpers'
 import {
   getInitiativeById,
   upsertInitiative,
@@ -21,6 +21,7 @@ import { getCurrentUser, isAdminContext } from '@/lib/userContext'
 import type {
   InitiativeProvenance,
   InitiativeTask,
+  InitiativeType,
   NewTaskFormInput,
   SurveyLink,
   SurveyLinkCandidate,
@@ -128,6 +129,7 @@ export function CreateActionPlanModal({
   const [owner, setOwner] = useState<SelectOption | null>(null)
   const [contributors, setContributors] = useState<SelectOption[]>([])
   const [goal, setGoal] = useState<SelectOption | null>(goalOptions[0] ?? null)
+  const [type, setType] = useState<SelectOption>(INITIATIVE_TYPE_OPTIONS[0])
   const [dueDate, setDueDate] = useState('')
   const [initiativeSearch, setInitiativeSearch] = useState('')
   const [selectedInitiative, setSelectedInitiative] = useState<SelectOption | null>(null)
@@ -158,6 +160,7 @@ export function CreateActionPlanModal({
     setOwner({ value: user.id, label: user.name })
     setContributors([])
     setGoal(goalOptions[0] ?? null)
+    setType(INITIATIVE_TYPE_OPTIONS[0])
     setDueDate(format(addDays(new Date(), parseTimeframeDays(action.timeframe)), 'yyyy-MM-dd'))
     setInitiativeSearch('')
     setSelectedInitiative(null)
@@ -260,13 +263,12 @@ export function CreateActionPlanModal({
       title: name.trim(),
       description: description.trim(),
       goalId: goal.value,
-      type: 'none',
+      type: type.value as InitiativeType,
       status: 'active',
       progress: 'on_track',
       createdBy: user.id,
       ownerId: owner!.value,
       contributors: contributorIdList,
-      dueDate,
       createdAt: now,
       tasks: [task],
       provenance,
@@ -461,6 +463,18 @@ export function CreateActionPlanModal({
                       accessorKey={{ value: 'value', label: 'label' }}
                       value={goal}
                       onSelect={(v) => setGoal(v as SelectOption)}
+                      variant="outlined"
+                    />
+                  }
+                />
+                <WuFormGroup
+                  Label="Type"
+                  Input={
+                    <WuSelect
+                      data={INITIATIVE_TYPE_OPTIONS}
+                      accessorKey={{ value: 'value', label: 'label' }}
+                      value={type}
+                      onSelect={(v) => setType(v as SelectOption)}
                       variant="outlined"
                     />
                   }

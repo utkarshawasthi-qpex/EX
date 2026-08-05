@@ -17,6 +17,7 @@ export {
   scopeFromWidget,
 } from '@/lib/empowerIntegration/dashboardLink'
 export {
+  INITIATIVE_TYPE_OPTIONS,
   formatDueDate,
   formatLatestChip,
   getGoalTitle,

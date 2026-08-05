@@ -1,6 +1,6 @@
 import { format } from 'date-fns'
 import { EMPOWER_GOALS } from '@/data/mock/empowerIntegrationSeed'
-import type { EmpowerInitiativeRecord, SurveyLink } from '@/types/empowerIntegration'
+import type { EmpowerInitiativeRecord, InitiativeType, SurveyLink } from '@/types/empowerIntegration'
 
 export function getGoalTitle(goalId: string): string {
   return EMPOWER_GOALS.find((g) => g.id === goalId)?.title ?? goalId
@@ -18,12 +18,19 @@ export function formatLatestChip(link: SurveyLink): string {
   return `${link.focus.label} · ${baseline}% → ${latest}% ${arrow} ${delta >= 0 ? '+' : ''}${delta}|${color}`
 }
 
-export function formatDueDate(date: string): string {
+export function formatDueDate(date: string | undefined): string {
+  if (!date) return '—'
   try {
     return format(new Date(date), 'MMM d, yyyy')
   } catch {
     return date
   }
+}
+
+export function initiativeTypeLabel(type: InitiativeType | undefined): string {
+  if (type === 'upstream') return 'Upstream'
+  if (type === 'downstream') return 'Downstream'
+  return 'None'
 }
 
 export function progressLabel(progress: EmpowerInitiativeRecord['progress']): string {

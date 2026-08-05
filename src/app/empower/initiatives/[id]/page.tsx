@@ -10,7 +10,7 @@ import { PageContent } from '@/components/shared/PageContent'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { PageShell } from '@/components/shared/PageShell'
 import { formatScopeLabel } from '@/lib/empowerIntegration/aggregate'
-import { formatDueDate, getGoalTitle, progressLabel } from '@/lib/empowerIntegration/helpers'
+import { formatDueDate, getGoalTitle, initiativeTypeLabel, progressLabel } from '@/lib/empowerIntegration/helpers'
 import { getInitiativeById, getSurveyDataStore, upsertInitiative } from '@/lib/empowerIntegration/storage'
 import { canSeeInitiative } from '@/lib/empowerIntegration/visibility'
 import { getCurrentUser } from '@/lib/userContext'
@@ -89,7 +89,7 @@ export default function InitiativeDetailPage() {
 
   return (
     <PageShell>
-      <PageHeader title={initiative.title} description={`${getGoalTitle(initiative.goalId)} · Due ${formatDueDate(initiative.dueDate)}`} actions={<WuChip size="sm">{progressLabel(initiative.progress)}</WuChip>} />
+      <PageHeader title={initiative.title} description={[getGoalTitle(initiative.goalId), `Type ${initiativeTypeLabel(initiative.type)}`, initiative.dueDate ? `Due ${formatDueDate(initiative.dueDate)}` : null].filter(Boolean).join(' · ')} actions={<WuChip size="sm">{progressLabel(initiative.progress)}</WuChip>} />
       <PageContent>
         <Link href="/empower/initiatives" className="mb-4 inline-block text-sm text-gray-500 hover:text-gray-700">← Back to initiatives</Link>
         <p className="mb-6 text-sm text-gray-700">{initiative.description}</p>

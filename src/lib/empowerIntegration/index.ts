@@ -20,6 +20,7 @@ export {
   formatDueDate,
   formatLatestChip,
   getGoalTitle,
+  initiativeTypeLabel,
   parseTimeframeDays,
   progressLabel,
 } from '@/lib/empowerIntegration/helpers'

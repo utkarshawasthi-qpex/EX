@@ -8,7 +8,7 @@ import { PageContent } from '@/components/shared/PageContent'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { PageShell } from '@/components/shared/PageShell'
 import { CreateInitiativeModal } from '@/components/modules/empower/CreateInitiativeModal'
-import { formatDueDate, formatLatestChip, getGoalTitle, progressLabel } from '@/lib/empowerIntegration/helpers'
+import { formatDueDate, formatLatestChip, getGoalTitle, initiativeTypeLabel, progressLabel } from '@/lib/empowerIntegration/helpers'
 import { getVisibleInitiatives } from '@/lib/empowerIntegration/visibility'
 import { getCurrentUser, isAdminContext, isEmployeeContext } from '@/lib/userContext'
 import { redirect } from 'next/navigation'
@@ -60,6 +60,7 @@ function EmpowerInitiativesList() {
       },
     },
     { accessorKey: 'goalId', header: 'Goal', cell: ({ row }) => getGoalTitle(row.original.goalId) },
+    { accessorKey: 'type', header: 'Type', cell: ({ row }) => initiativeTypeLabel(row.original.type) },
     { accessorKey: 'progress', header: 'Progress', cell: ({ row }) => progressLabel(row.original.progress) },
     { accessorKey: 'dueDate', header: 'Due', cell: ({ row }) => formatDueDate(row.original.dueDate) },
   ]

@@ -2,6 +2,7 @@ import type { ID } from '@/types'
 
 export type InitiativeProgress = 'on_track' | 'stuck' | 'done'
 export type InitiativeLifecycleStatus = 'active' | 'completed'
+export type InitiativeType = 'none' | 'upstream' | 'downstream'
 
 export type SurveyLinkScope =
   | { kind: 'org' }
@@ -73,12 +74,14 @@ export type EmpowerInitiativeRecord = {
   title: string
   description: string
   goalId: string
+  type: InitiativeType
   status: InitiativeLifecycleStatus
   progress: InitiativeProgress
   createdBy: ID
   ownerId: ID
   contributors: ID[]
-  dueDate: string
+  /** Absent on initiatives created after the due date field was dropped from the form. */
+  dueDate?: string
   createdAt: string
   tasks: InitiativeTask[]
   provenance: InitiativeProvenance | null

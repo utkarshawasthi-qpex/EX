@@ -260,6 +260,7 @@ export function CreateActionPlanModal({
       title: name.trim(),
       description: description.trim(),
       goalId: goal.value,
+      type: 'none',
       status: 'active',
       progress: 'on_track',
       createdBy: user.id,

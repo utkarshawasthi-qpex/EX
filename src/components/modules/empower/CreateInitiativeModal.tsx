@@ -1,7 +1,6 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { format, addDays } from 'date-fns'
 import { useEffect, useMemo, useState } from 'react'
 import { EMPOWER_GOALS } from '@/data/mock/empowerIntegrationSeed'
 import { mockEmployees } from '@/data/mock/employees'
@@ -9,7 +8,12 @@ import { aggregate, getExCategoriesForScope, listAccessibleExSurveys } from '@/l
 import { upsertInitiative } from '@/lib/empowerIntegration/storage'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { getCurrentUser, isAdminContext, isManagerUser } from '@/lib/userContext'
-import type { EmpowerInitiativeRecord, SurveyLink, SurveyLinkScope } from '@/types/empowerIntegration'
+import type {
+  EmpowerInitiativeRecord,
+  InitiativeType,
+  SurveyLink,
+  SurveyLinkScope,
+} from '@/types/empowerIntegration'
 
 const WuButton = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuButton })), { ssr: false })
 const WuFormGroup = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuFormGroup })), { ssr: false })
@@ -24,6 +28,12 @@ const WuText = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => 
 
 type SelectOption = { value: string; label: string }
 type Step = 'basics' | 'link' | 'confirm'
+
+const TYPE_OPTIONS: SelectOption[] = [
+  { value: 'none', label: 'None' },
+  { value: 'upstream', label: 'Upstream' },
+  { value: 'downstream', label: 'Downstream' },
+]
 
 export function CreateInitiativeModal({
   open,
@@ -42,7 +52,7 @@ export function CreateInitiativeModal({
   const [description, setDescription] = useState('')
   const [goal, setGoal] = useState<SelectOption | null>(null)
   const [owner, setOwner] = useState<SelectOption | null>(null)
-  const [dueDate, setDueDate] = useState(format(addDays(new Date(), 30), 'yyyy-MM-dd'))
+  const [type, setType] = useState<SelectOption>(TYPE_OPTIONS[0])
   const [survey, setSurvey] = useState<SelectOption | null>(null)
   const [scopeKind, setScopeKind] = useState<'org' | 'team' | 'filter'>('org')
   const [focusId, setFocusId] = useState<string | null>(null)
@@ -66,7 +76,7 @@ export function CreateInitiativeModal({
     setDescription('')
     setGoal(goalOptions[0] ?? null)
     setOwner({ value: user.id, label: user.name })
-    setDueDate(format(addDays(new Date(), 30), 'yyyy-MM-dd'))
+    setType(TYPE_OPTIONS[0])
     setSurvey(surveyOptions[0] ?? null)
     setScopeKind(isManager && !isAdmin ? 'team' : 'org')
     setFocusId(null)
@@ -117,12 +127,12 @@ export function CreateInitiativeModal({
       title: title.trim(),
       description,
       goalId: goal.value,
+      type: type.value as InitiativeType,
       status: 'active',
       progress: 'on_track',
       createdBy: user.id,
       ownerId: owner.value,
       contributors: [],
-      dueDate,
       createdAt: now,
       tasks: [],
       provenance: null,
@@ -147,7 +157,7 @@ export function CreateInitiativeModal({
             <WuFormGroup Label="Description" Input={<WuTextarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />} />
             <WuFormGroup Label="Goal" Input={<WuSelect data={goalOptions} accessorKey={{ value: 'value', label: 'label' }} value={goal} onSelect={(v) => setGoal(v as SelectOption)} variant="outlined" />} />
             <WuFormGroup Label="Owner" Input={<WuSelect data={employeeOptions} accessorKey={{ value: 'value', label: 'label' }} value={owner} onSelect={(v) => setOwner(v as SelectOption)} variant="outlined" disabled={!isAdmin} />} />
-            <WuFormGroup Label="Due date" Input={<WuInput type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />} />
+            <WuFormGroup Label="Type" Input={<WuSelect data={TYPE_OPTIONS} accessorKey={{ value: 'value', label: 'label' }} value={type} onSelect={(v) => setType(v as SelectOption)} variant="outlined" />} />
           </div>
         )}
         {step === 'link' && (

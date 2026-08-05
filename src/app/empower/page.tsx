@@ -2,10 +2,9 @@
 
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useState } from 'react'
-import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { UpcomingTasksGroup } from '@/components/empower/UpcomingTasksGroup'
 import { EmpowerEmptyState } from '@/components/empower/EmpowerEmptyState'
-import { CreateInitiativeModal } from '@/components/modules/empower/CreateInitiativeModal'
+import { CreateInitiativeModal } from '@/components/empower/CreateInitiativeModal'
 import { notifyEmpowerDataChanged } from '@/lib/empowerEvents'
 import { isTaskAssignedToUser } from '@/lib/empowerIntegration/storage'
 import { getVisibleInitiatives } from '@/lib/empowerIntegration/visibility'
@@ -23,7 +22,6 @@ type InitiativeGroup = {
 }
 
 export default function EmpowerHomePage() {
-  const { showToast } = useWuShowToast()
   const [groups, setGroups] = useState<InitiativeGroup[]>([])
   const [createOpen, setCreateOpen] = useState(false)
 
@@ -71,7 +69,6 @@ export default function EmpowerHomePage() {
         onCreated={() => {
           refresh()
           notifyEmpowerDataChanged()
-          showToast({ variant: 'success', message: 'Initiative created' })
         }}
       />
     </div>

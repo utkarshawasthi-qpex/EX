@@ -3,11 +3,10 @@
 import dynamic from 'next/dynamic'
 import { useMemo, useState } from 'react'
 import type { IWuTableColumnDef } from '@npm-questionpro/wick-ui-lib'
-import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { PageContent } from '@/components/shared/PageContent'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { PageShell } from '@/components/shared/PageShell'
-import { CreateInitiativeModal } from '@/components/modules/empower/CreateInitiativeModal'
+import { CreateInitiativeModal } from '@/components/empower/CreateInitiativeModal'
 import { formatDueDate, formatLatestChip, getGoalTitle, initiativeTypeLabel, progressLabel } from '@/lib/empowerIntegration/helpers'
 import { getVisibleInitiatives } from '@/lib/empowerIntegration/visibility'
 import { getCurrentUser, isAdminContext, isEmployeeContext } from '@/lib/userContext'
@@ -27,7 +26,6 @@ export default function EmpowerInitiativesPage() {
 function EmpowerInitiativesList() {
   const user = getCurrentUser()
   const isAdmin = isAdminContext()
-  const { showToast } = useWuShowToast()
   const [search, setSearch] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
   const [createOpen, setCreateOpen] = useState(false)
@@ -71,7 +69,11 @@ function EmpowerInitiativesList() {
       <PageContent>
         <WuInput variant="outlined" placeholder="Search initiatives..." value={search} onChange={(e) => setSearch(e.target.value)} className="mb-4 w-72" />
         <WuDataTable data={initiatives as unknown[]} columns={columns as unknown as IWuTableColumnDef<unknown>[]} />
-        <CreateInitiativeModal open={createOpen} onOpenChange={setCreateOpen} onCreated={() => { setRefreshKey((k) => k + 1); showToast({ variant: 'success', message: 'Initiative created' }) }} />
+        <CreateInitiativeModal
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onCreated={() => setRefreshKey((k) => k + 1)}
+        />
       </PageContent>
     </PageShell>
   )

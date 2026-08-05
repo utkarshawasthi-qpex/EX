@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
-import { EmpowerHeaderExtras } from '@/components/empower/EmpowerHeaderExtras'
 import { ProductSwitcher } from '@/components/shared/ProductSwitcher'
 import { getCurrentUser } from '@/lib/userContext'
 
@@ -42,9 +41,7 @@ export function EmpowerTopBar() {
         />
       </div>
 
-      <div className="flex flex-1 items-center">
-        <EmpowerHeaderExtras />
-      </div>
+      <div className="flex flex-1 items-center" />
 
       <div className="flex items-center gap-3 text-white">
         <button

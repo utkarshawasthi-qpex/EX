@@ -3,12 +3,11 @@
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { DonutChart } from '@/components/empower/analytics/DonutChart'
+import { getGoalColor } from '@/lib/empowerIntegration/helpers'
 import { computeHomeAnalytics, type HomeAnalytics } from '@/lib/empowerIntegration/storage'
 import { getVisibleInitiatives } from '@/lib/empowerIntegration/visibility'
 import { EMPOWER_DATA_CHANGED_EVENT } from '@/lib/empowerEvents'
 import { getCurrentUser } from '@/lib/userContext'
-
-const GOAL_COLORS = ['#1B3380', '#1B87E6', '#7CB342', '#F5A623', '#8E44AD']
 
 const EMPTY_ANALYTICS: HomeAnalytics = {
   activeInitiatives: 0,
@@ -65,27 +64,32 @@ export function EmpowerAnalyticsPanel() {
       <section className="mt-6 rounded border border-[#E5E7EB] bg-white p-4">
         <SectionHeading>Top goals</SectionHeading>
         {analytics.topGoals.length === 0 ? (
-          <p className="py-4 text-center text-xs text-[#9CA3AF]">No Data</p>
+          <div className="flex flex-col items-center gap-2 py-4">
+            <span className="wc-analytics text-2xl leading-none text-[#D1D5DB]" aria-hidden />
+            <p className="text-xs text-[#9CA3AF]">No Data</p>
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-4">
             <DonutChart
               centerLabel="Top goals"
               size={120}
-              segments={analytics.topGoals.map((goal, index) => ({
+              segments={analytics.topGoals.map((goal) => ({
                 percent: totalGoalCount === 0 ? 0 : (goal.count / totalGoalCount) * 100,
-                color: GOAL_COLORS[index % GOAL_COLORS.length],
+                color: getGoalColor(goal.goalId),
               }))}
             />
             <ul className="w-full space-y-2">
-              {analytics.topGoals.map((goal, index) => (
+              {analytics.topGoals.map((goal) => (
                 <li key={goal.goalId} className="flex items-center gap-2 text-xs">
                   <span
-                    className="size-3 shrink-0 rounded-sm"
-                    style={{ backgroundColor: GOAL_COLORS[index % GOAL_COLORS.length] }}
+                    className="size-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: getGoalColor(goal.goalId) }}
                     aria-hidden
                   />
                   <span className="flex-1 truncate text-[#374151]">{goal.label}</span>
-                  <span className="text-[#6B7280]">{goal.count}</span>
+                  <span className="text-[#6B7280]">
+                    {totalGoalCount === 0 ? '0%' : `${Math.round((goal.count / totalGoalCount) * 100)}%`}
+                  </span>
                 </li>
               ))}
             </ul>

@@ -17,13 +17,20 @@ export {
   scopeFromWidget,
 } from '@/lib/empowerIntegration/dashboardLink'
 export {
+  INITIATIVE_STATUS_OPTIONS,
   INITIATIVE_TYPE_OPTIONS,
+  TASK_STATUS_OPTIONS,
   formatDueDate,
   formatLatestChip,
+  formatLongDate,
+  getGoalColor,
   getGoalTitle,
+  initiativeStatusLabel,
   initiativeTypeLabel,
+  isTaskComplete,
   parseTimeframeDays,
   progressLabel,
+  taskStatusLabel,
 } from '@/lib/empowerIntegration/helpers'
 export { simulateEngagement2027Close } from '@/lib/empowerIntegration/simulateCycleClose'
 export { initiativeMatchesScope, toSurveyLinkScope } from '@/lib/empowerIntegration/scope'

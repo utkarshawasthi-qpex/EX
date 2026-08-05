@@ -1,9 +1,20 @@
 import { format } from 'date-fns'
 import { EMPOWER_GOALS } from '@/data/mock/empowerIntegrationSeed'
-import type { EmpowerInitiativeRecord, InitiativeType, SurveyLink } from '@/types/empowerIntegration'
+import type {
+  EmpowerInitiativeRecord,
+  InitiativeLifecycleStatus,
+  InitiativeTask,
+  InitiativeType,
+  SurveyLink,
+  TaskStatus,
+} from '@/types/empowerIntegration'
 
 export function getGoalTitle(goalId: string): string {
   return EMPOWER_GOALS.find((g) => g.id === goalId)?.title ?? goalId
+}
+
+export function getGoalColor(goalId: string): string {
+  return EMPOWER_GOALS.find((g) => g.id === goalId)?.color ?? '#9CA3AF'
 }
 
 export function formatLatestChip(link: SurveyLink): string {
@@ -25,6 +36,45 @@ export function formatDueDate(date: string | undefined): string {
   } catch {
     return date
   }
+}
+
+/** Long form used for created dates, e.g. "August 5, 2026". */
+export function formatLongDate(date: string | undefined): string {
+  if (!date) return '—'
+  try {
+    return format(new Date(date), 'MMMM d, yyyy')
+  } catch {
+    return date
+  }
+}
+
+export const TASK_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+]
+
+export function taskStatusLabel(status: TaskStatus | undefined): string {
+  return TASK_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'Pending'
+}
+
+export function isTaskComplete(task: InitiativeTask): boolean {
+  return task.status === 'completed'
+}
+
+export const INITIATIVE_STATUS_OPTIONS: {
+  value: InitiativeLifecycleStatus
+  label: string
+  color: string | null
+}[] = [
+  { value: 'new', label: 'New', color: null },
+  { value: 'active', label: 'Active', color: '#16A34A' },
+  { value: 'completed', label: 'Completed', color: '#1B87E6' },
+  { value: 'closed', label: 'Closed', color: '#9CA3AF' },
+]
+
+export function initiativeStatusLabel(status: InitiativeLifecycleStatus | undefined): string {
+  return INITIATIVE_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'New'
 }
 
 export const INITIATIVE_TYPE_OPTIONS: { value: InitiativeType; label: string }[] = [

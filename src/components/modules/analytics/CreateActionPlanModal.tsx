@@ -99,7 +99,7 @@ function buildTaskFromInput(input: NewTaskFormInput, provenance: InitiativeProve
     ownerId: input.ownerId,
     contributorIds: input.contributorIds,
     dueDate: input.dueDate,
-    done: false,
+    status: 'pending',
     source: 'ai_recommendation',
     provenance,
   }

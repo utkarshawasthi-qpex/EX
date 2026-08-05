@@ -17,12 +17,30 @@ type EmpowerNavEntry = {
   exact?: boolean
 }
 
-const NAV_ITEMS: EmpowerNavEntry[] = [
-  { label: 'Home', href: '/empower', icon: 'wc-home', exact: true },
-  { label: 'Initiatives', href: '/empower/initiatives', icon: 'wm-flag' },
-  { label: 'Team view', href: '/empower/team', icon: 'wc-employees-list' },
-  { label: 'Conversations', href: '/empower/conversations', icon: 'wm-forum' },
-  { label: 'Analytics', href: '/empower/analytics', icon: 'wc-analytics', adminOnly: true },
+type EmpowerNavSection = {
+  /** Sections without a label render their items with no heading. */
+  label?: string
+  items: EmpowerNavEntry[]
+}
+
+const NAV_SECTIONS: EmpowerNavSection[] = [
+  {
+    items: [{ label: 'Home', href: '/empower', icon: 'wc-home', exact: true }],
+  },
+  {
+    label: 'Edit',
+    items: [
+      { label: 'Initiatives', href: '/empower/initiatives', icon: 'wm-flag' },
+      { label: 'Team view', href: '/empower/team', icon: 'wc-employees-list' },
+    ],
+  },
+  {
+    label: 'Data',
+    items: [
+      { label: 'Analytics', href: '/empower/analytics', icon: 'wc-analytics', adminOnly: true },
+      { label: 'Conversations', href: '/empower/conversations', icon: 'wm-forum' },
+    ],
+  },
 ]
 
 const FOOTER_ITEMS: EmpowerNavEntry[] = [
@@ -79,7 +97,10 @@ export function EmpowerNav({
   }, [pathname])
 
   const canSee = (item: EmpowerNavEntry) => !item.adminOnly || isAdmin
-  const navItems = NAV_ITEMS.filter(canSee)
+  const navSections = NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter(canSee),
+  })).filter((section) => section.items.length > 0)
   const footerItems = FOOTER_ITEMS.filter(canSee)
 
   return (
@@ -111,8 +132,17 @@ export function EmpowerNav({
       </div>
 
       <div className="flex flex-1 flex-col">
-        {navItems.map((item) => (
-          <NavEntry key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
+        {navSections.map((section, index) => (
+          <div key={section.label ?? `section-${index}`} className="mb-4">
+            {!collapsed && section.label && (
+              <p className="px-4 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-[#9CA3AF]">
+                {section.label}
+              </p>
+            )}
+            {section.items.map((item) => (
+              <NavEntry key={item.href} item={item} pathname={pathname} collapsed={collapsed} />
+            ))}
+          </div>
         ))}
       </div>
 

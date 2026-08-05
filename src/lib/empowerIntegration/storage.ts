@@ -13,6 +13,7 @@ import type {
   InitiativeTask,
   OrgSettings,
   SurveyDataStore,
+  TaskStatus,
 } from '@/types/empowerIntegration'
 
 const INITIATIVES_KEY = 'pp_initiatives'
@@ -20,7 +21,7 @@ const ORG_SETTINGS_KEY = 'pp_org_settings'
 const SURVEY_DATA_KEY = 'pp_survey_data'
 const NOTIFICATIONS_KEY = 'pp_notifications'
 const FUNNEL_KEY = 'pp_funnel_seed'
-const SEEDED_KEY = 'pp_empower_ex_seeded_v2'
+const SEEDED_KEY = 'pp_empower_ex_seeded_v3'
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -159,15 +160,21 @@ export type HomeAnalytics = {
   topContributors: { id: string; name: string; initials: string; taskCount: number }[]
 }
 
-function employeeName(employeeId: string): string {
+export function getEmployeeName(employeeId: string | undefined): string {
+  if (!employeeId) return '–'
   const employee = mockEmployees.find((item) => item.id === employeeId)
   return employee ? `${employee.firstName} ${employee.lastName}` : employeeId
 }
 
-function employeeInitials(employeeId: string): string {
+export function getEmployeeInitials(employeeId: string): string {
   const employee = mockEmployees.find((item) => item.id === employeeId)
   if (!employee) return employeeId.slice(0, 2).toUpperCase()
   return `${employee.firstName[0] ?? ''}${employee.lastName[0] ?? ''}`.toUpperCase()
+}
+
+/** A task belongs to a user when they own it or contribute to it. */
+export function isTaskAssignedToUser(task: InitiativeTask, userId: string): boolean {
+  return task.ownerId === userId || (task.contributorIds ?? []).includes(userId)
 }
 
 export function getUpcomingTasksForUser(
@@ -176,12 +183,76 @@ export function getUpcomingTasksForUser(
 ): UpcomingTask[] {
   return initiatives
     .flatMap((initiative) => initiative.tasks.map((task) => ({ task, initiative })))
-    .filter(({ task }) => !task.done && task.ownerId === userId)
+    .filter(({ task }) => task.status !== 'completed' && isTaskAssignedToUser(task, userId))
     .sort((left, right) => {
       if (!left.task.dueDate) return 1
       if (!right.task.dueDate) return -1
       return left.task.dueDate.localeCompare(right.task.dueDate)
     })
+}
+
+/** Applies a status change and keeps `completedAt` consistent with it. */
+export function withTaskStatus(task: InitiativeTask, status: TaskStatus): InitiativeTask {
+  if (status === 'completed') {
+    return { ...task, status, completedAt: task.completedAt ?? new Date().toISOString() }
+  }
+  return { ...task, status, completedAt: undefined }
+}
+
+export function setTaskStatus(initiativeId: string, taskId: string, status: TaskStatus): void {
+  const initiative = getInitiativeById(initiativeId)
+  if (!initiative) return
+  const task = initiative.tasks.find((item) => item.id === taskId)
+  if (!task) return
+
+  upsertInitiative({
+    ...initiative,
+    tasks: initiative.tasks.map((item) => (item.id === taskId ? withTaskStatus(item, status) : item)),
+    history: [
+      ...initiative.history,
+      { at: new Date().toISOString(), event: `Task "${task.text}" set to ${status}` },
+    ],
+  })
+}
+
+export function addTaskToInitiative(initiativeId: string, task: InitiativeTask): void {
+  const initiative = getInitiativeById(initiativeId)
+  if (!initiative) return
+  upsertInitiative({
+    ...initiative,
+    tasks: [...initiative.tasks, task],
+    history: [
+      ...initiative.history,
+      { at: new Date().toISOString(), event: `Task "${task.text}" added` },
+    ],
+  })
+}
+
+export function updateTaskInInitiative(initiativeId: string, task: InitiativeTask): void {
+  const initiative = getInitiativeById(initiativeId)
+  if (!initiative) return
+  upsertInitiative({
+    ...initiative,
+    tasks: initiative.tasks.map((item) => (item.id === task.id ? task : item)),
+    history: [
+      ...initiative.history,
+      { at: new Date().toISOString(), event: `Task "${task.text}" updated` },
+    ],
+  })
+}
+
+export function deleteTaskFromInitiative(initiativeId: string, taskId: string): void {
+  const initiative = getInitiativeById(initiativeId)
+  if (!initiative) return
+  const task = initiative.tasks.find((item) => item.id === taskId)
+  upsertInitiative({
+    ...initiative,
+    tasks: initiative.tasks.filter((item) => item.id !== taskId),
+    history: [
+      ...initiative.history,
+      { at: new Date().toISOString(), event: `Task "${task?.text ?? taskId}" deleted` },
+    ],
+  })
 }
 
 export function computeHomeAnalytics(
@@ -197,14 +268,16 @@ export function computeHomeAnalytics(
 
   const closedTaskCounts = new Map<string, number>()
   for (const task of allTasks) {
-    if (!task.done || !task.ownerId) continue
+    if (task.status !== 'completed' || !task.ownerId) continue
     closedTaskCounts.set(task.ownerId, (closedTaskCounts.get(task.ownerId) ?? 0) + 1)
   }
 
   return {
     activeInitiatives: initiatives.filter((initiative) => initiative.status === 'active').length,
-    tasksInProgress: allTasks.filter((task) => !task.done && task.ownerId === userId).length,
-    newIdeas: 0,
+    tasksInProgress: allTasks.filter(
+      (task) => task.status !== 'completed' && isTaskAssignedToUser(task, userId),
+    ).length,
+    newIdeas: initiatives.filter((initiative) => initiative.status === 'new').length,
     topGoals: [...goalCounts.entries()]
       .map(([goalId, count]) => ({
         goalId,
@@ -215,8 +288,8 @@ export function computeHomeAnalytics(
     topContributors: [...closedTaskCounts.entries()]
       .map(([id, taskCount]) => ({
         id,
-        name: employeeName(id),
-        initials: employeeInitials(id),
+        name: getEmployeeName(id),
+        initials: getEmployeeInitials(id),
         taskCount,
       }))
       .sort((left, right) => right.taskCount - left.taskCount)

@@ -1,8 +1,9 @@
 import type { ID } from '@/types'
 
 export type InitiativeProgress = 'on_track' | 'stuck' | 'done'
-export type InitiativeLifecycleStatus = 'active' | 'completed'
+export type InitiativeLifecycleStatus = 'new' | 'active' | 'completed' | 'closed'
 export type InitiativeType = 'none' | 'upstream' | 'downstream'
+export type TaskStatus = 'pending' | 'in_progress' | 'completed'
 
 export type SurveyLinkScope =
   | { kind: 'org' }
@@ -44,7 +45,9 @@ export type InitiativeTask = {
   ownerId?: string
   contributorIds?: string[]
   dueDate?: string
-  done: boolean
+  status: TaskStatus
+  /** Set when status becomes 'completed', cleared when it moves back. */
+  completedAt?: string
   source: 'ai_recommendation' | 'manual'
   provenance?: InitiativeProvenance | null
 }
@@ -159,6 +162,7 @@ export type AggregateResult = {
 export type EmpowerGoal = {
   id: string
   title: string
+  color: string
 }
 
 export type SurveyLinkCandidate = {

@@ -5,173 +5,276 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
-import { ConfirmModal } from '@/components/ui/ConfirmModal'
-import { PageContent } from '@/components/shared/PageContent'
-import { PageHeader } from '@/components/shared/PageHeader'
-import { PageShell } from '@/components/shared/PageShell'
-import { formatScopeLabel } from '@/lib/empowerIntegration/aggregate'
-import { formatDueDate, getGoalTitle, initiativeTypeLabel, progressLabel } from '@/lib/empowerIntegration/helpers'
-import { getInitiativeById, getSurveyDataStore, upsertInitiative } from '@/lib/empowerIntegration/storage'
+import type { IWuTabItem } from '@npm-questionpro/wick-ui-lib'
+import { InitiativeStatusDropdown } from '@/components/empower/InitiativeStatusDropdown'
+import { InitiativeSurveyLink } from '@/components/empower/InitiativeSurveyLink'
+import { InitiativeTaskTable } from '@/components/empower/InitiativeTaskTable'
+import { TaskFormModal } from '@/components/modules/empower/TaskFormModal'
+import { notifyEmpowerDataChanged } from '@/lib/empowerEvents'
+import { formatLongDate } from '@/lib/empowerIntegration/helpers'
+import {
+  deleteTaskFromInitiative,
+  getEmployeeName,
+  getInitiativeById,
+  setTaskStatus,
+  upsertInitiative,
+} from '@/lib/empowerIntegration/storage'
 import { canSeeInitiative } from '@/lib/empowerIntegration/visibility'
 import { getCurrentUser } from '@/lib/userContext'
-import type { InitiativeProgress } from '@/types/empowerIntegration'
+import type {
+  EmpowerInitiativeRecord,
+  InitiativeLifecycleStatus,
+  InitiativeTask,
+  TaskStatus,
+} from '@/types/empowerIntegration'
 
 const WuButton = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuButton })), { ssr: false })
-const WuChip = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuChip })), { ssr: false })
-const WuText = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuText })), { ssr: false })
+const WuMenu = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuMenu })), { ssr: false })
+const WuMenuItem = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuMenuItem })), { ssr: false })
+const WuTab = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuTab })), { ssr: false })
+const WuTextarea = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuTextarea })), { ssr: false })
 
 export default function InitiativeDetailPage() {
   const params = useParams<{ id: string }>()
   const user = getCurrentUser()
   const { showToast } = useWuShowToast()
-  const [confirmUnlink, setConfirmUnlink] = useState(false)
-  const [confirmDone, setConfirmDone] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [taskModalOpen, setTaskModalOpen] = useState(false)
+  const [taskBeingEdited, setTaskBeingEdited] = useState<InitiativeTask | null>(null)
+  const [noteDraft, setNoteDraft] = useState('')
 
   const initiative = useMemo(() => {
     void refreshKey
     return getInitiativeById(params.id)
   }, [params.id, refreshKey])
 
+  function refresh() {
+    setRefreshKey((key) => key + 1)
+    notifyEmpowerDataChanged()
+  }
+
   if (!initiative || !canSeeInitiative(user, initiative)) {
     return (
-      <PageShell>
-        <PageContent>
-          <p className="text-gray-500">Initiative not found</p>
-          <Link href="/empower/initiatives" className="mt-2 inline-block text-blue-600 hover:underline">← Back</Link>
-        </PageContent>
-      </PageShell>
+      <div className="p-8">
+        <p className="text-sm text-[#6B7280]">Initiative not found</p>
+        <Link href="/empower/initiatives" className="mt-2 inline-block text-sm text-[#1B87E6] hover:underline">
+          ← Back to initiatives
+        </Link>
+      </div>
     )
   }
 
-  const link = initiative.surveyLink
-  const sourceMissing = link ? !getSurveyDataStore().ex[link.surveyId] : false
-  const canUnlink = user.id === initiative.createdBy || user.id === initiative.ownerId
-  const canUpdateProgress =
-    initiative.status === 'active' &&
-    (user.id === initiative.createdBy ||
-      user.id === initiative.ownerId ||
-      initiative.contributors.includes(user.id))
-  const delta =
-    link?.latest?.favorability !== undefined && link.baseline.favorability !== undefined
-      ? link.latest.favorability - link.baseline.favorability
-      : null
-
-  function handleUnlink() {
-    const current = getInitiativeById(params.id)
-    if (!current) return
+  function persist(next: EmpowerInitiativeRecord, event: string) {
     upsertInitiative({
-      ...current,
-      surveyLink: null,
-      history: [...current.history, { at: new Date().toISOString(), event: 'Survey link removed' }],
+      ...next,
+      history: [...next.history, { at: new Date().toISOString(), event }],
     })
-    showToast({ variant: 'success', message: 'Survey link removed' })
-    setConfirmUnlink(false)
-    setRefreshKey((k) => k + 1)
+    refresh()
   }
 
-  function updateProgress(progress: InitiativeProgress) {
-    const current = getInitiativeById(params.id)
-    if (!current) return
-    const now = new Date().toISOString()
-    upsertInitiative({
-      ...current,
-      progress,
-      status: progress === 'done' ? 'completed' : current.status,
-      history: [
-        ...current.history,
-        { at: now, event: `Progress set to ${progressLabel(progress)} from initiative detail` },
-      ],
-    })
-    showToast({ variant: 'success', message: 'Initiative progress updated' })
-    setRefreshKey((k) => k + 1)
+  function saveTitle() {
+    const trimmed = titleDraft.trim()
+    setIsEditingTitle(false)
+    if (!initiative || !trimmed || trimmed === initiative.title) return
+    persist({ ...initiative, title: trimmed }, `Initiative renamed to "${trimmed}"`)
+    showToast({ variant: 'success', message: 'Initiative renamed' })
   }
+
+  function changeStatus(status: InitiativeLifecycleStatus) {
+    if (!initiative) return
+    persist(
+      {
+        ...initiative,
+        status,
+        progress: status === 'completed' ? 'done' : initiative.progress,
+      },
+      `Status set to ${status}`,
+    )
+    showToast({ variant: 'success', message: 'Initiative status updated' })
+  }
+
+  function handleTaskStatusChange(taskId: string, status: TaskStatus) {
+    setTaskStatus(params.id, taskId, status)
+    refresh()
+    showToast({ variant: 'success', message: 'Task status updated' })
+  }
+
+  function handleTaskDelete(taskId: string) {
+    deleteTaskFromInitiative(params.id, taskId)
+    refresh()
+    showToast({ variant: 'success', message: 'Task deleted' })
+  }
+
+  const tabs: IWuTabItem[] = [
+    {
+      value: 'tasks',
+      Trigger: 'Tasks',
+      Content: (
+        <div className="pt-4">
+          <div className="mb-4 flex items-center gap-px">
+            <WuButton
+              variant="primary"
+              onClick={() => {
+                setTaskBeingEdited(null)
+                setTaskModalOpen(true)
+              }}
+            >
+              + New task
+            </WuButton>
+            <WuMenu
+              align="start"
+              Trigger={
+                <button
+                  type="button"
+                  className="flex h-9 items-center rounded-r bg-[#1B87E6] px-2 text-white hover:bg-[#1569B8]"
+                  aria-label="More task options"
+                >
+                  <span className="wm-expand-more text-base leading-none" aria-hidden />
+                </button>
+              }
+            >
+              <WuMenuItem
+                onSelect={() => showToast({ variant: 'info', message: 'Task templates are coming soon.' })}
+              >
+                Add from template
+              </WuMenuItem>
+              <WuMenuItem
+                onSelect={() => showToast({ variant: 'info', message: 'Task import is coming soon.' })}
+              >
+                Import tasks
+              </WuMenuItem>
+            </WuMenu>
+          </div>
+
+          {initiative.tasks.length === 0 ? (
+            <p className="rounded border border-dashed border-[#D1D5DB] px-6 py-10 text-center text-sm text-[#6B7280]">
+              No tasks yet. Create the first one to get this initiative moving.
+            </p>
+          ) : (
+            <InitiativeTaskTable
+              tasks={initiative.tasks}
+              onStatusChange={handleTaskStatusChange}
+              onEdit={(task) => {
+                setTaskBeingEdited(task)
+                setTaskModalOpen(true)
+              }}
+              onDelete={handleTaskDelete}
+            />
+          )}
+        </div>
+      ),
+    },
+    {
+      value: 'notes',
+      Trigger: 'Notes',
+      Content: (
+        <div className="max-w-2xl space-y-3 pt-4">
+          <p className="text-sm text-[#6B7280]">Notes will appear here. Add a note to get started.</p>
+          <WuTextarea
+            rows={4}
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            placeholder="Write a note for this initiative"
+          />
+          <WuButton
+            variant="secondary"
+            onClick={() => showToast({ variant: 'info', message: 'Notes are coming soon.' })}
+          >
+            Add note
+          </WuButton>
+        </div>
+      ),
+    },
+    {
+      value: 'ideation',
+      Trigger: 'Ideation',
+      Content: (
+        <p className="pt-4 text-sm text-[#6B7280]">Ideation for this initiative will appear here.</p>
+      ),
+    },
+  ]
 
   return (
-    <PageShell>
-      <PageHeader title={initiative.title} description={[getGoalTitle(initiative.goalId), `Type ${initiativeTypeLabel(initiative.type)}`, initiative.dueDate ? `Due ${formatDueDate(initiative.dueDate)}` : null].filter(Boolean).join(' · ')} actions={<WuChip size="sm">{progressLabel(initiative.progress)}</WuChip>} />
-      <PageContent>
-        <Link href="/empower/initiatives" className="mb-4 inline-block text-sm text-gray-500 hover:text-gray-700">← Back to initiatives</Link>
-        <p className="mb-6 text-sm text-gray-700">{initiative.description}</p>
+    <div className="p-8">
+      <div className="mb-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <Link
+              href="/empower/initiatives"
+              className="flex size-7 items-center justify-center rounded text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#374151]"
+              aria-label="Back to initiatives"
+            >
+              <span className="wm-arrow-back text-lg leading-none" aria-hidden />
+            </Link>
 
-        {link && (
-          <section className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-            <WuText size="sm" as="div" className="mb-3 font-semibold text-gray-900">Linked Survey Data</WuText>
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-medium">{link.surveyName}</span>
-              <WuChip size="sm" variant="secondary">{formatScopeLabel(link.scope)}</WuChip>
-              <span>{link.focus.label}</span>
-            </div>
-            {sourceMissing && (
-              <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Source survey no longer available</div>
-            )}
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded border border-gray-100 bg-gray-50 p-3 text-sm">
-                <p className="text-xs font-medium uppercase text-gray-500">Baseline</p>
-                <p className="mt-1">{link.baseline.favorability}% · {link.baseline.respondentCount} respondents · {new Date(link.baseline.capturedAt).toLocaleDateString()}</p>
-              </div>
-              <div className="rounded border border-gray-100 bg-gray-50 p-3 text-sm">
-                <p className="text-xs font-medium uppercase text-gray-500">Latest</p>
-                {link.latest ? (
-                  <p className="mt-1">{link.latest.favorability}% · {link.latest.respondentCount} respondents · {new Date(link.latest.computedAt).toLocaleDateString()}</p>
-                ) : (
-                  <p className="mt-1 text-gray-600">Next measurement: when the next {link.surveyName} cycle closes</p>
-                )}
-              </div>
-            </div>
-            {delta !== null && link.latest && (
-              <WuChip size="sm" color={delta >= 0 ? 'success' : 'danger'} className="mt-3">
-                Delta {delta >= 0 ? '+' : ''}{delta}%
-              </WuChip>
-            )}
-            <div className="mt-4 flex gap-3">
-              {!sourceMissing && (
-                <Link href="/lifecycle/analytics/list" className="text-sm text-blue-600 hover:underline">View in dashboard →</Link>
-              )}
-              {canUnlink && <WuButton variant="secondary" size="sm" onClick={() => setConfirmUnlink(true)}>Unlink</WuButton>}
-            </div>
-          </section>
-        )}
-
-        {canUpdateProgress && (
-          <section className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-            <WuText size="sm" as="div" className="mb-3 font-semibold text-gray-900">
-              Status
-            </WuText>
-            <div className="flex flex-wrap gap-2">
-              {(['on_track', 'stuck', 'done'] as InitiativeProgress[]).map((progress) => (
-                <WuButton
-                  key={progress}
-                  variant={initiative.progress === progress ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={() => (progress === 'done' ? setConfirmDone(true) : updateProgress(progress))}
-                >
-                  {progressLabel(progress)}
-                </WuButton>
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section>
-          <WuText size="sm" as="div" className="mb-3 font-semibold text-gray-900">Tasks</WuText>
-          <ul className="space-y-2">
-            {initiative.tasks.length === 0 ? (
-              <li className="text-sm text-gray-400">No tasks yet</li>
+            {isEditingTitle ? (
+              <input
+                autoFocus
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={saveTitle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveTitle()
+                  if (e.key === 'Escape') setIsEditingTitle(false)
+                }}
+                className="min-w-0 flex-1 rounded border border-[#1B87E6] px-2 py-1 text-2xl font-semibold text-[#1B2E4A] outline-none"
+                aria-label="Initiative name"
+              />
             ) : (
-              initiative.tasks.map((task) => (
-                <li key={task.id} className="flex items-center gap-2 rounded border border-gray-100 px-3 py-2 text-sm">
-                  <input type="checkbox" checked={task.done} readOnly />
-                  <span className={task.done ? 'text-gray-400 line-through' : ''}>{task.text}</span>
-                  {task.source === 'ai_recommendation' && <WuChip size="sm" variant="secondary">AI</WuChip>}
-                </li>
-              ))
+              <>
+                <h1 className="truncate text-2xl font-semibold text-[#1B2E4A]">{initiative.title}</h1>
+                <button
+                  type="button"
+                  className="flex size-7 shrink-0 items-center justify-center rounded text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#1B87E6]"
+                  onClick={() => {
+                    setTitleDraft(initiative.title)
+                    setIsEditingTitle(true)
+                  }}
+                  aria-label="Rename initiative"
+                >
+                  <span className="wm-edit text-base leading-none" aria-hidden />
+                </button>
+              </>
             )}
-          </ul>
-        </section>
-      </PageContent>
-      <ConfirmModal open={confirmUnlink} onOpenChange={setConfirmUnlink} title="Unlink survey data?" description="The initiative will remain; only the linked survey panel is removed." confirmLabel="Unlink" variant="critical" onConfirm={handleUnlink} />
-      <ConfirmModal open={confirmDone} onOpenChange={setConfirmDone} title="Mark initiative as done?" description="This will set the initiative status to completed." confirmLabel="Mark done" onConfirm={() => { updateProgress('done'); setConfirmDone(false) }} />
-    </PageShell>
+          </div>
+
+          <InitiativeStatusDropdown status={initiative.status} onChange={changeStatus} />
+        </div>
+
+        <p className="mt-1 pl-9 text-sm text-[#6B7280]">
+          By {getEmployeeName(initiative.ownerId)} · {formatLongDate(initiative.createdAt)}
+        </p>
+        <p className="mt-3 max-w-3xl text-sm text-[#374151]">{initiative.description}</p>
+
+        {initiative.surveyLink && (
+          <InitiativeSurveyLink
+            link={initiative.surveyLink}
+            canUnlink={user.id === initiative.createdBy || user.id === initiative.ownerId}
+            onUnlink={() => {
+              persist({ ...initiative, surveyLink: null }, 'Survey link removed')
+              showToast({ variant: 'success', message: 'Survey link removed' })
+            }}
+          />
+        )}
+      </div>
+
+      <WuTab items={tabs} defaultValue="tasks" />
+
+      <TaskFormModal
+        open={taskModalOpen}
+        onOpenChange={setTaskModalOpen}
+        initiativeId={initiative.id}
+        task={taskBeingEdited}
+        onSaved={() => {
+          refresh()
+          showToast({
+            variant: 'success',
+            message: taskBeingEdited ? 'Task updated' : 'Task created',
+          })
+        }}
+      />
+    </div>
   )
 }

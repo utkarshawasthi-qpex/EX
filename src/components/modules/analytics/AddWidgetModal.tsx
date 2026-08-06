@@ -18,6 +18,7 @@ import {
   type SummaryAdminSettingsFieldValues,
 } from '@/components/modules/analytics/SummaryAdminSettingsFields'
 import { getSurveys } from '@/lib/mockDb'
+import { getDriverOutcomeOptions } from '@/lib/dashboardFilters'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { getCurrentUser } from '@/lib/userContext'
 import { cn } from '@/lib/utils'
@@ -530,19 +531,42 @@ export function AddWidgetModal({
     [surveys, surveySearch],
   )
   const markerOptions = getMarkerOptions(selectedSurvey)
+  const driverOutcomeOptions = useMemo(() => {
+    const { markers, buildingBlocks } = getDriverOutcomeOptions()
+    return [
+      ...markers.map((m) => ({
+        value: m.id,
+        label: `Markers · ${m.label}`,
+      })),
+      ...buildingBlocks.map((b) => ({
+        value: b.id,
+        label: `Building blocks · ${b.label}`,
+      })),
+    ]
+  }, [])
   const selectedQuestionObjects = selectedSurvey?.questions.filter((question) =>
     selectedQuestions.includes(question.id),
   ) ?? []
   const needsQuestions = widgetNeedsQuestions(selectedType)
   const standardSourceValid =
     Boolean(selectedSurveyId) && (!needsQuestions || selectedQuestions.length > 0)
+  const driverOutcomeValid =
+    selectedType !== 'driver_analysis' ||
+    Boolean(
+      (widgetConfig.outcomeMetricId as string | undefined) ||
+        (widgetConfig.primaryOutcome as string | undefined),
+    )
   const canContinue =
     (step === 0 && Boolean(selectedType)) ||
     (isSummaryFlow && step === 1 && widgetName.trim().length > 0) ||
     (isSummaryFlow && step === 2 && dataWidgetsOnTab.length > 0) ||
     (!isSummaryFlow && step === 1 && widgetName.trim().length > 0) ||
     (!isSummaryFlow && step === 2 && standardSourceValid) ||
-    (!isSummaryFlow && step === 3 && standardSourceValid && widgetName.trim().length > 0)
+    (!isSummaryFlow &&
+      step === 3 &&
+      standardSourceValid &&
+      widgetName.trim().length > 0 &&
+      driverOutcomeValid)
 
   const resetModalState = useCallback(() => {
     const defaultSurvey = getDefaultSurvey(surveys)
@@ -575,7 +599,20 @@ export function AddWidgetModal({
     setWidgetName(type === 'summary' ? 'Summary & Recommendations' : getWidgetDisplayName(type))
     setWidgetDescription('')
     setSelectedQuestions([])
-    setWidgetConfig({})
+    if (type === 'driver_analysis') {
+      const defaultOutcome = getDriverOutcomeOptions().markers[0]
+      setWidgetConfig(
+        defaultOutcome
+          ? {
+              outcomeMetricId: defaultOutcome.id,
+              outcomeMetricLabel: defaultOutcome.label,
+              primaryOutcome: defaultOutcome.id,
+            }
+          : {},
+      )
+    } else {
+      setWidgetConfig({})
+    }
     setWidgetSize(getDefaultWidth(type))
     setSummarySettings(DEFAULT_SUMMARY_SETTINGS)
   }
@@ -737,16 +774,38 @@ export function AddWidgetModal({
     }
 
     if (selectedType === 'driver_analysis') {
+      const selectedOutcomeId =
+        (widgetConfig.outcomeMetricId as string | undefined) ??
+        (widgetConfig.primaryOutcome as string | undefined) ??
+        driverOutcomeOptions[0]?.value
+      const selectedOutcome =
+        driverOutcomeOptions.find((option) => option.value === selectedOutcomeId) ??
+        driverOutcomeOptions[0]
+
       return (
-        <FieldRow label="Primary outcome">
+        <div className="mb-4">
+          <WuText size="sm" as="p" className="mb-2 font-medium text-gray-900">
+            Outcome variable
+          </WuText>
+          <WuText size="sm" as="p" className="mb-3 text-xs text-gray-500">
+            Select the metric this analysis should explain. All other metrics will be plotted as
+            drivers of this outcome.
+          </WuText>
           <WuSelect
-            data={markerOptions}
+            data={driverOutcomeOptions}
             accessorKey={{ value: 'value', label: 'label' }}
-              value={getConfigOption('primaryOutcome', markerOptions, markerOptions[0] ?? NO_MARKERS_OPTION)}
-            onSelect={(value) => updateWidgetConfig('primaryOutcome', (value as SelectOption).value)}
+            value={selectedOutcome}
+            onSelect={(value) => {
+              const option = value as SelectOption
+              const label = option.label.replace(/^(Markers|Building blocks) · /, '')
+              updateWidgetConfig('outcomeMetricId', option.value)
+              updateWidgetConfig('outcomeMetricLabel', label)
+              updateWidgetConfig('primaryOutcome', option.value)
+            }}
             variant="outlined"
+            placeholder="Select outcome metric"
           />
-        </FieldRow>
+        </div>
       )
     }
 

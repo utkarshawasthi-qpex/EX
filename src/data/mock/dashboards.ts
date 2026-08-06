@@ -40,6 +40,7 @@ function widget(
   title: string,
   width: 'full' | 'half',
   order: number,
+  config?: Record<string, unknown>,
 ): DashboardWidget {
   return {
     id,
@@ -48,6 +49,7 @@ function widget(
     width,
     order,
     surveyId: 'surv_annual_engagement_2025',
+    ...(config ? { config } : {}),
   }
 }
 
@@ -72,7 +74,11 @@ export const mockDashboards: Dashboard[] = [
           widget('wid_new_heatmap', 'heatmap', 'Heatmap', 'half', 5),
           widget('wid_new_comparison', 'survey_comparison', 'Survey Comparison', 'half', 6),
           widget('wid_new_single_question', 'single_question', 'Single Question', 'half', 7),
-          widget('wid_new_driver', 'driver_analysis', 'Driver Analysis', 'full', 8),
+          widget('wid_new_driver', 'driver_analysis', 'Driver Analysis', 'full', 8, {
+            outcomeMetricId: 'marker_inclusion',
+            outcomeMetricLabel: 'Inclusion',
+            primaryOutcome: 'marker_inclusion',
+          }),
         ],
       },
     ],

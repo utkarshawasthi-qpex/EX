@@ -158,20 +158,7 @@ export const mockSingleQuestionData = {
   ],
 }
 
-export const mockDriverAnalysisData = {
-  surveyName: 'Workplace Culture',
-  drivers: [
-    { name: 'Transparency', impact: 0.82, favorability: 43 },
-    { name: 'Technologies', impact: 0.61, favorability: 38 },
-    { name: 'Solutions', impact: 0.74, favorability: 33 },
-    { name: 'Innovation', impact: 0.55, favorability: 40 },
-    { name: 'Inclusion', impact: 0.88, favorability: 41 },
-    { name: 'Growth', impact: 0.45, favorability: 40 },
-    { name: 'Collaboration', impact: 0.38, favorability: 40 },
-    { name: 'Agility', impact: 0.67, favorability: 38 },
-    { name: 'Engagement', impact: 0.71, favorability: 40 },
-  ],
-}
+export { mockDriverAnalysisData } from '@/data/mock/driverAnalysis'
 
 export const mockSurveyComparisonData = {
   surveys: ['Workplace Culture', 'Employee Experience'],

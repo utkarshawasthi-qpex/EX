@@ -75,9 +75,14 @@ export const mockDashboards: Dashboard[] = [
           widget('wid_new_comparison', 'survey_comparison', 'Survey Comparison', 'half', 6),
           widget('wid_new_single_question', 'single_question', 'Single Question', 'half', 7),
           widget('wid_new_driver', 'driver_analysis', 'Driver Analysis', 'full', 8, {
-            outcomeMetricId: 'marker_inclusion',
-            outcomeMetricLabel: 'Inclusion',
             primaryOutcome: 'marker_inclusion',
+            activeOutcomeIndex: 0,
+            columns: [
+              { id: 'marker_inclusion', label: 'Inclusion', kind: 'marker' },
+              { id: 'marker_growth', label: 'Growth', kind: 'marker' },
+              { id: 'marker_transparency', label: 'Transparency', kind: 'marker' },
+              { id: 'marker_technologies', label: 'Technologies', kind: 'marker' },
+            ],
           }),
         ],
       },

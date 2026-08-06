@@ -39,8 +39,9 @@ type DriverColumn = {
 type DotPoint = {
   name: string
   kind: DriverMetricKind
-  x: number
-  y: number
+  /** Correlation impact — intentionally not named x/y (recharts overwrites those with pixels). */
+  impact: number
+  favorability: number
 }
 
 type QuadrantInfo = {
@@ -93,8 +94,8 @@ function CustomTooltip({
   if (!active || !payload?.length) return null
   const d = payload[0]?.payload
   if (!d) return null
-  const q = getQuadrant(d.x, d.y)
-  const impactLabel = d.x > 0.33 ? 'High' : d.x > 0 ? 'Medium' : 'Low'
+  const q = getQuadrant(d.impact, d.favorability)
+  const impactLabel = d.impact > 0.33 ? 'High' : d.impact > 0 ? 'Medium' : 'Low'
 
   return (
     <div
@@ -118,7 +119,9 @@ function CustomTooltip({
         }}
       >
         <span>Favorability</span>
-        <span style={{ color: 'var(--wu-text-body)', fontWeight: 500 }}>{d.y.toFixed(0)}%</span>
+        <span style={{ color: 'var(--wu-text-body)', fontWeight: 500 }}>
+          {d.favorability.toFixed(0)}%
+        </span>
       </div>
       <div
         style={{
@@ -131,7 +134,7 @@ function CustomTooltip({
       >
         <span>Impact</span>
         <span style={{ color: 'var(--wu-text-body)', fontWeight: 500 }}>
-          {impactLabel} ({d.x.toFixed(2)})
+          {impactLabel} ({d.impact.toFixed(2)})
         </span>
       </div>
       <span
@@ -158,7 +161,8 @@ function QuadrantDot(props: {
 }) {
   const { cx = 0, cy = 0, payload } = props
   if (!payload) return null
-  const isPriority = payload.x > 0 && payload.y < FAVORABILITY_THRESHOLD
+  // Must match getQuadrant(): high impact AND low favorability only
+  const isPriority = payload.impact > 0 && payload.favorability < FAVORABILITY_THRESHOLD
 
   return (
     <g>
@@ -246,25 +250,56 @@ function computeAxisDomain(dots: DotPoint[]): {
   yMax: number
 } {
   if (dots.length === 0) {
-    return { xMin: -0.05, xMax: 0.05, yMin: 60, yMax: 100 }
+    return { xMin: -0.15 * 1.15, xMax: 0.15 * 1.15, yMin: 40, yMax: 100 }
   }
 
-  const xValues = dots.map((d) => d.x)
-  const yValues = dots.map((d) => d.y)
+  const xValues = dots.map((d) => d.impact).filter((v) => Number.isFinite(v))
+  const yValues = dots.map((d) => d.favorability).filter((v) => Number.isFinite(v))
 
-  const xPad = Math.max((Math.max(...xValues) - Math.min(...xValues)) * 0.2, 0.1)
-  const yPad = Math.max((Math.max(...yValues) - Math.min(...yValues)) * 0.2, 5)
+  if (xValues.length === 0 || yValues.length === 0) {
+    return { xMin: -0.15 * 1.15, xMax: 0.15 * 1.15, yMin: 40, yMax: 100 }
+  }
 
-  let xMin = Math.min(Math.min(...xValues) - xPad, -0.05)
-  let xMax = Math.max(Math.max(...xValues) + xPad, 0.05)
-  let yMin = Math.max(Math.min(...yValues) - yPad, 0)
-  let yMax = Math.min(Math.max(...yValues) + yPad, 100)
+  // Remove outliers beyond 2 standard deviations before computing range
+  const xMean = xValues.reduce((a, b) => a + b, 0) / xValues.length
+  const xStd = Math.sqrt(
+    xValues.reduce((a, b) => a + Math.pow(b - xMean, 2), 0) / xValues.length,
+  )
+  const xFiltered =
+    xStd > 0
+      ? xValues.filter((v) => Math.abs(v - xMean) <= 2 * xStd)
+      : xValues
+  const xForDomain = xFiltered.length > 0 ? xFiltered : xValues
 
-  // Keep threshold reference lines visible
-  if (xMin > 0) xMin = -0.05
-  if (xMax < 0) xMax = 0.05
-  if (yMin > FAVORABILITY_THRESHOLD) yMin = 60
-  if (yMax < FAVORABILITY_THRESHOLD) yMax = Math.min(FAVORABILITY_THRESHOLD + 5, 100)
+  const xAbsMax = Math.max(
+    Math.abs(Math.min(...xForDomain)),
+    Math.abs(Math.max(...xForDomain)),
+    0.15, // minimum half-width so the chart is never too narrow
+  )
+
+  // Always symmetric around zero so the divider line is centered
+  const xMin = -(xAbsMax * 1.15)
+  const xMax = xAbsMax * 1.15
+
+  const yMean = yValues.reduce((a, b) => a + b, 0) / yValues.length
+  const yStd = Math.sqrt(
+    yValues.reduce((a, b) => a + Math.pow(b - yMean, 2), 0) / yValues.length,
+  )
+  const yFiltered =
+    yStd > 0
+      ? yValues.filter((v) => Math.abs(v - yMean) <= 2 * yStd)
+      : yValues
+  const yForDomain = yFiltered.length > 0 ? yFiltered : yValues
+
+  const yDataMin = Math.min(...yForDomain)
+  const yDataMax = Math.max(...yForDomain)
+  const yPad = Math.max((yDataMax - yDataMin) * 0.2, 8)
+  let yMin = Math.max(yDataMin - yPad, 0)
+  let yMax = Math.min(yDataMax + yPad, 100)
+
+  // Keep the fixed y=65 threshold visible inside the domain
+  if (yMin >= FAVORABILITY_THRESHOLD) yMin = 60
+  if (yMax <= FAVORABILITY_THRESHOLD) yMax = Math.min(70, 100)
 
   return { xMin, xMax, yMin, yMax }
 }
@@ -322,8 +357,8 @@ export function DriverAnalysisWidget({
     return plotMetrics.map((col) => ({
       name: col.label,
       kind: col.kind,
-      x: DRIVER_CORRELATION_MATRIX[col.id]?.[activeOutcome.id] ?? 0,
-      y: getMetricFavorability(col.id, col.kind, activeFilters),
+      impact: DRIVER_CORRELATION_MATRIX[col.id]?.[activeOutcome.id] ?? 0,
+      favorability: getMetricFavorability(col.id, col.kind, activeFilters),
     }))
   }, [activeFilters, activeOutcome, activeOutcomeIndex, columns])
 
@@ -332,26 +367,31 @@ export function DriverAnalysisWidget({
   const dotsSortedByPriority = useMemo(
     () =>
       [...dots].sort((a, b) => {
-        const qa = getQuadrant(a.x, a.y)
-        const qb = getQuadrant(b.x, b.y)
+        const qa = getQuadrant(a.impact, a.favorability)
+        const qb = getQuadrant(b.impact, b.favorability)
         const orderDiff = QUADRANT_ORDER[qa.label] - QUADRANT_ORDER[qb.label]
         if (orderDiff !== 0) return orderDiff
-        return a.y - b.y
+        return a.favorability - b.favorability
       }),
     [dots],
   )
 
-  const outcomeOptions = columns.map((col, i) => ({
-    value: String(i),
-    label: col.label,
-  }))
+  const outcomeOptions = useMemo(
+    () =>
+      columns.map((col, i) => ({
+        value: String(i),
+        label: col.label,
+      })),
+    [columns],
+  )
 
   const selectedOutcomeOption =
     outcomeOptions.find((option) => option.value === String(activeOutcomeIndex)) ??
-    outcomeOptions[0]
+    outcomeOptions[0] ??
+    null
 
   const handleOutcomeSelect = (value: unknown) => {
-    const option = value as { value?: string } | null
+    const option = (Array.isArray(value) ? value[0] : value) as { value?: string } | null
     if (!option?.value) return
     const next = Number(option.value)
     if (!Number.isFinite(next) || next < 0 || next >= columns.length) return
@@ -377,7 +417,12 @@ export function DriverAnalysisWidget({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <div
+              className="relative z-20 flex items-center gap-2"
+              style={{ marginTop: 4 }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+            >
               <span style={{ fontSize: 11, color: 'var(--wu-text-muted)' }}>Outcome variable</span>
               <div className="min-w-[180px]">
                 <WuSelect
@@ -386,6 +431,7 @@ export function DriverAnalysisWidget({
                   value={selectedOutcomeOption}
                   onSelect={handleOutcomeSelect}
                   variant="outlined"
+                  placeholder="Select outcome"
                 />
               </div>
             </div>
@@ -398,14 +444,14 @@ export function DriverAnalysisWidget({
                     x1={0}
                     x2={xMax}
                     y1={yMin}
-                    y2={FAVORABILITY_THRESHOLD}
+                    y2={65}
                     fill="#fef2f2"
                     fillOpacity={0.5}
                   />
                   <ReferenceArea
                     x1={0}
                     x2={xMax}
-                    y1={FAVORABILITY_THRESHOLD}
+                    y1={65}
                     y2={yMax}
                     fill="#f0fdf4"
                     fillOpacity={0.5}
@@ -413,7 +459,7 @@ export function DriverAnalysisWidget({
                   <ReferenceArea
                     x1={xMin}
                     x2={0}
-                    y1={FAVORABILITY_THRESHOLD}
+                    y1={65}
                     y2={yMax}
                     fill="#eff6ff"
                     fillOpacity={0.5}
@@ -422,7 +468,7 @@ export function DriverAnalysisWidget({
                     x1={xMin}
                     x2={0}
                     y1={yMin}
-                    y2={FAVORABILITY_THRESHOLD}
+                    y2={65}
                     fill="#f9fafb"
                     fillOpacity={0.5}
                   />
@@ -431,11 +477,12 @@ export function DriverAnalysisWidget({
 
                   <XAxis
                     type="number"
-                    dataKey="x"
+                    dataKey="impact"
                     domain={[xMin, xMax]}
                     tickCount={5}
                     tickFormatter={(v: number) => v.toFixed(1)}
                     tick={{ fontSize: 11, fill: 'var(--wu-text-muted)' }}
+                    allowDataOverflow
                   >
                     <Label
                       value={`Impact on ${activeOutcome.label}`}
@@ -447,10 +494,16 @@ export function DriverAnalysisWidget({
 
                   <YAxis
                     type="number"
-                    dataKey="y"
+                    dataKey="favorability"
                     domain={[yMin, yMax]}
-                    tickFormatter={(v: number) => `${v}%`}
+                    ticks={[
+                      Math.round(yMin),
+                      65,
+                      Math.round(yMax),
+                    ].filter((v, i, arr) => arr.indexOf(v) === i)}
+                    tickFormatter={(v: number) => `${Math.round(v)}%`}
                     tick={{ fontSize: 11, fill: 'var(--wu-text-muted)' }}
+                    allowDataOverflow
                   >
                     <Label
                       value="Current favorability"
@@ -468,7 +521,7 @@ export function DriverAnalysisWidget({
                     strokeWidth={1}
                   />
                   <ReferenceLine
-                    y={FAVORABILITY_THRESHOLD}
+                    y={65}
                     stroke="#94A3B8"
                     strokeDasharray="5 4"
                     strokeWidth={1}
@@ -571,7 +624,7 @@ export function DriverAnalysisWidget({
                 }}
               >
                 {dotsSortedByPriority.map((d) => {
-                  const q = getQuadrant(d.x, d.y)
+                  const q = getQuadrant(d.impact, d.favorability)
                   return (
                     <Fragment key={d.name}>
                       <span
@@ -596,7 +649,7 @@ export function DriverAnalysisWidget({
                           textAlign: 'right',
                         }}
                       >
-                        {d.y.toFixed(0)}%
+                        {d.favorability.toFixed(0)}%
                       </span>
                       <span
                         style={{

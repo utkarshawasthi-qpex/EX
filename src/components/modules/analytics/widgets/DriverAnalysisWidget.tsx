@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import {
   CartesianGrid,
@@ -47,26 +47,22 @@ type DriverAnalysisWidgetProps = {
 }
 
 const FAVORABILITY_THRESHOLD = 65
-const IMPACT_DOMAIN: [number, number] = [-0.6, 0.6]
+const IMPACT_DOMAIN: [number, number] = [-0.7, 0.7]
+const FAVORABILITY_DOMAIN: [number, number] = [20, 100]
 const STORAGE_PREFIX = 'pp_driver_active_outcome_'
-
-const KIND_COLORS: Record<DriverMetricKind, string> = {
-  marker: '#2a78d6',
-  buildingBlock: '#1baf7a',
-  question: '#eb6834',
-}
+const QP_BLUE = '#1B87E6'
 
 function getQuadrant(x: number, y: number) {
   if (x >= 0 && y < FAVORABILITY_THRESHOLD) {
-    return { label: 'Priority focus', bg: '#fef3f2', color: '#9a3412' }
+    return { label: 'Priority focus', bg: '#fef3f2', color: '#9a3412', rank: 0 }
   }
   if (x >= 0 && y >= FAVORABILITY_THRESHOLD) {
-    return { label: 'Celebrate', bg: '#f0fdf4', color: '#166534' }
+    return { label: 'Celebrate', bg: '#f0fdf4', color: '#166534', rank: 1 }
   }
   if (x < 0 && y >= FAVORABILITY_THRESHOLD) {
-    return { label: 'Maintain', bg: '#eff6ff', color: '#1e40af' }
+    return { label: 'Maintain', bg: '#eff6ff', color: '#1e40af', rank: 2 }
   }
-  return { label: 'Monitor', bg: '#f9fafb', color: '#6b7280' }
+  return { label: 'Monitor', bg: '#f9fafb', color: '#6b7280', rank: 3 }
 }
 
 function CustomTooltip({
@@ -136,38 +132,38 @@ function CustomTooltip({
   )
 }
 
+/** All dots QP blue; Priority Focus gets a red ring + slightly larger radius. No always-on labels. */
 function DotWithLabel(props: {
   cx?: number
   cy?: number
-  fill?: string
   payload?: DotPoint
 }) {
-  const { cx = 0, cy = 0, fill = '#2a78d6', payload } = props
+  const { cx = 0, cy = 0, payload } = props
   if (!payload) return null
-  const label =
-    payload.name.length > 16 ? `${payload.name.slice(0, 15)}…` : payload.name
+  const isPriority = payload.x >= 0 && payload.y < FAVORABILITY_THRESHOLD
 
   return (
     <g>
+      {isPriority && (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={11}
+          fill="none"
+          stroke="#ef4444"
+          strokeWidth={1.5}
+          opacity={0.6}
+        />
+      )}
       <circle
         cx={cx}
         cy={cy}
-        r={7}
-        fill={fill}
-        fillOpacity={0.85}
-        stroke="#fff"
+        r={isPriority ? 9 : 7}
+        fill={QP_BLUE}
+        fillOpacity={isPriority ? 1 : 0.75}
+        stroke="#ffffff"
         strokeWidth={1.5}
       />
-      <text
-        x={cx}
-        y={cy - 11}
-        textAnchor="middle"
-        fontSize={10}
-        fill="var(--wu-text-muted)"
-        fontFamily="inherit"
-      >
-        {label}
-      </text>
     </g>
   )
 }
@@ -196,7 +192,6 @@ function resolveColumns(config?: Record<string, unknown>): DriverColumn[] {
   }
 
   // Legacy / missing columns: default to Workplace Culture markers.
-  // If primaryOutcome matches a catalog id, put it first.
   const markers = DRIVER_METRICS.filter((metric) => metric.kind === 'marker')
   const primary =
     typeof config?.primaryOutcome === 'string'
@@ -225,6 +220,15 @@ function readStoredOutcomeIndex(widgetId: string, columnCount: number, fallback:
   } catch {
     return fallback
   }
+}
+
+function sortDotsByPriority(dots: DotPoint[]): DotPoint[] {
+  return [...dots].sort((a, b) => {
+    const rankA = getQuadrant(a.x, a.y).rank
+    const rankB = getQuadrant(b.x, b.y).rank
+    if (rankA !== rankB) return rankA - rankB
+    return a.y - b.y
+  })
 }
 
 export function DriverAnalysisWidget({
@@ -263,8 +267,6 @@ export function DriverAnalysisWidget({
     const selectedIds = new Set(columns.map((col) => col.id))
     const nonOutcomeColumns = columns.filter((_, i) => i !== activeOutcomeIndex)
 
-    // Other selected columns + remaining Workplace Culture metrics that are
-    // not the active outcome (so the chart stays informative with only a few columns).
     const extras: DriverColumn[] = DRIVER_METRICS.filter(
       (metric) => metric.id !== activeOutcome.id && !selectedIds.has(metric.id),
     ).map((metric: DriverMetric) => ({
@@ -282,6 +284,8 @@ export function DriverAnalysisWidget({
       y: getMetricFavorability(col.id, col.kind, activeFilters),
     }))
   }, [activeFilters, activeOutcome, activeOutcomeIndex, columns])
+
+  const dotsSortedByPriority = useMemo(() => sortDotsByPriority(dots), [dots])
 
   const outcomeOptions = columns.map((col, i) => ({
     value: String(i),
@@ -314,8 +318,8 @@ export function DriverAnalysisWidget({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 0 }}>
+    <div className="flex flex-col gap-2">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
         <span style={{ fontSize: 11, color: 'var(--wu-text-muted)' }}>Outcome variable</span>
         <div className="min-w-[180px]">
           <WuSelect
@@ -328,12 +332,12 @@ export function DriverAnalysisWidget({
         </div>
       </div>
 
-      <div style={{ position: 'relative', flex: 1, minHeight: 320 }}>
-        <ResponsiveContainer width="100%" height={380}>
-          <ScatterChart margin={{ top: 28, right: 24, bottom: 48, left: 48 }}>
+      <div style={{ position: 'relative' }}>
+        <ResponsiveContainer width="100%" height={360}>
+          <ScatterChart margin={{ top: 24, right: 24, bottom: 48, left: 52 }}>
             <ReferenceArea
               x1={0}
-              x2={0.6}
+              x2={0.7}
               y1={0}
               y2={FAVORABILITY_THRESHOLD}
               fill="#fef2f2"
@@ -341,14 +345,14 @@ export function DriverAnalysisWidget({
             />
             <ReferenceArea
               x1={0}
-              x2={0.6}
+              x2={0.7}
               y1={FAVORABILITY_THRESHOLD}
               y2={100}
               fill="#f0fdf4"
               fillOpacity={0.4}
             />
             <ReferenceArea
-              x1={-0.6}
+              x1={-0.7}
               x2={0}
               y1={FAVORABILITY_THRESHOLD}
               y2={100}
@@ -356,7 +360,7 @@ export function DriverAnalysisWidget({
               fillOpacity={0.4}
             />
             <ReferenceArea
-              x1={-0.6}
+              x1={-0.7}
               x2={0}
               y1={0}
               y2={FAVORABILITY_THRESHOLD}
@@ -385,7 +389,7 @@ export function DriverAnalysisWidget({
             <YAxis
               type="number"
               dataKey="y"
-              domain={[0, 100]}
+              domain={FAVORABILITY_DOMAIN}
               tickFormatter={(v: number) => `${v}%`}
               tick={{ fontSize: 11, fill: 'var(--wu-text-muted)' }}
             >
@@ -398,38 +402,26 @@ export function DriverAnalysisWidget({
               />
             </YAxis>
 
-            <ReferenceLine x={0} stroke="#CBD5E1" strokeDasharray="4 4" />
-            <ReferenceLine y={FAVORABILITY_THRESHOLD} stroke="#CBD5E1" strokeDasharray="4 4" />
+            <ReferenceLine
+              x={0}
+              stroke="#94A3B8"
+              strokeDasharray="5 4"
+              strokeWidth={1}
+            />
+            <ReferenceLine
+              y={FAVORABILITY_THRESHOLD}
+              stroke="#94A3B8"
+              strokeDasharray="5 4"
+              strokeWidth={1}
+            />
 
             <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
 
-            <Scatter
-              name="Markers"
-              data={dots.filter((d) => d.kind === 'marker')}
-              fill={KIND_COLORS.marker}
-              fillOpacity={0.8}
-              shape={<DotWithLabel fill={KIND_COLORS.marker} />}
-            />
-            <Scatter
-              name="Building blocks"
-              data={dots.filter((d) => d.kind === 'buildingBlock')}
-              fill={KIND_COLORS.buildingBlock}
-              fillOpacity={0.8}
-              shape={<DotWithLabel fill={KIND_COLORS.buildingBlock} />}
-            />
-            <Scatter
-              name="Questions"
-              data={dots.filter((d) => d.kind === 'question')}
-              fill={KIND_COLORS.question}
-              fillOpacity={0.8}
-              shape={<DotWithLabel fill={KIND_COLORS.question} />}
-            />
+            <Scatter data={dots} shape={<DotWithLabel />} name="Metrics" />
           </ScatterChart>
         </ResponsiveContainer>
 
-        {/* Labels match ReferenceArea tints (x≥0 = high impact on the right):
-            top-left Maintain, top-right Celebrate,
-            bottom-left Monitor, bottom-right Priority focus. */}
+        {/* Corner labels per acceptance checklist */}
         <div
           style={{
             position: 'absolute',
@@ -437,13 +429,13 @@ export function DriverAnalysisWidget({
             left: 55,
             fontSize: 11,
             fontWeight: 500,
-            color: '#1e40af',
-            background: '#eff6ff',
+            color: '#9a3412',
+            background: '#fef3f2',
             padding: '2px 7px',
             borderRadius: 4,
           }}
         >
-          Maintain
+          ★ Priority focus
         </div>
         <div
           style={{
@@ -467,6 +459,21 @@ export function DriverAnalysisWidget({
             left: 55,
             fontSize: 11,
             fontWeight: 500,
+            color: '#1e40af',
+            background: '#eff6ff',
+            padding: '2px 7px',
+            borderRadius: 4,
+          }}
+        >
+          Maintain
+        </div>
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 52,
+            right: 24,
+            fontSize: 11,
+            fontWeight: 500,
             color: '#6b7280',
             background: '#f9fafb',
             border: '0.5px solid #e5e7eb',
@@ -476,53 +483,76 @@ export function DriverAnalysisWidget({
         >
           Monitor
         </div>
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 52,
-            right: 24,
-            fontSize: 11,
-            fontWeight: 500,
-            color: '#9a3412',
-            background: '#fef3f2',
-            padding: '2px 7px',
-            borderRadius: 4,
-          }}
-        >
-          ★ Priority focus
-        </div>
       </div>
 
       <div
         style={{
-          display: 'flex',
-          gap: 16,
-          marginTop: 4,
-          fontSize: 12,
-          color: 'var(--wu-text-muted)',
-          paddingLeft: 40,
+          marginTop: 16,
+          borderTop: '0.5px solid var(--wu-border)',
+          paddingTop: 12,
         }}
       >
-        {(
-          [
-            { color: KIND_COLORS.marker, label: 'Markers' },
-            { color: KIND_COLORS.buildingBlock, label: 'Building blocks' },
-            { color: KIND_COLORS.question, label: 'Questions' },
-          ] as const
-        ).map(({ color, label }) => (
-          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: color,
-                display: 'inline-block',
-              }}
-            />
-            {label}
-          </span>
-        ))}
+        <p
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            color: 'var(--wu-text-muted)',
+            marginBottom: 8,
+            paddingLeft: 4,
+          }}
+        >
+          All metrics
+        </p>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto auto',
+            gap: '2px 12px',
+            alignItems: 'center',
+          }}
+        >
+          {dotsSortedByPriority.map((d) => {
+            const q = getQuadrant(d.x, d.y)
+            const isPriority = d.x >= 0 && d.y < FAVORABILITY_THRESHOLD
+            return (
+              <Fragment key={d.name}>
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--wu-text-body)',
+                    paddingLeft: 4,
+                    paddingTop: 2,
+                    paddingBottom: 2,
+                    borderLeft: isPriority ? '2px solid #ef4444' : '2px solid transparent',
+                  }}
+                >
+                  {d.name}
+                </span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--wu-text-muted)',
+                    textAlign: 'right',
+                  }}
+                >
+                  {d.y.toFixed(0)}%
+                </span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    padding: '1px 7px',
+                    borderRadius: 10,
+                    background: q.bg,
+                    color: q.color,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {q.label}
+                </span>
+              </Fragment>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

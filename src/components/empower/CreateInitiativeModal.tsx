@@ -167,11 +167,7 @@ export function CreateInitiativeModal({
 
   const selectedCount = generatedTasks?.filter((task) => task.selected).length ?? 0
   const canProceedStep1 = Boolean(
-    form.name.trim() &&
-      form.description.trim() &&
-      form.goalId &&
-      form.ownerId &&
-      form.contributorIds.length > 0,
+    form.name.trim() && form.goalId && form.ownerId && form.contributorIds.length > 0,
   )
 
   useEffect(() => {

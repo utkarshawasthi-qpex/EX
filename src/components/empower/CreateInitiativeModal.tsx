@@ -12,6 +12,7 @@ import {
   overallFavorability,
   type RecommendedTask,
 } from '@/lib/empowerIntegration/generateRecommendations'
+import { INITIATIVE_TYPE_OPTIONS } from '@/lib/empowerIntegration/helpers'
 import { upsertInitiative } from '@/lib/empowerIntegration/storage'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { getCurrentUser } from '@/lib/userContext'
@@ -19,13 +20,13 @@ import { cn } from '@/lib/utils'
 import type {
   EmpowerInitiativeRecord,
   InitiativeTask,
+  InitiativeType,
   SurveyLink,
 } from '@/types/empowerIntegration'
 
 const WuButton = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuButton })), { ssr: false })
 const WuCheckbox = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuCheckbox })), { ssr: false })
 const WuChip = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuChip })), { ssr: false })
-const WuDatePicker = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuDatePicker })), { ssr: false })
 const WuFormGroup = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuFormGroup })), { ssr: false })
 const WuInput = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuInput })), { ssr: false })
 const WuLoader = dynamic(() => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuLoader })), { ssr: false })
@@ -51,7 +52,8 @@ type FormState = {
   description: string
   goalId: string
   ownerId: string
-  dueDate: string
+  contributorIds: string[]
+  type: InitiativeType
 }
 
 const EMPTY_FORM: FormState = {
@@ -59,7 +61,8 @@ const EMPTY_FORM: FormState = {
   description: '',
   goalId: '',
   ownerId: '',
-  dueDate: '',
+  contributorIds: [],
+  type: 'none',
 }
 
 function daysFromNow(days: number): string {
@@ -143,6 +146,10 @@ export function CreateInitiativeModal({
     () => mockEmployees.map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` })),
     [],
   )
+  const contributorOptions = useMemo(
+    () => employeeOptions.filter((option) => option.value !== form.ownerId),
+    [employeeOptions, form.ownerId],
+  )
   const surveys = useMemo(() => listAccessibleExSurveys(true), [])
 
   const selectedSurveys = useMemo(
@@ -152,8 +159,20 @@ export function CreateInitiativeModal({
 
   const goalValue = goalOptions.find((option) => option.value === form.goalId) ?? null
   const ownerValue = employeeOptions.find((option) => option.value === form.ownerId) ?? null
+  const contributorValues = contributorOptions.filter((option) =>
+    form.contributorIds.includes(option.value),
+  )
+  const typeValue =
+    INITIATIVE_TYPE_OPTIONS.find((option) => option.value === form.type) ?? INITIATIVE_TYPE_OPTIONS[0]
+
   const selectedCount = generatedTasks?.filter((task) => task.selected).length ?? 0
-  const canProceedStep1 = Boolean(form.name.trim() && form.goalId)
+  const canProceedStep1 = Boolean(
+    form.name.trim() &&
+      form.description.trim() &&
+      form.goalId &&
+      form.ownerId &&
+      form.contributorIds.length > 0,
+  )
 
   useEffect(() => {
     if (!open) return
@@ -181,13 +200,20 @@ export function CreateInitiativeModal({
     onOpenChange(next)
   }
 
+  function setOwner(ownerId: string) {
+    setForm((current) => ({
+      ...current,
+      ownerId,
+      contributorIds: current.contributorIds.filter((id) => id !== ownerId),
+    }))
+  }
+
   function toggleSurvey(surveyId: string) {
     setSelectedSurveyIds((current) =>
       current.includes(surveyId)
         ? current.filter((id) => id !== surveyId)
         : [...current, surveyId],
     )
-    // Changing the survey set invalidates prior generation.
     setGeneratedTasks(null)
   }
 
@@ -236,23 +262,21 @@ export function CreateInitiativeModal({
   }
 
   function createInitiative(tasks: InitiativeTask[], surveyLinks: SurveyLink[]) {
-    if (!form.name.trim() || !form.goalId) return
+    if (!canProceedStep1) return
 
     const now = new Date().toISOString()
     const id = `init_${Date.now()}`
-    const ownerId = form.ownerId || user.id
     const record: EmpowerInitiativeRecord = {
       id,
       title: form.name.trim(),
       description: form.description.trim(),
       goalId: form.goalId,
-      type: 'none',
+      type: form.type,
       status: 'active',
       progress: 'on_track',
       createdBy: user.id,
-      ownerId,
-      contributors: [],
-      dueDate: form.dueDate || undefined,
+      ownerId: form.ownerId,
+      contributors: form.contributorIds,
       createdAt: now,
       tasks,
       provenance: null,
@@ -285,8 +309,6 @@ export function CreateInitiativeModal({
   }
 
   function handleCreateWithTasks() {
-    const ownerId = form.ownerId || user.id
-    const dueDate = form.dueDate || daysFromNow(60)
     const selectedTasks = (generatedTasks ?? [])
       .filter((task) => task.selected)
       .map(
@@ -294,9 +316,9 @@ export function CreateInitiativeModal({
           id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
           text: task.text,
           description: `Targets ${task.category} (${task.favorability}% favorable)`,
-          ownerId,
+          ownerId: form.ownerId,
           contributorIds: [],
-          dueDate,
+          dueDate: daysFromNow(60),
           status: 'pending',
           source: 'ai_recommendation',
         }),
@@ -368,29 +390,61 @@ export function CreateInitiativeModal({
                   data={employeeOptions}
                   accessorKey={{ value: 'value', label: 'label' }}
                   value={ownerValue}
-                  onSelect={(v) =>
-                    setForm({ ...form, ownerId: (v as SelectOption | null)?.value ?? '' })
-                  }
+                  onSelect={(v) => setOwner((v as SelectOption | null)?.value ?? '')}
                   variant="outlined"
                   placeholder="Select owner"
                 />
               }
             />
-            <WuFormGroup
-              Label="Due date"
-              Input={
-                <WuDatePicker
-                  value={form.dueDate ? new Date(`${form.dueDate}T00:00:00`) : undefined}
-                  onChange={(date) =>
-                    setForm({ ...form, dueDate: date ? format(date, 'yyyy-MM-dd') : '' })
-                  }
-                  onReset={() => setForm({ ...form, dueDate: '' })}
-                  showResetButton
-                  variant="outlined"
-                  placeholder="No due date"
-                />
-              }
-            />
+            <div>
+              <WuFormGroup
+                Label="Contributor(s)"
+                Input={
+                  <WuSelect
+                    data={contributorOptions}
+                    accessorKey={{ value: 'value', label: 'label' }}
+                    value={contributorValues}
+                    onSelect={(v) =>
+                      setForm({
+                        ...form,
+                        contributorIds: (Array.isArray(v) ? v : v ? [v] : []).map(
+                          (option) => (option as SelectOption).value,
+                        ),
+                      })
+                    }
+                    multiple
+                    variant="outlined"
+                    placeholder="Select contributors"
+                  />
+                }
+              />
+              <p className="-mt-2 text-xs text-[rgb(var(--wu-gray-lead))]">
+                At least one contributor is required
+              </p>
+            </div>
+            <div>
+              <WuFormGroup
+                Label="Type"
+                Input={
+                  <WuSelect
+                    data={INITIATIVE_TYPE_OPTIONS}
+                    accessorKey={{ value: 'value', label: 'label' }}
+                    value={typeValue}
+                    onSelect={(v) =>
+                      setForm({
+                        ...form,
+                        type: ((v as SelectOption | null)?.value ?? 'none') as InitiativeType,
+                      })
+                    }
+                    variant="outlined"
+                  />
+                }
+              />
+              <p className="-mt-2 text-xs text-[rgb(var(--wu-gray-lead))]">
+                Upstream: other initiatives depend on this one. Downstream: this initiative depends
+                on another.
+              </p>
+            </div>
           </div>
         )}
 

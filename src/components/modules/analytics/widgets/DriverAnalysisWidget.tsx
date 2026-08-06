@@ -14,6 +14,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
+import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
 import type { ActiveFilter, DashboardWidget } from '@/types'
 import {
   DRIVER_CORRELATION_MATRIX,
@@ -41,28 +43,44 @@ type DotPoint = {
   y: number
 }
 
+type QuadrantInfo = {
+  label: 'Priority focus' | 'Celebrate' | 'Maintain' | 'Monitor'
+  bg: string
+  color: string
+}
+
 type DriverAnalysisWidgetProps = {
   widget?: DashboardWidget
   activeFilters?: ActiveFilter[]
+  onEdit?: () => void
+  onDuplicate?: () => void
+  onDelete?: () => void
 }
 
 const FAVORABILITY_THRESHOLD = 65
-const IMPACT_DOMAIN: [number, number] = [-0.7, 0.7]
-const FAVORABILITY_DOMAIN: [number, number] = [20, 100]
 const STORAGE_PREFIX = 'pp_driver_active_outcome_'
 const QP_BLUE = '#1B87E6'
 
-function getQuadrant(x: number, y: number) {
-  if (x >= 0 && y < FAVORABILITY_THRESHOLD) {
-    return { label: 'Priority focus', bg: '#fef3f2', color: '#9a3412', rank: 0 }
+const QUADRANT_ORDER: Record<QuadrantInfo['label'], number> = {
+  'Priority focus': 0,
+  Celebrate: 1,
+  Maintain: 2,
+  Monitor: 3,
+}
+
+function getQuadrant(x: number, y: number): QuadrantInfo {
+  const highImpact = x > 0
+  const highFav = y >= FAVORABILITY_THRESHOLD
+  if (highImpact && !highFav) {
+    return { label: 'Priority focus', bg: '#fef2f2', color: '#9a3412' }
   }
-  if (x >= 0 && y >= FAVORABILITY_THRESHOLD) {
-    return { label: 'Celebrate', bg: '#f0fdf4', color: '#166534', rank: 1 }
+  if (highImpact && highFav) {
+    return { label: 'Celebrate', bg: '#f0fdf4', color: '#166534' }
   }
-  if (x < 0 && y >= FAVORABILITY_THRESHOLD) {
-    return { label: 'Maintain', bg: '#eff6ff', color: '#1e40af', rank: 2 }
+  if (!highImpact && highFav) {
+    return { label: 'Maintain', bg: '#eff6ff', color: '#1e40af' }
   }
-  return { label: 'Monitor', bg: '#f9fafb', color: '#6b7280', rank: 3 }
+  return { label: 'Monitor', bg: '#f9fafb', color: '#6b7280' }
 }
 
 function CustomTooltip({
@@ -132,15 +150,15 @@ function CustomTooltip({
   )
 }
 
-/** All dots QP blue; Priority Focus gets a red ring + slightly larger radius. No always-on labels. */
-function DotWithLabel(props: {
+/** All dots QP blue; Priority Focus gets a red ring. No always-on labels. */
+function QuadrantDot(props: {
   cx?: number
   cy?: number
   payload?: DotPoint
 }) {
   const { cx = 0, cy = 0, payload } = props
   if (!payload) return null
-  const isPriority = payload.x >= 0 && payload.y < FAVORABILITY_THRESHOLD
+  const isPriority = payload.x > 0 && payload.y < FAVORABILITY_THRESHOLD
 
   return (
     <g>
@@ -191,7 +209,6 @@ function resolveColumns(config?: Record<string, unknown>): DriverColumn[] {
       .filter((col): col is DriverColumn => col !== null)
   }
 
-  // Legacy / missing columns: default to Workplace Culture markers.
   const markers = DRIVER_METRICS.filter((metric) => metric.kind === 'marker')
   const primary =
     typeof config?.primaryOutcome === 'string'
@@ -222,20 +239,45 @@ function readStoredOutcomeIndex(widgetId: string, columnCount: number, fallback:
   }
 }
 
-function sortDotsByPriority(dots: DotPoint[]): DotPoint[] {
-  return [...dots].sort((a, b) => {
-    const rankA = getQuadrant(a.x, a.y).rank
-    const rankB = getQuadrant(b.x, b.y).rank
-    if (rankA !== rankB) return rankA - rankB
-    return a.y - b.y
-  })
+function computeAxisDomain(dots: DotPoint[]): {
+  xMin: number
+  xMax: number
+  yMin: number
+  yMax: number
+} {
+  if (dots.length === 0) {
+    return { xMin: -0.05, xMax: 0.05, yMin: 60, yMax: 100 }
+  }
+
+  const xValues = dots.map((d) => d.x)
+  const yValues = dots.map((d) => d.y)
+
+  const xPad = Math.max((Math.max(...xValues) - Math.min(...xValues)) * 0.2, 0.1)
+  const yPad = Math.max((Math.max(...yValues) - Math.min(...yValues)) * 0.2, 5)
+
+  let xMin = Math.min(Math.min(...xValues) - xPad, -0.05)
+  let xMax = Math.max(Math.max(...xValues) + xPad, 0.05)
+  let yMin = Math.max(Math.min(...yValues) - yPad, 0)
+  let yMax = Math.min(Math.max(...yValues) + yPad, 100)
+
+  // Keep threshold reference lines visible
+  if (xMin > 0) xMin = -0.05
+  if (xMax < 0) xMax = 0.05
+  if (yMin > FAVORABILITY_THRESHOLD) yMin = 60
+  if (yMax < FAVORABILITY_THRESHOLD) yMax = Math.min(FAVORABILITY_THRESHOLD + 5, 100)
+
+  return { xMin, xMax, yMin, yMax }
 }
 
 export function DriverAnalysisWidget({
   widget,
   activeFilters = [],
+  onEdit,
+  onDuplicate,
+  onDelete,
 }: DriverAnalysisWidgetProps) {
   const widgetId = widget?.id ?? 'driver_analysis'
+  const title = widget?.title?.trim() || 'Driver Analysis'
   const columns = useMemo(() => resolveColumns(widget?.config), [widget?.config])
 
   const configDefaultIndex = useMemo(() => {
@@ -285,7 +327,19 @@ export function DriverAnalysisWidget({
     }))
   }, [activeFilters, activeOutcome, activeOutcomeIndex, columns])
 
-  const dotsSortedByPriority = useMemo(() => sortDotsByPriority(dots), [dots])
+  const { xMin, xMax, yMin, yMax } = useMemo(() => computeAxisDomain(dots), [dots])
+
+  const dotsSortedByPriority = useMemo(
+    () =>
+      [...dots].sort((a, b) => {
+        const qa = getQuadrant(a.x, a.y)
+        const qb = getQuadrant(b.x, b.y)
+        const orderDiff = QUADRANT_ORDER[qa.label] - QUADRANT_ORDER[qb.label]
+        if (orderDiff !== 0) return orderDiff
+        return a.y - b.y
+      }),
+    [dots],
+  )
 
   const outcomeOptions = columns.map((col, i) => ({
     value: String(i),
@@ -309,251 +363,261 @@ export function DriverAnalysisWidget({
     }
   }
 
-  if (!activeOutcome || columns.length === 0) {
-    return (
-      <div className="flex h-[280px] items-center justify-center text-sm text-[var(--wu-text-muted)]">
-        Select columns in widget settings to plot driver analysis.
-      </div>
-    )
-  }
-
   return (
-    <div className="flex flex-col gap-2">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-        <span style={{ fontSize: 11, color: 'var(--wu-text-muted)' }}>Outcome variable</span>
-        <div className="min-w-[180px]">
-          <WuSelect
-            data={outcomeOptions}
-            accessorKey={{ value: 'value', label: 'label' }}
-            value={selectedOutcomeOption}
-            onSelect={handleOutcomeSelect}
-            variant="outlined"
-          />
-        </div>
-      </div>
+    <WidgetCardShell
+      title={title}
+      onEdit={onEdit}
+      onDuplicate={onDuplicate}
+      onDelete={onDelete}
+    >
+      <FilteredWidgetGuard activeFilters={activeFilters}>
+        {!activeOutcome || columns.length === 0 ? (
+          <div className="flex h-[280px] items-center justify-center text-sm text-gray-500">
+            Select columns in widget settings to plot driver analysis.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <span style={{ fontSize: 11, color: 'var(--wu-text-muted)' }}>Outcome variable</span>
+              <div className="min-w-[180px]">
+                <WuSelect
+                  data={outcomeOptions}
+                  accessorKey={{ value: 'value', label: 'label' }}
+                  value={selectedOutcomeOption}
+                  onSelect={handleOutcomeSelect}
+                  variant="outlined"
+                />
+              </div>
+            </div>
 
-      <div style={{ position: 'relative' }}>
-        <ResponsiveContainer width="100%" height={360}>
-          <ScatterChart margin={{ top: 24, right: 24, bottom: 48, left: 52 }}>
-            <ReferenceArea
-              x1={0}
-              x2={0.7}
-              y1={0}
-              y2={FAVORABILITY_THRESHOLD}
-              fill="#fef2f2"
-              fillOpacity={0.4}
-            />
-            <ReferenceArea
-              x1={0}
-              x2={0.7}
-              y1={FAVORABILITY_THRESHOLD}
-              y2={100}
-              fill="#f0fdf4"
-              fillOpacity={0.4}
-            />
-            <ReferenceArea
-              x1={-0.7}
-              x2={0}
-              y1={FAVORABILITY_THRESHOLD}
-              y2={100}
-              fill="#eff6ff"
-              fillOpacity={0.4}
-            />
-            <ReferenceArea
-              x1={-0.7}
-              x2={0}
-              y1={0}
-              y2={FAVORABILITY_THRESHOLD}
-              fill="#f9fafb"
-              fillOpacity={0.4}
-            />
+            <div style={{ position: 'relative' }}>
+              <ResponsiveContainer width="100%" height={360}>
+                <ScatterChart margin={{ top: 24, right: 24, bottom: 48, left: 52 }}>
+                  {/* ReferenceAreas FIRST so Scatter renders on top */}
+                  <ReferenceArea
+                    x1={0}
+                    x2={xMax}
+                    y1={yMin}
+                    y2={FAVORABILITY_THRESHOLD}
+                    fill="#fef2f2"
+                    fillOpacity={0.5}
+                  />
+                  <ReferenceArea
+                    x1={0}
+                    x2={xMax}
+                    y1={FAVORABILITY_THRESHOLD}
+                    y2={yMax}
+                    fill="#f0fdf4"
+                    fillOpacity={0.5}
+                  />
+                  <ReferenceArea
+                    x1={xMin}
+                    x2={0}
+                    y1={FAVORABILITY_THRESHOLD}
+                    y2={yMax}
+                    fill="#eff6ff"
+                    fillOpacity={0.5}
+                  />
+                  <ReferenceArea
+                    x1={xMin}
+                    x2={0}
+                    y1={yMin}
+                    y2={FAVORABILITY_THRESHOLD}
+                    fill="#f9fafb"
+                    fillOpacity={0.5}
+                  />
 
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--wu-border)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--wu-border)" />
 
-            <XAxis
-              type="number"
-              dataKey="x"
-              domain={IMPACT_DOMAIN}
-              tickCount={5}
-              tickFormatter={(v: number) => v.toFixed(1)}
-              tick={{ fontSize: 11, fill: 'var(--wu-text-muted)' }}
+                  <XAxis
+                    type="number"
+                    dataKey="x"
+                    domain={[xMin, xMax]}
+                    tickCount={5}
+                    tickFormatter={(v: number) => v.toFixed(1)}
+                    tick={{ fontSize: 11, fill: 'var(--wu-text-muted)' }}
+                  >
+                    <Label
+                      value={`Impact on ${activeOutcome.label}`}
+                      position="insideBottom"
+                      offset={-10}
+                      style={{ fontSize: 11, fill: 'var(--wu-text-muted)' }}
+                    />
+                  </XAxis>
+
+                  <YAxis
+                    type="number"
+                    dataKey="y"
+                    domain={[yMin, yMax]}
+                    tickFormatter={(v: number) => `${v}%`}
+                    tick={{ fontSize: 11, fill: 'var(--wu-text-muted)' }}
+                  >
+                    <Label
+                      value="Current favorability"
+                      angle={-90}
+                      position="insideLeft"
+                      offset={10}
+                      style={{ fontSize: 11, fill: 'var(--wu-text-muted)' }}
+                    />
+                  </YAxis>
+
+                  <ReferenceLine
+                    x={0}
+                    stroke="#94A3B8"
+                    strokeDasharray="5 4"
+                    strokeWidth={1}
+                  />
+                  <ReferenceLine
+                    y={FAVORABILITY_THRESHOLD}
+                    stroke="#94A3B8"
+                    strokeDasharray="5 4"
+                    strokeWidth={1}
+                  />
+
+                  <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
+
+                  <Scatter data={dots} shape={<QuadrantDot />} name="Metrics" />
+                </ScatterChart>
+              </ResponsiveContainer>
+
+              {/* Corner labels match quadrant mapping */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 28,
+                  left: 55,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: '#1e40af',
+                  background: '#eff6ff',
+                  padding: '2px 7px',
+                  borderRadius: 4,
+                }}
+              >
+                Maintain
+              </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 28,
+                  right: 24,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: '#166534',
+                  background: '#f0fdf4',
+                  padding: '2px 7px',
+                  borderRadius: 4,
+                }}
+              >
+                Celebrate
+              </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 52,
+                  left: 55,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: '#6b7280',
+                  background: '#f9fafb',
+                  border: '0.5px solid #e5e7eb',
+                  padding: '2px 7px',
+                  borderRadius: 4,
+                }}
+              >
+                Monitor
+              </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 52,
+                  right: 24,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: '#9a3412',
+                  background: '#fef2f2',
+                  padding: '2px 7px',
+                  borderRadius: 4,
+                }}
+              >
+                ★ Priority focus
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: 16,
+                borderTop: '0.5px solid var(--wu-border)',
+                paddingTop: 12,
+              }}
             >
-              <Label
-                value={`Impact on ${activeOutcome.label}`}
-                position="insideBottom"
-                offset={-10}
-                style={{ fontSize: 11, fill: 'var(--wu-text-muted)' }}
-              />
-            </XAxis>
-
-            <YAxis
-              type="number"
-              dataKey="y"
-              domain={FAVORABILITY_DOMAIN}
-              tickFormatter={(v: number) => `${v}%`}
-              tick={{ fontSize: 11, fill: 'var(--wu-text-muted)' }}
-            >
-              <Label
-                value="Current favorability"
-                angle={-90}
-                position="insideLeft"
-                offset={10}
-                style={{ fontSize: 11, fill: 'var(--wu-text-muted)' }}
-              />
-            </YAxis>
-
-            <ReferenceLine
-              x={0}
-              stroke="#94A3B8"
-              strokeDasharray="5 4"
-              strokeWidth={1}
-            />
-            <ReferenceLine
-              y={FAVORABILITY_THRESHOLD}
-              stroke="#94A3B8"
-              strokeDasharray="5 4"
-              strokeWidth={1}
-            />
-
-            <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-
-            <Scatter data={dots} shape={<DotWithLabel />} name="Metrics" />
-          </ScatterChart>
-        </ResponsiveContainer>
-
-        {/* Corner labels per acceptance checklist */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 28,
-            left: 55,
-            fontSize: 11,
-            fontWeight: 500,
-            color: '#9a3412',
-            background: '#fef3f2',
-            padding: '2px 7px',
-            borderRadius: 4,
-          }}
-        >
-          ★ Priority focus
-        </div>
-        <div
-          style={{
-            position: 'absolute',
-            top: 28,
-            right: 24,
-            fontSize: 11,
-            fontWeight: 500,
-            color: '#166534',
-            background: '#f0fdf4',
-            padding: '2px 7px',
-            borderRadius: 4,
-          }}
-        >
-          Celebrate
-        </div>
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 52,
-            left: 55,
-            fontSize: 11,
-            fontWeight: 500,
-            color: '#1e40af',
-            background: '#eff6ff',
-            padding: '2px 7px',
-            borderRadius: 4,
-          }}
-        >
-          Maintain
-        </div>
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 52,
-            right: 24,
-            fontSize: 11,
-            fontWeight: 500,
-            color: '#6b7280',
-            background: '#f9fafb',
-            border: '0.5px solid #e5e7eb',
-            padding: '2px 7px',
-            borderRadius: 4,
-          }}
-        >
-          Monitor
-        </div>
-      </div>
-
-      <div
-        style={{
-          marginTop: 16,
-          borderTop: '0.5px solid var(--wu-border)',
-          paddingTop: 12,
-        }}
-      >
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 500,
-            color: 'var(--wu-text-muted)',
-            marginBottom: 8,
-            paddingLeft: 4,
-          }}
-        >
-          All metrics
-        </p>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr auto auto',
-            gap: '2px 12px',
-            alignItems: 'center',
-          }}
-        >
-          {dotsSortedByPriority.map((d) => {
-            const q = getQuadrant(d.x, d.y)
-            const isPriority = d.x >= 0 && d.y < FAVORABILITY_THRESHOLD
-            return (
-              <Fragment key={d.name}>
-                <span
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--wu-text-body)',
-                    paddingLeft: 4,
-                    paddingTop: 2,
-                    paddingBottom: 2,
-                    borderLeft: isPriority ? '2px solid #ef4444' : '2px solid transparent',
-                  }}
-                >
-                  {d.name}
-                </span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--wu-text-muted)',
-                    textAlign: 'right',
-                  }}
-                >
-                  {d.y.toFixed(0)}%
-                </span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    padding: '1px 7px',
-                    borderRadius: 10,
-                    background: q.bg,
-                    color: q.color,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {q.label}
-                </span>
-              </Fragment>
-            )
-          })}
-        </div>
-      </div>
-    </div>
+              <p
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: 'var(--wu-text-muted)',
+                  marginBottom: 8,
+                  paddingLeft: 4,
+                }}
+              >
+                All metrics
+              </p>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr auto auto',
+                  gap: '2px 12px',
+                  alignItems: 'center',
+                }}
+              >
+                {dotsSortedByPriority.map((d) => {
+                  const q = getQuadrant(d.x, d.y)
+                  return (
+                    <Fragment key={d.name}>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--wu-text-body)',
+                          paddingLeft: 4,
+                          paddingTop: 2,
+                          paddingBottom: 2,
+                          borderLeft:
+                            q.label === 'Priority focus'
+                              ? '3px solid #ef4444'
+                              : '3px solid transparent',
+                        }}
+                      >
+                        {d.name}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--wu-text-muted)',
+                          textAlign: 'right',
+                        }}
+                      >
+                        {d.y.toFixed(0)}%
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: '1px 7px',
+                          borderRadius: 10,
+                          background: q.bg,
+                          color: q.color,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {q.label}
+                      </span>
+                    </Fragment>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </FilteredWidgetGuard>
+    </WidgetCardShell>
   )
 }

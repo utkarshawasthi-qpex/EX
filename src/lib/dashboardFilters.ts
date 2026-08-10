@@ -20,8 +20,18 @@ export {
   DRIVER_CORRELATION_MATRIX,
   DRIVER_METRICS,
   getCorrelation,
+  getDriverImpact,
   getDriverMetricById,
   getDriverOutcomeOptions,
+  getEligibleDriverMetrics,
   getMetricFavorability,
+  getRespondentMetricScores,
+  getYAxisDisclosureLabel,
+  normalizeToFavorability,
+  pearsonCorrelation,
 } from '@/data/mock/driverAnalysis'
-export type { DriverMetric, DriverMetricKind } from '@/data/mock/driverAnalysis'
+export type {
+  DriverMetric,
+  DriverMetricKind,
+  DriverQuestionType,
+} from '@/data/mock/driverAnalysis'

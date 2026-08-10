@@ -162,31 +162,59 @@ export function getDriverOutcomeOptions(): {
   }
 }
 
-/** Pearson r between paired respondent-level score arrays. Returns value in [-1, 1]. */
-export function pearsonCorrelation(driverScores: number[], outcomeScores: number[]): number {
-  const n = Math.min(driverScores.length, outcomeScores.length)
+/**
+ * Pearson r (computational form):
+ * r = [n·Σ(xy) - (Σx)(Σy)] / √{[n·Σx² - (Σx)²] · [n·Σy² - (Σy)²]}
+ */
+export function pearsonR(x: number[], y: number[]): number {
+  const n = Math.min(x.length, y.length)
   if (n < 2) return 0
+  const xs = x.slice(0, n)
+  const ys = y.slice(0, n)
+  const sumX = xs.reduce((a, b) => a + b, 0)
+  const sumY = ys.reduce((a, b) => a + b, 0)
+  const sumXY = xs.reduce((a, v, i) => a + v * (ys[i] ?? 0), 0)
+  const sumX2 = xs.reduce((a, v) => a + v * v, 0)
+  const sumY2 = ys.reduce((a, v) => a + v * v, 0)
+  const num = n * sumXY - sumX * sumY
+  const den = Math.sqrt((n * sumX2 - sumX ** 2) * (n * sumY2 - sumY ** 2))
+  return den === 0 ? 0 : num / den
+}
 
-  let sumX = 0
-  let sumY = 0
-  let sumXY = 0
-  let sumX2 = 0
-  let sumY2 = 0
+/** @deprecated Prefer pearsonR */
+export function pearsonCorrelation(driverScores: number[], outcomeScores: number[]): number {
+  return pearsonR(driverScores, outcomeScores)
+}
 
-  for (let i = 0; i < n; i += 1) {
-    const x = driverScores[i] ?? 0
-    const y = outcomeScores[i] ?? 0
-    sumX += x
-    sumY += y
-    sumXY += x * y
-    sumX2 += x * x
-    sumY2 += y * y
-  }
+export type AxisConfig = {
+  min: number
+  max: number
+  threshold: number
+}
 
-  const numerator = n * sumXY - sumX * sumY
-  const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY))
-  if (denominator === 0) return 0
-  return Math.round((numerator / denominator) * 1000) / 1000
+/** Dynamic domain + median threshold with 2σ outlier removal. */
+export function computeAxisConfig(values: number[], padding = 0.15): AxisConfig {
+  if (!values.length) return { min: 0, max: 1, threshold: 0.5 }
+
+  const mean = values.reduce((a, b) => a + b, 0) / values.length
+  const std = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length)
+  const filtered =
+    std > 0 ? values.filter((v) => Math.abs(v - mean) <= 2 * std) : values
+  const usable = filtered.length > 0 ? filtered : values
+
+  const dataMin = Math.min(...usable)
+  const dataMax = Math.max(...usable)
+  const range = dataMax - dataMin || 1
+  const pad = range * padding
+
+  const sorted = [...usable].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  const threshold =
+    sorted.length % 2 === 0
+      ? ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2
+      : (sorted[mid] ?? 0.5)
+
+  return { min: dataMin - pad, max: dataMax + pad, threshold }
 }
 
 /**
@@ -308,16 +336,21 @@ export function getMetricFavorability(
   return normalizeToFavorability(scores, metric.questionType)
 }
 
-/** Pearson r between a driver metric and an outcome metric (filtered respondents). */
+/**
+ * Impact on the outcome = |Pearson r| (always ≥ 0).
+ * Y axis of the driver analysis chart uses this absolute value.
+ */
 export function getDriverImpact(
   driverId: string,
   outcomeId: string,
   activeFilters: ActiveFilter[] = [],
 ): number {
   if (driverId === outcomeId) return 1
-  return pearsonCorrelation(
-    getRespondentMetricScores(driverId, activeFilters),
-    getRespondentMetricScores(outcomeId, activeFilters),
+  return Math.abs(
+    pearsonR(
+      getRespondentMetricScores(driverId, activeFilters),
+      getRespondentMetricScores(outcomeId, activeFilters),
+    ),
   )
 }
 

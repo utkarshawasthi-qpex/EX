@@ -17,11 +17,12 @@ import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCa
 import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
 import type { ActiveFilter, DashboardWidget } from '@/types'
 import {
+  computeAxisConfig,
   getDriverImpact,
   getDriverMetricById,
   getEligibleDriverMetrics,
   getMetricFavorability,
-  getYAxisDisclosureLabel,
+  type AxisConfig,
   type DriverMetricKind,
   type DriverQuestionType,
 } from '@/lib/dashboardFilters'
@@ -30,9 +31,13 @@ type DotPoint = {
   name: string
   kind: DriverMetricKind
   questionType: DriverQuestionType
-  /** Pearson r — stored as impact (recharts overwrites top-level x/y with pixels). */
+  /** Performance (favorability %) — X axis dataKey */
+  x: number
+  /** Impact |r| — Y axis dataKey */
+  y: number
+  /** Stable copies — recharts may overwrite top-level x/y with pixels on shape props */
+  performance: number
   impact: number
-  favorability: number
 }
 
 type QuadrantInfo = {
@@ -49,14 +54,14 @@ type DriverAnalysisWidgetProps = {
   onDelete?: () => void
 }
 
-const FAVORABILITY_THRESHOLD = 50
 const QP_BLUE = '#1B87E6'
 
+/** Priority focus → Celebrate → Monitor → Maintain */
 const QUADRANT_ORDER: Record<QuadrantInfo['label'], number> = {
   'Priority focus': 0,
   Celebrate: 1,
-  Maintain: 2,
-  Monitor: 3,
+  Monitor: 2,
+  Maintain: 3,
 }
 
 const cornerStyle: CSSProperties = {
@@ -68,43 +73,54 @@ const cornerStyle: CSSProperties = {
   pointerEvents: 'none',
 }
 
-function getQuadrant(x: number, y: number): QuadrantInfo {
-  const highImpact = x > 0
-  const highFav = y >= FAVORABILITY_THRESHOLD
-  if (highImpact && !highFav) {
+function getQuadrant(
+  x: number,
+  y: number,
+  xThreshold: number,
+  yThreshold: number,
+): QuadrantInfo {
+  const highPerf = x >= xThreshold
+  const highImpact = y >= yThreshold
+  if (!highPerf && highImpact) {
     return { label: 'Priority focus', bg: '#FEE2E2', color: '#991B1B' }
   }
-  if (highImpact && highFav) {
+  if (highPerf && highImpact) {
     return { label: 'Celebrate', bg: '#DCFCE7', color: '#166534' }
   }
-  if (!highImpact && highFav) {
-    return { label: 'Maintain', bg: '#DBEAFE', color: '#1E40AF' }
+  if (!highPerf && !highImpact) {
+    return { label: 'Monitor', bg: '#F3F4F6', color: '#374151' }
   }
-  return { label: 'Monitor', bg: '#F3F4F6', color: '#374151' }
+  return { label: 'Maintain', bg: '#DBEAFE', color: '#1E40AF' }
 }
 
 function DriverTooltip({
   active,
   payload,
+  xThreshold,
+  yThreshold,
 }: {
   active?: boolean
   payload?: Array<{ payload?: DotPoint }>
+  xThreshold: number
+  yThreshold: number
 }) {
   if (!active || !payload?.length) return null
   const d = payload[0]?.payload
   if (!d) return null
-  const q = getQuadrant(d.impact, d.favorability)
-  const yLabel = getYAxisDisclosureLabel(d.questionType)
+  const perf = d.performance ?? d.x
+  const impact = d.impact ?? d.y
+  const q = getQuadrant(perf, impact, xThreshold, yThreshold)
+  const isEnps = d.questionType === 'enps' || d.questionType === 'nps'
 
   return (
     <div
       style={{
-        background: '#FFFFFF',
+        background: '#fff',
         border: '1px solid #E5E7EB',
         borderRadius: 8,
         padding: '12px 16px',
         boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-        minWidth: 200,
+        minWidth: 210,
         fontSize: 13,
       }}
     >
@@ -117,8 +133,8 @@ function DriverTooltip({
           color: '#6B7280',
         }}
       >
-        <span>{yLabel}</span>
-        <span style={{ color: '#1B2E4A', fontWeight: 500 }}>{d.favorability.toFixed(1)}%</span>
+        <span>{isEnps ? 'eNPS (normalized)' : 'Favorability'}</span>
+        <span style={{ color: '#1B2E4A', fontWeight: 500 }}>{perf.toFixed(1)}%</span>
       </div>
       <div
         style={{
@@ -128,11 +144,8 @@ function DriverTooltip({
           color: '#6B7280',
         }}
       >
-        <span>Impact (r)</span>
-        <span style={{ color: '#1B2E4A', fontWeight: 500 }}>
-          {d.impact > 0 ? '+' : ''}
-          {d.impact.toFixed(3)}
-        </span>
+        <span>Impact (|r|)</span>
+        <span style={{ color: '#1B2E4A', fontWeight: 500 }}>{impact.toFixed(3)}</span>
       </div>
       <span
         style={{
@@ -150,39 +163,43 @@ function DriverTooltip({
   )
 }
 
-function QuadrantDot(props: {
-  cx?: number
-  cy?: number
-  payload?: DotPoint
-}) {
-  const { cx, cy, payload } = props
-  if (cx == null || cy == null || !payload) return null
-  const isPriority = payload.impact > 0 && payload.favorability < FAVORABILITY_THRESHOLD
+function makeQuadrantDot(xThreshold: number, yThreshold: number) {
+  return function QuadrantDot(props: {
+    cx?: number
+    cy?: number
+    payload?: DotPoint
+  }) {
+    const { cx, cy, payload } = props
+    if (cx == null || cy == null || !payload) return null
+    const perf = payload.performance ?? payload.x
+    const impact = payload.impact ?? payload.y
+    const isPriority = perf < xThreshold && impact >= yThreshold
 
-  return (
-    <g>
-      {isPriority && (
+    return (
+      <g>
+        {isPriority && (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={13}
+            fill="none"
+            stroke="#EF4444"
+            strokeWidth={1.5}
+            opacity={0.65}
+          />
+        )}
         <circle
           cx={cx}
           cy={cy}
-          r={12}
-          fill="none"
-          stroke="#EF4444"
-          strokeWidth={1.5}
-          opacity={0.7}
+          r={isPriority ? 8 : 6}
+          fill={QP_BLUE}
+          fillOpacity={0.85}
+          stroke="#FFFFFF"
+          strokeWidth={2}
         />
-      )}
-      <circle
-        cx={cx}
-        cy={cy}
-        r={isPriority ? 8 : 6}
-        fill={QP_BLUE}
-        fillOpacity={0.85}
-        stroke="#FFFFFF"
-        strokeWidth={2}
-      />
-    </g>
-  )
+      </g>
+    )
+  }
 }
 
 type ResolvedConfig = {
@@ -215,7 +232,10 @@ function resolveDriverConfig(config?: Record<string, unknown>): ResolvedConfig |
   let driverMetricIds: string[] = []
   if (Array.isArray(rawDrivers) && rawDrivers.every((id) => typeof id === 'string')) {
     driverMetricIds = (rawDrivers as string[]).filter(
-      (id) => id !== outcome.id && Boolean(getDriverMetricById(id)) && !getDriverMetricById(id)?.excluded,
+      (id) =>
+        id !== outcome.id &&
+        Boolean(getDriverMetricById(id)) &&
+        !getDriverMetricById(id)?.excluded,
     )
   } else if (Array.isArray(config?.columns)) {
     driverMetricIds = config.columns
@@ -265,32 +285,48 @@ export function DriverAnalysisWidget({
       .map((id) => {
         const metric = getDriverMetricById(id)
         if (!metric || metric.excluded) return null
+        const performance = getMetricFavorability(id, metric.kind, activeFilters)
+        const impact = getDriverImpact(id, resolved.outcomeMetricId, activeFilters)
         return {
           name: metric.label,
           kind: metric.kind,
           questionType: metric.questionType,
-          impact: getDriverImpact(id, resolved.outcomeMetricId, activeFilters),
-          favorability: getMetricFavorability(id, metric.kind, activeFilters),
+          // X = Performance (favorability %), Y = Impact (|r|)
+          x: performance,
+          y: impact,
+          performance,
+          impact,
         } satisfies DotPoint
       })
       .filter((d): d is DotPoint => d !== null)
   }, [activeFilters, resolved])
 
-  const dotsSortedByPriority = useMemo(
-    () =>
-      [...dots].sort((a, b) => {
-        const qa = getQuadrant(a.impact, a.favorability)
-        const qb = getQuadrant(b.impact, b.favorability)
-        const orderDiff = QUADRANT_ORDER[qa.label] - QUADRANT_ORDER[qb.label]
-        if (orderDiff !== 0) return orderDiff
-        return a.favorability - b.favorability
-      }),
+  const xConfig: AxisConfig = useMemo(
+    () => computeAxisConfig(dots.map((d) => d.x)),
+    [dots],
+  )
+  const yConfig: AxisConfig = useMemo(
+    () => computeAxisConfig(dots.map((d) => d.y)),
     [dots],
   )
 
-  const outcomeMetric = resolved
-    ? getDriverMetricById(resolved.outcomeMetricId)
-    : undefined
+  const QuadrantDot = useMemo(
+    () => makeQuadrantDot(xConfig.threshold, yConfig.threshold),
+    [xConfig.threshold, yConfig.threshold],
+  )
+
+  const dotsSortedByPriority = useMemo(
+    () =>
+      [...dots].sort((a, b) => {
+        const qa = getQuadrant(a.x, a.y, xConfig.threshold, yConfig.threshold)
+        const qb = getQuadrant(b.x, b.y, xConfig.threshold, yConfig.threshold)
+        const orderDiff = QUADRANT_ORDER[qa.label] - QUADRANT_ORDER[qb.label]
+        if (orderDiff !== 0) return orderDiff
+        // Within group: lowest favorability (x) first
+        return a.x - b.x
+      }),
+    [dots, xConfig.threshold, yConfig.threshold],
+  )
 
   return (
     <WidgetCardShell
@@ -298,7 +334,9 @@ export function DriverAnalysisWidget({
       subtitle={
         resolved ? (
           <>
-            Impact on <span className="font-medium text-gray-700">{resolved.outcomeLabel}</span>
+            Impact on{' '}
+            <span className="font-medium text-gray-600">{resolved.outcomeLabel}</span>
+            {' · Thresholds set to median of your data'}
           </>
         ) : undefined
       }
@@ -315,37 +353,38 @@ export function DriverAnalysisWidget({
           <div className="flex flex-col">
             <div style={{ position: 'relative' }}>
               <ResponsiveContainer width="100%" height={340}>
-                <ScatterChart margin={{ top: 20, right: 20, bottom: 55, left: 65 }}>
+                <ScatterChart margin={{ top: 24, right: 24, bottom: 52, left: 60 }}>
+                  {/* ReferenceAreas FIRST */}
                   <ReferenceArea
-                    x1={0}
-                    x2={1}
-                    y1={0}
-                    y2={50}
+                    x1={xConfig.min}
+                    x2={xConfig.threshold}
+                    y1={yConfig.threshold}
+                    y2={yConfig.max}
                     fill="#FEE2E2"
                     fillOpacity={0.45}
                   />
                   <ReferenceArea
-                    x1={0}
-                    x2={1}
-                    y1={50}
-                    y2={100}
+                    x1={xConfig.threshold}
+                    x2={xConfig.max}
+                    y1={yConfig.threshold}
+                    y2={yConfig.max}
                     fill="#DCFCE7"
                     fillOpacity={0.45}
                   />
                   <ReferenceArea
-                    x1={-1}
-                    x2={0}
-                    y1={50}
-                    y2={100}
-                    fill="#DBEAFE"
+                    x1={xConfig.min}
+                    x2={xConfig.threshold}
+                    y1={yConfig.min}
+                    y2={yConfig.threshold}
+                    fill="#F3F4F6"
                     fillOpacity={0.45}
                   />
                   <ReferenceArea
-                    x1={-1}
-                    x2={0}
-                    y1={0}
-                    y2={50}
-                    fill="#F3F4F6"
+                    x1={xConfig.threshold}
+                    x2={xConfig.max}
+                    y1={yConfig.min}
+                    y2={yConfig.threshold}
+                    fill="#DBEAFE"
                     fillOpacity={0.45}
                   />
 
@@ -353,14 +392,14 @@ export function DriverAnalysisWidget({
 
                   <XAxis
                     type="number"
-                    dataKey="impact"
-                    domain={[-1, 1]}
-                    ticks={[-1, -0.5, 0, 0.5, 1]}
-                    tickFormatter={(v: number) => v.toFixed(1)}
+                    dataKey="x"
+                    domain={[xConfig.min, xConfig.max]}
+                    tickFormatter={(v: number) => `${v.toFixed(0)}%`}
                     tick={{ fontSize: 11, fill: '#9CA3AF' }}
+                    allowDataOverflow
                   >
                     <Label
-                      value="Impact (Pearson r)"
+                      value="Performance (favorability)"
                       position="insideBottom"
                       offset={-20}
                       style={{ fontSize: 11, fill: '#9CA3AF' }}
@@ -369,19 +408,15 @@ export function DriverAnalysisWidget({
 
                   <YAxis
                     type="number"
-                    dataKey="favorability"
-                    domain={[0, 100]}
-                    ticks={[0, 25, 50, 75, 100]}
-                    tickFormatter={(v: number) => `${v}%`}
+                    dataKey="y"
+                    domain={[yConfig.min, yConfig.max]}
+                    tickFormatter={(v: number) => v.toFixed(2)}
                     tick={{ fontSize: 11, fill: '#9CA3AF' }}
                     width={45}
+                    allowDataOverflow
                   >
                     <Label
-                      value={
-                        outcomeMetric
-                          ? getYAxisDisclosureLabel(outcomeMetric.questionType)
-                          : 'Favorability'
-                      }
+                      value="Impact (|r|)"
                       angle={-90}
                       position="insideLeft"
                       offset={15}
@@ -390,51 +425,62 @@ export function DriverAnalysisWidget({
                   </YAxis>
 
                   <ReferenceLine
-                    x={0}
+                    x={xConfig.threshold}
                     stroke="#94A3B8"
-                    strokeDasharray="6 4"
+                    strokeDasharray="5 4"
                     strokeWidth={1.5}
                   />
                   <ReferenceLine
-                    y={50}
+                    y={yConfig.threshold}
                     stroke="#94A3B8"
-                    strokeDasharray="6 4"
+                    strokeDasharray="5 4"
                     strokeWidth={1.5}
                   />
 
-                  <Tooltip content={<DriverTooltip />} cursor={{ strokeDasharray: '3 3' }} />
+                  <Tooltip
+                    content={
+                      <DriverTooltip
+                        xThreshold={xConfig.threshold}
+                        yThreshold={yConfig.threshold}
+                      />
+                    }
+                    cursor={{ strokeDasharray: '3 3' }}
+                  />
 
                   <Scatter data={dots} shape={<QuadrantDot />} name="Metrics" />
                 </ScatterChart>
               </ResponsiveContainer>
 
+              {/* Top-left: Priority focus */}
               <div
                 style={{
                   ...cornerStyle,
                   top: 28,
-                  left: 72,
-                  background: '#DBEAFE',
-                  color: '#1E40AF',
+                  left: 70,
+                  background: '#FEE2E2',
+                  color: '#991B1B',
                 }}
               >
-                Maintain
+                ★ Priority focus
               </div>
+              {/* Top-right: Celebrate */}
               <div
                 style={{
                   ...cornerStyle,
                   top: 28,
-                  right: 28,
+                  right: 24,
                   background: '#DCFCE7',
                   color: '#166534',
                 }}
               >
                 Celebrate
               </div>
+              {/* Bottom-left: Monitor */}
               <div
                 style={{
                   ...cornerStyle,
-                  bottom: 62,
-                  left: 72,
+                  bottom: 58,
+                  left: 70,
                   background: '#F3F4F6',
                   color: '#374151',
                   border: '1px solid #E5E7EB',
@@ -442,16 +488,17 @@ export function DriverAnalysisWidget({
               >
                 Monitor
               </div>
+              {/* Bottom-right: Maintain */}
               <div
                 style={{
                   ...cornerStyle,
-                  bottom: 62,
-                  right: 28,
-                  background: '#FEE2E2',
-                  color: '#991B1B',
+                  bottom: 58,
+                  right: 24,
+                  background: '#DBEAFE',
+                  color: '#1E40AF',
                 }}
               >
-                ★ Priority focus
+                Maintain
               </div>
             </div>
 
@@ -489,7 +536,7 @@ export function DriverAnalysisWidget({
                   }}
                 >
                   {dotsSortedByPriority.map((d) => {
-                    const q = getQuadrant(d.impact, d.favorability)
+                    const q = getQuadrant(d.x, d.y, xConfig.threshold, yConfig.threshold)
                     return (
                       <Fragment key={d.name}>
                         <span
@@ -514,7 +561,7 @@ export function DriverAnalysisWidget({
                             textAlign: 'right',
                           }}
                         >
-                          {d.favorability.toFixed(0)}%
+                          {d.x.toFixed(0)}%
                         </span>
                         <span
                           style={{

@@ -17,6 +17,7 @@ export {
 } from '@/data/mock/dashboardFilters'
 export type { CategorySentiment, DashboardRespondent, ScorecardMarker } from '@/data/mock/dashboardFilters'
 export {
+  computeAxisConfig,
   DRIVER_CORRELATION_MATRIX,
   DRIVER_METRICS,
   getCorrelation,
@@ -29,8 +30,10 @@ export {
   getYAxisDisclosureLabel,
   normalizeToFavorability,
   pearsonCorrelation,
+  pearsonR,
 } from '@/data/mock/driverAnalysis'
 export type {
+  AxisConfig,
   DriverMetric,
   DriverMetricKind,
   DriverQuestionType,

@@ -163,6 +163,52 @@ export function getDriverOutcomeOptions(): {
 }
 
 /**
+ * Resolve metrics at a hierarchy level that belong to the selected driver set
+ * (directly selected, descendants of selected ancestors, or ancestors of
+ * selected descendants). Falls back to all eligible items at that level.
+ */
+export function resolveItemsAtLevel(
+  level: DriverMetricKind,
+  driverMetricIds: string[],
+): DriverMetric[] {
+  const eligible = getEligibleDriverMetrics()
+  const byId = new Map(eligible.map((m) => [m.id, m]))
+  const selected = new Set(driverMetricIds.filter((id) => byId.has(id)))
+
+  function isDescendantOf(metric: DriverMetric, ancestorId: string): boolean {
+    let current: DriverMetric | undefined = metric
+    while (current?.parentId) {
+      if (current.parentId === ancestorId) return true
+      current = byId.get(current.parentId)
+    }
+    return false
+  }
+
+  function isAncestorOfSelected(metric: DriverMetric): boolean {
+    for (const id of selected) {
+      const sel = byId.get(id)
+      if (!sel) continue
+      if (sel.id === metric.id || isDescendantOf(sel, metric.id)) return true
+    }
+    return false
+  }
+
+  const atLevel = eligible.filter((m) => m.kind === level)
+  if (selected.size === 0) return atLevel
+
+  const resolved = atLevel.filter((m) => {
+    if (selected.has(m.id)) return true
+    for (const id of selected) {
+      if (isDescendantOf(m, id)) return true
+    }
+    if (isAncestorOfSelected(m)) return true
+    return false
+  })
+
+  return resolved.length > 0 ? resolved : atLevel
+}
+
+/**
  * Pearson r (computational form):
  * r = [n·Σ(xy) - (Σx)(Σy)] / √{[n·Σx² - (Σx)²] · [n·Σy² - (Σy)²]}
  */

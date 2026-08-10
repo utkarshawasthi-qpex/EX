@@ -22,20 +22,24 @@ import {
   getDriverMetricById,
   getEligibleDriverMetrics,
   getMetricFavorability,
+  resolveItemsAtLevel,
   type AxisConfig,
   type DriverMetricKind,
   type DriverQuestionType,
 } from '@/lib/dashboardFilters'
 
+type MetricLevel = 'marker' | 'buildingBlock' | 'question'
+
 type DotPoint = {
+  id: string
   name: string
   kind: DriverMetricKind
   questionType: DriverQuestionType
-  /** Performance (favorability %) — X axis dataKey */
+  /** Performance % — X axis dataKey */
   x: number
   /** Impact |r| — Y axis dataKey */
   y: number
-  /** Stable copies — recharts may overwrite top-level x/y with pixels on shape props */
+  /** Stable copies — recharts may overwrite top-level x/y with pixels */
   performance: number
   impact: number
 }
@@ -55,6 +59,30 @@ type DriverAnalysisWidgetProps = {
 }
 
 const QP_BLUE = '#1B87E6'
+
+const DOT_RADIUS: Record<MetricLevel, number> = {
+  marker: 8,
+  buildingBlock: 7,
+  question: 5,
+}
+
+const LEVEL_LABEL: Record<MetricLevel, string> = {
+  marker: 'Markers',
+  buildingBlock: 'Building blocks',
+  question: 'Questions',
+}
+
+const LEVEL_SINGULAR: Record<MetricLevel, string> = {
+  marker: 'Marker',
+  buildingBlock: 'Building block',
+  question: 'Question',
+}
+
+const LEVEL_LIST_NOUN: Record<MetricLevel, string> = {
+  marker: 'markers',
+  buildingBlock: 'building blocks',
+  question: 'questions',
+}
 
 /** Priority focus → Celebrate → Monitor → Maintain */
 const QUADRANT_ORDER: Record<QuadrantInfo['label'], number> = {
@@ -110,7 +138,6 @@ function DriverTooltip({
   const perf = d.performance ?? d.x
   const impact = d.impact ?? d.y
   const q = getQuadrant(perf, impact, xThreshold, yThreshold)
-  const isEnps = d.questionType === 'enps' || d.questionType === 'nps'
 
   return (
     <div
@@ -124,6 +151,17 @@ function DriverTooltip({
         fontSize: 13,
       }}
     >
+      <p
+        style={{
+          fontSize: 10,
+          color: '#9CA3AF',
+          marginBottom: 6,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+        }}
+      >
+        {LEVEL_SINGULAR[d.kind as MetricLevel] ?? d.kind}
+      </p>
       <p style={{ fontWeight: 600, color: '#1B2E4A', marginBottom: 8 }}>{d.name}</p>
       <div
         style={{
@@ -133,7 +171,7 @@ function DriverTooltip({
           color: '#6B7280',
         }}
       >
-        <span>{isEnps ? 'eNPS (normalized)' : 'Favorability'}</span>
+        <span>Performance</span>
         <span style={{ color: '#1B2E4A', fontWeight: 500 }}>{perf.toFixed(1)}%</span>
       </div>
       <div
@@ -144,7 +182,7 @@ function DriverTooltip({
           color: '#6B7280',
         }}
       >
-        <span>Impact (|r|)</span>
+        <span>Impact</span>
         <span style={{ color: '#1B2E4A', fontWeight: 500 }}>{impact.toFixed(3)}</span>
       </div>
       <span
@@ -163,7 +201,14 @@ function DriverTooltip({
   )
 }
 
-function makeQuadrantDot(xThreshold: number, yThreshold: number) {
+function makeQuadrantDot(
+  xThreshold: number,
+  yThreshold: number,
+  level: MetricLevel,
+) {
+  const radius = DOT_RADIUS[level]
+  const ringRadius = radius + 5
+
   return function QuadrantDot(props: {
     cx?: number
     cy?: number
@@ -181,7 +226,7 @@ function makeQuadrantDot(xThreshold: number, yThreshold: number) {
           <circle
             cx={cx}
             cy={cy}
-            r={13}
+            r={ringRadius}
             fill="none"
             stroke="#EF4444"
             strokeWidth={1.5}
@@ -191,7 +236,7 @@ function makeQuadrantDot(xThreshold: number, yThreshold: number) {
         <circle
           cx={cx}
           cy={cy}
-          r={isPriority ? 8 : 6}
+          r={radius}
           fill={QP_BLUE}
           fillOpacity={0.85}
           stroke="#FFFFFF"
@@ -266,6 +311,33 @@ function resolveDriverConfig(config?: Record<string, unknown>): ResolvedConfig |
   }
 }
 
+function getDotsForLevel(
+  level: MetricLevel,
+  driverMetricIds: string[],
+  outcomeMetricId: string,
+  activeFilters: ActiveFilter[],
+): DotPoint[] {
+  const items = resolveItemsAtLevel(level, driverMetricIds)
+
+  return items
+    .filter((item) => item.id !== outcomeMetricId)
+    .map((item) => {
+      const performance = getMetricFavorability(item.id, item.kind, activeFilters)
+      const impact = getDriverImpact(item.id, outcomeMetricId, activeFilters)
+      return {
+        id: item.id,
+        name: item.label,
+        kind: level,
+        questionType: item.questionType,
+        x: performance,
+        y: impact,
+        performance,
+        impact,
+      } satisfies DotPoint
+    })
+    .filter((d) => Number.isFinite(d.x) && Number.isFinite(d.y))
+}
+
 export function DriverAnalysisWidget({
   widget,
   activeFilters = [],
@@ -275,31 +347,19 @@ export function DriverAnalysisWidget({
 }: DriverAnalysisWidgetProps) {
   const title = widget?.title?.trim() || 'Driver analysis'
   const [showMetricList, setShowMetricList] = useState(false)
+  const [level, setLevel] = useState<MetricLevel>('marker')
 
   const resolved = useMemo(() => resolveDriverConfig(widget?.config), [widget?.config])
 
   const dots = useMemo(() => {
     if (!resolved) return [] as DotPoint[]
-
-    return resolved.driverMetricIds
-      .map((id) => {
-        const metric = getDriverMetricById(id)
-        if (!metric || metric.excluded) return null
-        const performance = getMetricFavorability(id, metric.kind, activeFilters)
-        const impact = getDriverImpact(id, resolved.outcomeMetricId, activeFilters)
-        return {
-          name: metric.label,
-          kind: metric.kind,
-          questionType: metric.questionType,
-          // X = Performance (favorability %), Y = Impact (|r|)
-          x: performance,
-          y: impact,
-          performance,
-          impact,
-        } satisfies DotPoint
-      })
-      .filter((d): d is DotPoint => d !== null)
-  }, [activeFilters, resolved])
+    return getDotsForLevel(
+      level,
+      resolved.driverMetricIds,
+      resolved.outcomeMetricId,
+      activeFilters,
+    )
+  }, [activeFilters, level, resolved])
 
   const xConfig: AxisConfig = useMemo(
     () => computeAxisConfig(dots.map((d) => d.x)),
@@ -311,8 +371,8 @@ export function DriverAnalysisWidget({
   )
 
   const QuadrantDot = useMemo(
-    () => makeQuadrantDot(xConfig.threshold, yConfig.threshold),
-    [xConfig.threshold, yConfig.threshold],
+    () => makeQuadrantDot(xConfig.threshold, yConfig.threshold, level),
+    [level, xConfig.threshold, yConfig.threshold],
   )
 
   const dotsSortedByPriority = useMemo(
@@ -322,10 +382,34 @@ export function DriverAnalysisWidget({
         const qb = getQuadrant(b.x, b.y, xConfig.threshold, yConfig.threshold)
         const orderDiff = QUADRANT_ORDER[qa.label] - QUADRANT_ORDER[qb.label]
         if (orderDiff !== 0) return orderDiff
-        // Within group: lowest favorability (x) first
         return a.x - b.x
       }),
     [dots, xConfig.threshold, yConfig.threshold],
+  )
+
+  const levelToggle = (
+    <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+      {(['marker', 'buildingBlock', 'question'] as const).map((l) => (
+        <button
+          key={l}
+          type="button"
+          onClick={() => setLevel(l)}
+          style={{
+            fontSize: 11,
+            padding: '3px 10px',
+            borderRadius: 4,
+            border: '1px solid',
+            cursor: 'pointer',
+            borderColor: level === l ? '#1B87E6' : '#E5E7EB',
+            background: level === l ? '#EFF6FF' : '#FFFFFF',
+            color: level === l ? '#1B87E6' : '#6B7280',
+            fontWeight: level === l ? 500 : 400,
+          }}
+        >
+          {LEVEL_LABEL[l]}
+        </button>
+      ))}
+    </div>
   )
 
   return (
@@ -333,11 +417,11 @@ export function DriverAnalysisWidget({
       title={title}
       subtitle={
         resolved ? (
-          <>
+          <span>
             Impact on{' '}
             <span className="font-medium text-gray-600">{resolved.outcomeLabel}</span>
             {' · Thresholds set to median of your data'}
-          </>
+          </span>
         ) : undefined
       }
       onEdit={onEdit}
@@ -351,10 +435,11 @@ export function DriverAnalysisWidget({
           </div>
         ) : (
           <div className="flex flex-col">
-            <div style={{ position: 'relative' }}>
+            {levelToggle}
+
+            <div style={{ position: 'relative', marginTop: 8 }}>
               <ResponsiveContainer width="100%" height={340}>
                 <ScatterChart margin={{ top: 24, right: 24, bottom: 52, left: 60 }}>
-                  {/* ReferenceAreas FIRST */}
                   <ReferenceArea
                     x1={xConfig.min}
                     x2={xConfig.threshold}
@@ -399,7 +484,7 @@ export function DriverAnalysisWidget({
                     allowDataOverflow
                   >
                     <Label
-                      value="Performance (favorability)"
+                      value="Performance"
                       position="insideBottom"
                       offset={-20}
                       style={{ fontSize: 11, fill: '#9CA3AF' }}
@@ -416,7 +501,7 @@ export function DriverAnalysisWidget({
                     allowDataOverflow
                   >
                     <Label
-                      value="Impact (|r|)"
+                      value="Impact"
                       angle={-90}
                       position="insideLeft"
                       offset={15}
@@ -451,7 +536,6 @@ export function DriverAnalysisWidget({
                 </ScatterChart>
               </ResponsiveContainer>
 
-              {/* Top-left: Priority focus */}
               <div
                 style={{
                   ...cornerStyle,
@@ -463,7 +547,6 @@ export function DriverAnalysisWidget({
               >
                 ★ Priority focus
               </div>
-              {/* Top-right: Celebrate */}
               <div
                 style={{
                   ...cornerStyle,
@@ -475,7 +558,6 @@ export function DriverAnalysisWidget({
               >
                 Celebrate
               </div>
-              {/* Bottom-left: Monitor */}
               <div
                 style={{
                   ...cornerStyle,
@@ -488,7 +570,6 @@ export function DriverAnalysisWidget({
               >
                 Monitor
               </div>
-              {/* Bottom-right: Maintain */}
               <div
                 style={{
                   ...cornerStyle,
@@ -527,8 +608,20 @@ export function DriverAnalysisWidget({
 
             {showMetricList && (
               <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 12 }}>
+                <p
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: '#6B7280',
+                    marginBottom: 8,
+                  }}
+                >
+                  All {LEVEL_LIST_NOUN[level]}
+                </p>
                 <div
                   style={{
+                    maxHeight: 280,
+                    overflowY: 'auto',
                     display: 'grid',
                     gridTemplateColumns: '1fr auto auto',
                     gap: '2px 12px',
@@ -538,7 +631,7 @@ export function DriverAnalysisWidget({
                   {dotsSortedByPriority.map((d) => {
                     const q = getQuadrant(d.x, d.y, xConfig.threshold, yConfig.threshold)
                     return (
-                      <Fragment key={d.name}>
+                      <Fragment key={d.id}>
                         <span
                           style={{
                             fontSize: 12,

@@ -31,6 +31,7 @@ export {
   normalizeToFavorability,
   pearsonCorrelation,
   pearsonR,
+  resolveItemsAtLevel,
 } from '@/data/mock/driverAnalysis'
 export type {
   AxisConfig,

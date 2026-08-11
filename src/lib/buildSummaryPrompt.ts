@@ -19,7 +19,14 @@ import {
 import { getOrgContextText } from '@/lib/orgContext'
 import { buildSummaryContent, normalizeActionsFromApi } from '@/lib/summaryContent'
 import { getCurrentUser } from '@/lib/userContext'
-import type { ActiveFilter, DashboardWidget, SummaryAction, SummaryContent, SummaryPriority } from '@/types'
+import type {
+  ActiveFilter,
+  DashboardWidget,
+  SummaryAction,
+  SummaryContent,
+  SummaryInsight,
+  SummaryPriority,
+} from '@/types'
 
 export function buildDataContext(widgets: DashboardWidget[]): string {
   const lines: string[] = []
@@ -261,6 +268,7 @@ export type DashboardFacts = {
   highestCategory: { name: string; favorable: number; respondents: number }
   worstHeatmapCell: { category: string; department: string; favorable: number } | null
   enps: number | null
+  overallFavorability: number | null
   responseRate: number | null
   filterDescription: string | null
   rankedCategories: { name: string; favorable: number; respondents: number }[]
@@ -343,6 +351,7 @@ export function computeDashboardFacts(
   const hasHeatmap = dataWidgets.some((widget) => widget.type === 'heatmap')
   const hasEnps = dataWidgets.some((widget) => widget.type === 'enps')
   const hasResponseRate = dataWidgets.some((widget) => widget.type === 'response_rate')
+  const hasScorecard = dataWidgets.some((widget) => widget.type === 'scorecard')
 
   const enps = hasEnps
     ? activeFilters.length > 0
@@ -356,11 +365,19 @@ export function computeDashboardFacts(
       : mockResponseRateData.overview.rate
     : null
 
+  const overallFavorability =
+    hasScorecard && categories.length > 0
+      ? Math.round(
+          categories.reduce((sum, category) => sum + category.favorable, 0) / categories.length,
+        )
+      : null
+
   return {
     lowestCategory,
     highestCategory,
     worstHeatmapCell: hasHeatmap ? findWeakestDepartmentCategoryCell(activeFilters) : null,
     enps,
+    overallFavorability,
     responseRate,
     filterDescription: buildFilterDescription(activeFilters),
     rankedCategories,
@@ -462,6 +479,92 @@ export function composeSummary(
   sentences.push(pickSummaryVariant(closingVariants, seed, 'closing')())
 
   return assertPlainLanguage(sentences.join(' '))
+}
+
+function clampInsightDescription(text: string): string {
+  const cleaned = assertPlainLanguage(text.trim())
+  const words = cleaned.split(/\s+/).filter(Boolean)
+  if (words.length <= 20) return cleaned
+  return `${words.slice(0, 20).join(' ')}.`
+}
+
+function composeStrengths(
+  facts: DashboardFacts,
+  actions: SummaryAction[],
+  seed: string,
+): SummaryInsight[] {
+  const blocked = usedCategoriesFromActions(actions)
+  const highestFirst = [...facts.rankedCategories].reverse()
+  const candidates = highestFirst.filter((category) => !blocked.has(category.name))
+  const pool = candidates.length >= 2 ? candidates : highestFirst
+  const count = Math.min(3, Math.max(2, Math.min(pool.length, 3)))
+  const selected = pool.slice(0, count)
+
+  return selected.map((category, index) => {
+    const descriptionVariants = [
+      () =>
+        `People feel confident about ${category.name.toLowerCase()} in day-to-day work.`,
+      () =>
+        `${category.name} stands out because employees rate it strongly and consistently.`,
+      () =>
+        `Teams report genuine confidence in ${category.name.toLowerCase()} across the board.`,
+    ]
+    return {
+      area: category.name,
+      description: clampInsightDescription(
+        pickSummaryVariant(descriptionVariants, seed, `strength-${index}`)(),
+      ),
+    }
+  })
+}
+
+function composeOpportunities(
+  facts: DashboardFacts,
+  actions: SummaryAction[],
+  strengths: SummaryInsight[],
+  seed: string,
+): SummaryInsight[] {
+  const blocked = usedCategoriesFromActions(actions)
+  const strengthAreas = new Set(strengths.map((item) => item.area))
+  const belowFifty = facts.rankedCategories.filter((category) => category.favorable < 50)
+  const maxItems = belowFifty.length >= 4 ? 4 : 3
+
+  const lowestFirst = [...facts.rankedCategories]
+  const preferred = lowestFirst.filter(
+    (category) => !blocked.has(category.name) && !strengthAreas.has(category.name),
+  )
+  const pool = preferred.length >= 2 ? preferred : lowestFirst.filter((c) => !strengthAreas.has(c.name))
+  const fallback = pool.length >= 2 ? pool : lowestFirst
+  const count = Math.min(maxItems, Math.max(2, Math.min(fallback.length, maxItems)))
+  const selected = fallback.slice(0, count)
+
+  return selected.map((category, index) => {
+    const descriptionVariants = [
+      () =>
+        `${category.name} is holding people back and needs focused follow-up soon.`,
+      () =>
+        `Low scores on ${category.name.toLowerCase()} point to a clear friction point for teams.`,
+      () =>
+        `Employees flag ${category.name.toLowerCase()} as a gap that slows everyday work.`,
+    ]
+    return {
+      area: category.name,
+      description: clampInsightDescription(
+        pickSummaryVariant(descriptionVariants, seed, `opportunity-${index}`)(),
+      ),
+    }
+  })
+}
+
+export function composeSummaryInsights(
+  facts: DashboardFacts,
+  actions: SummaryAction[],
+  seed?: string,
+): { strengths: SummaryInsight[]; opportunities: SummaryInsight[] } {
+  const variantSeed = seed ?? `${Date.now()}`
+  const strengths = composeStrengths(facts, actions, variantSeed)
+  const opportunities = composeOpportunities(facts, actions, strengths, variantSeed)
+  return { strengths, opportunities }
 }
 
 function categoryFromActionContext(context: string): string | null {
@@ -799,6 +902,11 @@ export async function generateDashboardSummary(
     viewType === 'team'
       ? mockTeamActions(dataWidgets, activeFilters)
       : mockCompanyActions(dataWidgets, activeFilters)
+  const { strengths, opportunities } = composeSummaryInsights(
+    facts,
+    actions,
+    `${Date.now()}-insights`,
+  )
 
   return buildSummaryContent(
     summary,
@@ -806,6 +914,8 @@ export async function generateDashboardSummary(
     generatedBy,
     activeFilters,
     dataWidgets.map((widget) => widget.id),
+    strengths,
+    opportunities,
   )
 }
 
@@ -814,7 +924,13 @@ export async function generateFullUpdate(
   activeFilters: ActiveFilter[],
   currentActions: SummaryAction[],
   options?: { viewType?: 'company' | 'team'; guidance?: string },
-): Promise<{ summary: string; actions: SummaryAction[]; allRecommendationsLocked: boolean }> {
+): Promise<{
+  summary: string
+  actions: SummaryAction[]
+  allRecommendationsLocked: boolean
+  strengths: SummaryInsight[]
+  opportunities: SummaryInsight[]
+}> {
   const viewType = options?.viewType ?? 'company'
   const dataContext = buildDataContext(dataWidgets)
   const orgContext = readOrgContextText()
@@ -836,8 +952,13 @@ export async function generateFullUpdate(
     facts,
     viewType,
   )
+  const { strengths, opportunities } = composeSummaryInsights(
+    facts,
+    actions,
+    `${Date.now()}-full-insights`,
+  )
 
-  return { summary, actions, allRecommendationsLocked }
+  return { summary, actions, allRecommendationsLocked, strengths, opportunities }
 }
 
 export async function generateSummaryOnlyRegeneration(
@@ -845,7 +966,12 @@ export async function generateSummaryOnlyRegeneration(
   activeFilters: ActiveFilter[],
   viewType: 'company' | 'team' = 'company',
   guidance?: string,
-): Promise<string> {
+  currentActions: SummaryAction[] = [],
+): Promise<{
+  summary: string
+  strengths: SummaryInsight[]
+  opportunities: SummaryInsight[]
+}> {
   const dataContext = buildDataContext(dataWidgets)
   const orgContext = readOrgContextText()
   void buildSummaryOnlyPrompt(dataContext, orgContext, filterLabels(activeFilters), viewType, guidance)
@@ -853,7 +979,19 @@ export async function generateSummaryOnlyRegeneration(
   await new Promise((resolve) => setTimeout(resolve, 1200))
 
   const facts = computeDashboardFacts(dataWidgets, activeFilters, viewType)
-  return composeSummary(facts, viewType, `${Date.now()}-${Math.random()}`)
+  const summary = composeSummary(facts, viewType, `${Date.now()}-${Math.random()}`)
+  const actions =
+    currentActions.length === 4
+      ? currentActions
+      : viewType === 'team'
+        ? mockTeamActions(dataWidgets, activeFilters)
+        : mockCompanyActions(dataWidgets, activeFilters)
+  const { strengths, opportunities } = composeSummaryInsights(
+    facts,
+    actions,
+    `${Date.now()}-summary-insights`,
+  )
+  return { summary, strengths, opportunities }
 }
 
 export async function generateSingleRecommendation(
@@ -923,9 +1061,19 @@ export async function regenerateSummaryParagraph(
   activeFilters: ActiveFilter[],
   viewType: 'company' | 'team' = 'company',
 ): Promise<SummaryContent> {
-  void content
-  const summary = await generateSummaryOnlyRegeneration(dataWidgets, activeFilters, viewType)
-  return { ...content, summary }
+  const result = await generateSummaryOnlyRegeneration(
+    dataWidgets,
+    activeFilters,
+    viewType,
+    undefined,
+    content.actions,
+  )
+  return {
+    ...content,
+    summary: result.summary,
+    strengths: result.strengths,
+    opportunities: result.opportunities,
+  }
 }
 
 /** @deprecated use generateRecommendationsOnlyRegeneration */

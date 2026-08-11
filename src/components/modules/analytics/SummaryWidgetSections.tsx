@@ -8,7 +8,8 @@ import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { SCORECARD_HARD_GATE_MESSAGE, STALE_MESSAGES } from '@/lib/summaryContent'
 import { cn } from '@/lib/utils'
 import type { RegenerateModalContext } from '@/components/modules/analytics/SummaryRegenerateModal'
-import type { SummaryAction, SummaryContent, SummaryPriority } from '@/types'
+import type { ActiveFilter, DashboardWidget, SummaryAction, SummaryContent, SummaryInsight, SummaryPriority } from '@/types'
+import type { DashboardFacts } from '@/lib/buildSummaryPrompt'
 
 const WuButton = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuButton })),
@@ -23,6 +24,7 @@ export const MAX_REGENERATIONS = 3
 
 type SummaryWidgetSectionsProps = {
   content: SummaryContent
+  dashboardFacts?: DashboardFacts
   onContentChange: (content: SummaryContent) => void
   onCreateActionPlan: (action: SummaryAction) => void
   canShowFeedback?: boolean
@@ -78,8 +80,226 @@ function FeedbackButtons({
   )
 }
 
+export function SummaryHighlightStrip({ facts }: { facts?: DashboardFacts }) {
+  const enps = facts?.enps ?? null
+  const overall = facts?.overallFavorability ?? null
+  const responseRate = facts?.responseRate ?? null
+
+  const stats = [
+    {
+      label: 'eNPS',
+      value:
+        enps != null ? (enps > 0 ? `+${enps}` : `${enps}`) : '—',
+      color:
+        enps == null
+          ? 'var(--wu-text-muted, #9CA3AF)'
+          : enps > 0
+            ? 'var(--wu-success, #16A34A)'
+            : enps < 0
+              ? 'var(--wu-danger, #DC2626)'
+              : 'var(--wu-text-body, #374151)',
+    },
+    {
+      label: 'Overall favorability',
+      value: overall != null ? `${overall.toFixed(0)}%` : '—',
+      color: 'var(--wu-text-body, #374151)',
+    },
+    {
+      label: 'Response rate',
+      value: responseRate != null ? `${responseRate.toFixed(0)}%` : '—',
+      color: 'var(--wu-text-body, #374151)',
+    },
+  ]
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr',
+        gap: 0,
+        border: '1px solid var(--wu-border, #E5E7EB)',
+        borderRadius: 8,
+        overflow: 'hidden',
+        marginBottom: 16,
+      }}
+    >
+      {stats.map((stat, i) => (
+        <div
+          key={stat.label}
+          style={{
+            padding: '14px 16px',
+            textAlign: 'center',
+            borderRight: i < 2 ? '1px solid var(--wu-border, #E5E7EB)' : 'none',
+            background: '#FAFAFA',
+          }}
+        >
+          <p
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: stat.color,
+              lineHeight: 1,
+              marginBottom: 4,
+            }}
+          >
+            {stat.value}
+          </p>
+          <p
+            style={{
+              fontSize: 11,
+              color: 'var(--wu-text-muted, #9CA3AF)',
+              fontWeight: 400,
+            }}
+          >
+            {stat.label}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function InsightCards({
+  strengths,
+  opportunities,
+}: {
+  strengths: SummaryInsight[]
+  opportunities: SummaryInsight[]
+}) {
+  if (strengths.length === 0 && opportunities.length === 0) return null
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: 10,
+        marginTop: 14,
+        alignItems: 'stretch',
+      }}
+    >
+      <div
+        style={{
+          border: '1px solid #DCFCE7',
+          borderRadius: 8,
+          padding: '12px 14px',
+          background: '#F0FDF4',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            marginBottom: 10,
+          }}
+        >
+          <span style={{ fontSize: 14 }}>💪</span>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: '#166534',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Strengths
+          </span>
+        </div>
+        {strengths.map((s, i) => (
+          <div
+            key={`${s.area}-${i}`}
+            style={{ marginBottom: i < strengths.length - 1 ? 8 : 0 }}
+          >
+            <p
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: '#15803D',
+                marginBottom: 2,
+              }}
+            >
+              {s.area}
+            </p>
+            <p
+              style={{
+                fontSize: 11.5,
+                color: '#166534',
+                lineHeight: 1.5,
+                opacity: 0.85,
+              }}
+            >
+              {s.description}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          border: '1px solid #FEE2E2',
+          borderRadius: 8,
+          padding: '12px 14px',
+          background: '#FEF2F2',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            marginBottom: 10,
+          }}
+        >
+          <span style={{ fontSize: 14 }}>⚠️</span>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: '#991B1B',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Opportunities
+          </span>
+        </div>
+        {opportunities.map((o, i) => (
+          <div
+            key={`${o.area}-${i}`}
+            style={{ marginBottom: i < opportunities.length - 1 ? 8 : 0 }}
+          >
+            <p
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: '#B91C1C',
+                marginBottom: 2,
+              }}
+            >
+              {o.area}
+            </p>
+            <p
+              style={{
+                fontSize: 11.5,
+                color: '#991B1B',
+                lineHeight: 1.5,
+                opacity: 0.85,
+              }}
+            >
+              {o.description}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function SummaryWidgetSections({
   content,
+  dashboardFacts,
   onContentChange,
   onCreateActionPlan,
   canShowFeedback = false,
@@ -292,17 +512,31 @@ export function SummaryWidgetSections({
         </div>
       )}
 
-      <div className="flex-shrink-0">
+      <div
+        className={cn('flex-shrink-0', content.isStale && !isRecipientView && 'opacity-50')}
+      >
         {regeneratingSummary ? (
           <div className="mb-3 space-y-2">
+            <div className="h-14 w-full animate-pulse rounded bg-gray-100" />
             <div className="h-3 w-3/4 animate-pulse rounded bg-gray-100" />
             <div className="h-3 w-full animate-pulse rounded bg-gray-100" />
             <div className="h-3 w-5/6 animate-pulse rounded bg-gray-100" />
+            <div className="mt-3 grid grid-cols-2 gap-2.5">
+              <div className="h-24 animate-pulse rounded bg-gray-100" />
+              <div className="h-24 animate-pulse rounded bg-gray-100" />
+            </div>
           </div>
         ) : (
-          <WuText size="sm" as="p" className="leading-relaxed text-gray-700">
-            {content.summary}
-          </WuText>
+          <>
+            <SummaryHighlightStrip facts={dashboardFacts} />
+            <WuText size="sm" as="p" className="leading-relaxed text-gray-700">
+              {content.summary}
+            </WuText>
+            <InsightCards
+              strengths={content.strengths ?? []}
+              opportunities={content.opportunities ?? []}
+            />
+          </>
         )}
 
         {canRegenerate && !isRecipientView && !content.isStale && (

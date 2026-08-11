@@ -430,9 +430,16 @@ export type SummaryAction = {
   regenerationsUsed: number
 }
 
+export type SummaryInsight = {
+  area: string
+  description: string
+}
+
 export type SummarySharedSnapshot = {
   summary: string
   actions: SummaryAction[]
+  strengths: SummaryInsight[]
+  opportunities: SummaryInsight[]
   sharedAt: string
 }
 
@@ -441,6 +448,8 @@ export type StalenessReason = 'filters' | 'widgets' | 'both'
 export type SummaryContent = {
   summary: string
   actions: SummaryAction[]
+  strengths: SummaryInsight[]
+  opportunities: SummaryInsight[]
   summaryRegenerationsUsed: number
   isStale: boolean
   summaryOnlyUpdateNote?: boolean

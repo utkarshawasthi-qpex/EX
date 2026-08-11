@@ -4,6 +4,7 @@ import type {
   StalenessReason,
   SummaryAction,
   SummaryContent,
+  SummaryInsight,
   SummaryPriority,
 } from '@/types'
 
@@ -16,6 +17,25 @@ export const EMPTY_ACTION_FEEDBACK: Record<SummaryPriority, 'up' | 'down' | null
   2: null,
   3: null,
   4: null,
+}
+
+function normalizeInsights(raw: unknown): SummaryInsight[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((item): item is SummaryInsight => {
+      if (!item || typeof item !== 'object') return false
+      const row = item as Record<string, unknown>
+      return typeof row.area === 'string' && typeof row.description === 'string'
+    })
+    .map((item) => ({ area: item.area, description: item.description }))
+}
+
+function insightsMatchForShare(a: SummaryInsight[], b: SummaryInsight[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every(
+    (insight, index) =>
+      insight.area === b[index]?.area && insight.description === b[index]?.description,
+  )
 }
 
 export const STALE_MESSAGES: Record<StalenessReason, string> = {
@@ -116,7 +136,9 @@ export function liveContentMatchesSnapshot(content: SummaryContent): boolean {
   if (!content.sharedSnapshot) return false
   return (
     content.summary === content.sharedSnapshot.summary &&
-    actionsMatchForShare(content.actions, content.sharedSnapshot.actions)
+    actionsMatchForShare(content.actions, content.sharedSnapshot.actions) &&
+    insightsMatchForShare(content.strengths, content.sharedSnapshot.strengths ?? []) &&
+    insightsMatchForShare(content.opportunities, content.sharedSnapshot.opportunities ?? [])
   )
 }
 
@@ -135,6 +157,8 @@ export function shareSummarySnapshot(content: SummaryContent): SummaryContent {
     sharedSnapshot: {
       summary: content.summary,
       actions: content.actions.map((action) => ({ ...action })),
+      strengths: content.strengths.map((item) => ({ ...item })),
+      opportunities: content.opportunities.map((item) => ({ ...item })),
       sharedAt: now,
     },
   }
@@ -184,6 +208,8 @@ export function buildSummaryContent(
   generatedBy: ID,
   generatedAtFilters: ActiveFilter[] = [],
   generatedAtWidgetIds: string[] = [],
+  strengths: SummaryInsight[] = [],
+  opportunities: SummaryInsight[] = [],
 ): SummaryContent {
   validateActionsLength(actions)
   const now = new Date().toISOString()
@@ -192,6 +218,8 @@ export function buildSummaryContent(
   return {
     summary,
     actions: normalizeActions(sortedActions),
+    strengths: normalizeInsights(strengths),
+    opportunities: normalizeInsights(opportunities),
     summaryRegenerationsUsed: 0,
     isStale: false,
     summaryOnlyUpdateNote: false,
@@ -263,6 +291,8 @@ function migrateLegacyVersioned(raw: LegacyVersionedSummary, generatedBy: ID): S
   return {
     summary: activeSummary,
     actions: normalizeActions(actions.slice(0, 4)),
+    strengths: [],
+    opportunities: [],
     summaryRegenerationsUsed: 0,
     isStale: false,
     summaryOnlyUpdateNote: false,
@@ -296,16 +326,25 @@ export function normalizeSummaryContent(raw: unknown, generatedBy = 'system'): S
   }
 
   if ('summary' in record && Array.isArray(record.actions)) {
+    const snapshot = record.sharedSnapshot
+      ? {
+          ...record.sharedSnapshot,
+          strengths: normalizeInsights(record.sharedSnapshot.strengths),
+          opportunities: normalizeInsights(record.sharedSnapshot.opportunities),
+        }
+      : null
     return {
       summary: record.summary,
       actions: normalizeActions(record.actions),
+      strengths: normalizeInsights(record.strengths),
+      opportunities: normalizeInsights(record.opportunities),
       summaryRegenerationsUsed: record.summaryRegenerationsUsed ?? 0,
       isStale: record.isStale ?? false,
       summaryOnlyUpdateNote: record.summaryOnlyUpdateNote ?? false,
       stalenessReason: record.stalenessReason ?? null,
       generatedAtFilters: record.generatedAtFilters ?? [],
       generatedAtWidgetIds: record.generatedAtWidgetIds ?? [],
-      sharedSnapshot: record.sharedSnapshot ?? null,
+      sharedSnapshot: snapshot,
       summaryFeedback: record.summaryFeedback ?? null,
       summaryFeedbackReason: record.summaryFeedbackReason ?? null,
       actionFeedback: { ...EMPTY_ACTION_FEEDBACK, ...record.actionFeedback },
@@ -325,7 +364,11 @@ export function applyFullUpdate(
   generatedBy: ID,
   activeFilters: ActiveFilter[],
   currentWidgetIds: string[],
-  options?: { allRecommendationsLocked?: boolean },
+  options?: {
+    allRecommendationsLocked?: boolean
+    strengths?: SummaryInsight[]
+    opportunities?: SummaryInsight[]
+  },
 ): SummaryContent {
   const now = new Date().toISOString()
   validateActionsLength(actions)
@@ -333,6 +376,8 @@ export function applyFullUpdate(
     ...content,
     summary,
     actions: normalizeActions([...actions].sort((a, b) => a.priority - b.priority)),
+    strengths: normalizeInsights(options?.strengths ?? content.strengths),
+    opportunities: normalizeInsights(options?.opportunities ?? content.opportunities),
     summaryRegenerationsUsed: 0,
     isStale: false,
     stalenessReason: null,
@@ -350,11 +395,15 @@ export function applySummaryRegeneration(
   summary: string,
   activeFilters: ActiveFilter[],
   currentWidgetIds: string[],
+  strengths: SummaryInsight[] = [],
+  opportunities: SummaryInsight[] = [],
 ): SummaryContent {
   const now = new Date().toISOString()
   return {
     ...content,
     summary,
+    strengths: normalizeInsights(strengths),
+    opportunities: normalizeInsights(opportunities),
     summaryRegenerationsUsed: content.summaryRegenerationsUsed + 1,
     summaryOnlyUpdateNote: false,
     generatedAtFilters: [...activeFilters],
@@ -433,6 +482,8 @@ export function resolveSummaryContentForViewer(
         ...normalized,
         summary: normalized.sharedSnapshot.summary,
         actions: normalized.sharedSnapshot.actions.map((action) => ({ ...action })),
+        strengths: normalizeInsights(normalized.sharedSnapshot.strengths),
+        opportunities: normalizeInsights(normalized.sharedSnapshot.opportunities),
         isStale: false,
         stalenessReason: null,
       },

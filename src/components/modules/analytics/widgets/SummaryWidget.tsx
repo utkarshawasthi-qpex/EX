@@ -24,10 +24,12 @@ import {
   resolveSurveyLinkForAction,
 } from '@/lib/empowerIntegration/dashboardLink'
 import {
+  computeDashboardFacts,
   generateDashboardSummary,
   generateFullUpdate,
   generateSingleRecommendation,
   generateSummaryOnlyRegeneration,
+  type DashboardFacts,
 } from '@/lib/buildSummaryPrompt'
 import { activeFiltersToLabels } from '@/lib/dashboardFilters'
 import { normalizeSummaryAdminConfig } from '@/lib/normalizeSummaryConfig'
@@ -392,7 +394,13 @@ function SummaryWidgetInner({
     if (context === 'full') {
       setRegeneratingSummary(true)
       try {
-        const { summary, actions, allRecommendationsLocked } = await generateFullUpdate(
+        const {
+          summary,
+          actions,
+          allRecommendationsLocked,
+          strengths,
+          opportunities,
+        } = await generateFullUpdate(
           dataWidgets,
           activeFilters,
           currentContent.actions,
@@ -408,7 +416,7 @@ function SummaryWidgetInner({
           activeTab === 'company' ? config.createdBy : currentUser.id,
           activeFilters,
           currentDataWidgetIds,
-          { allRecommendationsLocked },
+          { allRecommendationsLocked, strengths, opportunities },
         )
         if (activeTab === 'company') {
           handleCompanyContentChange(updated)
@@ -424,17 +432,20 @@ function SummaryWidgetInner({
     if (context === 'summary') {
       setRegeneratingSummary(true)
       try {
-        const summary = await generateSummaryOnlyRegeneration(
+        const { summary, strengths, opportunities } = await generateSummaryOnlyRegeneration(
           dataWidgets,
           activeFilters,
           viewType,
           guidance || undefined,
+          currentContent.actions,
         )
         const updated = applySummaryRegeneration(
           currentContent,
           summary,
           activeFilters,
           currentDataWidgetIds,
+          strengths,
+          opportunities,
         )
         if (activeTab === 'company') {
           handleCompanyContentChange(updated)
@@ -592,6 +603,15 @@ function SummaryWidgetInner({
         ? withComputedStaleness(teamContent, activeFilters, currentDataWidgetIds)
         : undefined,
     [teamContent, activeFilters, currentDataWidgetIds],
+  )
+
+  const companyDashboardFacts = useMemo(
+    () => computeDashboardFacts(dataWidgets, activeFilters, 'company'),
+    [activeFilters, dataWidgets],
+  )
+  const teamDashboardFacts = useMemo(
+    () => computeDashboardFacts(dataWidgets, activeFilters, 'team'),
+    [activeFilters, dataWidgets],
   )
 
   const sharingEnabled = config.visibility === 'everyone'
@@ -788,6 +808,7 @@ function SummaryWidgetInner({
     return (
       <SummaryWidgetSections
         content={displayContent}
+        dashboardFacts={companyDashboardFacts}
         onContentChange={handleCompanyContentChange}
         onCreateActionPlan={handleCreateActionPlan}
         canShowFeedback={canRateSummary(currentUser, config) && !companySharedViewer}
@@ -877,6 +898,7 @@ function SummaryWidgetInner({
     return (
       <SummaryWidgetSections
         content={ownerTeamLiveContent!}
+        dashboardFacts={teamDashboardFacts}
         onContentChange={handleTeamContentChange}
         onCreateActionPlan={handleCreateActionPlan}
         canShowFeedback={canRateSummary(currentUser, config)}
@@ -1036,6 +1058,9 @@ function SummaryWidgetInner({
           open={previewOpen}
           onClose={() => setPreviewOpen(false)}
           content={previewContent}
+          dashboardFacts={
+            activeTab === 'team' ? teamDashboardFacts : companyDashboardFacts
+          }
         />
       )}
 

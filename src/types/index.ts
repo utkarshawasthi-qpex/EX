@@ -664,8 +664,9 @@ export type PublicShareLink = {
   status: 'active' | 'closed'
   passwordProtected: boolean
   password?: string
-  includeQrCode: boolean
   shortenUrl: boolean
+  /** Custom path segment used when shortenUrl is true */
+  shortUrlText?: string
   hasExpiry: boolean
   expiresAt?: string
   includedTabIds: ID[]

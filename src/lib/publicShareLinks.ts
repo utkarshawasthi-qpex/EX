@@ -1,6 +1,8 @@
 import {
   buildPublicShareUrl,
   createMockPublicShareLinks,
+  isStrongAlphanumericPassword,
+  slugifyShareName,
 } from '@/data/mock/publicShareLinks'
 import type { ID, PublicShareLink } from '@/types'
 
@@ -10,13 +12,31 @@ function storageKey(dashboardId: ID): string {
   return `${STORAGE_PREFIX}${dashboardId}`
 }
 
+function normalizeLink(raw: PublicShareLink): PublicShareLink {
+  return {
+    id: raw.id,
+    dashboardId: raw.dashboardId,
+    name: raw.name,
+    url: raw.url,
+    createdAt: raw.createdAt,
+    status: raw.status === 'closed' ? 'closed' : 'active',
+    passwordProtected: Boolean(raw.passwordProtected),
+    password: raw.password,
+    shortenUrl: Boolean(raw.shortenUrl),
+    shortUrlText: raw.shortUrlText,
+    hasExpiry: Boolean(raw.hasExpiry),
+    expiresAt: raw.expiresAt,
+    includedTabIds: Array.isArray(raw.includedTabIds) ? raw.includedTabIds : [],
+  }
+}
+
 function readLinks(dashboardId: ID): PublicShareLink[] | null {
   if (typeof window === 'undefined') return null
   try {
     const raw = window.localStorage.getItem(storageKey(dashboardId))
     if (!raw) return null
     const parsed = JSON.parse(raw) as PublicShareLink[]
-    return Array.isArray(parsed) ? parsed : null
+    return Array.isArray(parsed) ? parsed.map(normalizeLink) : null
   } catch {
     return null
   }
@@ -70,12 +90,12 @@ export function createPublicShareLinkDraft(
     status: 'active',
     passwordProtected: false,
     password: '',
-    includeQrCode: false,
     shortenUrl: true,
+    shortUrlText: '',
     hasExpiry: false,
     expiresAt: undefined,
     includedTabIds: [...tabIds],
   }
 }
 
-export { buildPublicShareUrl }
+export { buildPublicShareUrl, isStrongAlphanumericPassword, slugifyShareName }

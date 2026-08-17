@@ -13,6 +13,8 @@ import {
   createPublicShareLinkDraft,
   deletePublicShareLink,
   getPublicShareLinks,
+  isStrongAlphanumericPassword,
+  slugifyShareName,
   upsertPublicShareLink,
 } from '@/lib/publicShareLinks'
 import type { DashboardTab, ID, PublicShareLink } from '@/types'
@@ -49,6 +51,10 @@ const WuModalHeader = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuModalHeader })),
   { ssr: false },
 )
+const WuSelect = dynamic(
+  () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuSelect })),
+  { ssr: false },
+)
 const WuText = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuText })),
   { ssr: false },
@@ -60,13 +66,20 @@ const WuToggle = dynamic(
 
 type ModalView = 'list' | 'form'
 
+type StatusOption = { value: 'active' | 'closed'; label: string }
+
+const STATUS_OPTIONS: StatusOption[] = [
+  { value: 'active', label: 'Active' },
+  { value: 'closed', label: 'Closed' },
+]
+
 type FormState = {
   id?: ID
   name: string
   passwordProtected: boolean
   password: string
-  includeQrCode: boolean
   shortenUrl: boolean
+  shortUrlText: string
   hasExpiry: boolean
   expiresAt: string
   includedTabIds: ID[]
@@ -86,14 +99,18 @@ function truncateUrl(url: string, max = 42): string {
   return `${url.slice(0, max - 1)}…`
 }
 
+function getStatusOption(status: 'active' | 'closed'): StatusOption {
+  return STATUS_OPTIONS.find((option) => option.value === status) ?? STATUS_OPTIONS[0]!
+}
+
 function emptyForm(tabIds: ID[]): FormState {
   const draft = createPublicShareLinkDraft('', tabIds)
   return {
     name: draft.name,
     passwordProtected: draft.passwordProtected,
     password: draft.password ?? '',
-    includeQrCode: draft.includeQrCode,
     shortenUrl: draft.shortenUrl,
+    shortUrlText: draft.shortUrlText ?? '',
     hasExpiry: draft.hasExpiry,
     expiresAt: draft.expiresAt ?? '',
     includedTabIds: draft.includedTabIds,
@@ -107,8 +124,8 @@ function linkToForm(link: PublicShareLink, tabIds: ID[]): FormState {
     name: link.name,
     passwordProtected: link.passwordProtected,
     password: link.password ?? '',
-    includeQrCode: link.includeQrCode,
     shortenUrl: link.shortenUrl,
+    shortUrlText: link.shortUrlText ?? '',
     hasExpiry: link.hasExpiry,
     expiresAt: link.expiresAt ?? '',
     includedTabIds:
@@ -146,6 +163,10 @@ export function DashboardShareModal({
     return links.filter((link) => link.name.toLowerCase().includes(query))
   }, [links, search])
 
+  const shortUrlPreview = form.shortUrlText.trim()
+    ? `https://bilabs.questionpro.com/sd/${slugifyShareName(form.shortUrlText)}`
+    : 'https://bilabs.questionpro.com/sd/…'
+
   function openCreate() {
     setForm(emptyForm(tabs.map((tab) => tab.id)))
     setView('form')
@@ -161,15 +182,14 @@ export function DashboardShareModal({
     setForm(emptyForm(tabs.map((tab) => tab.id)))
   }
 
-  function toggleStatus(link: PublicShareLink, active: boolean) {
-    const updated: PublicShareLink = {
-      ...link,
-      status: active ? 'active' : 'closed',
-    }
+  function updateStatus(link: PublicShareLink, status: 'active' | 'closed') {
+    if (link.status === status) return
+    const updated: PublicShareLink = { ...link, status }
     setLinks(upsertPublicShareLink(dashboardId, updated))
     showToast({
       variant: 'success',
-      message: active ? `"${link.name}" is now active` : `"${link.name}" is now closed`,
+      message:
+        status === 'active' ? `"${link.name}" is now Active` : `"${link.name}" is now Closed`,
     })
   }
 
@@ -197,8 +217,26 @@ export function DashboardShareModal({
       showToast({ variant: 'error', message: 'Enter a name for this sharing link' })
       return
     }
-    if (form.passwordProtected && !form.password.trim()) {
-      showToast({ variant: 'error', message: 'Enter a password or turn off password protection' })
+    if (form.passwordProtected) {
+      const password = form.password.trim()
+      if (!password) {
+        showToast({
+          variant: 'error',
+          message: 'Enter a strong alphanumeric password or turn off password protection',
+        })
+        return
+      }
+      if (!isStrongAlphanumericPassword(password)) {
+        showToast({
+          variant: 'error',
+          message:
+            'Password must be at least 8 alphanumeric characters and include both letters and numbers',
+        })
+        return
+      }
+    }
+    if (form.shortenUrl && !form.shortUrlText.trim()) {
+      showToast({ variant: 'error', message: 'Enter the text you want for the shortened URL' })
       return
     }
     if (form.hasExpiry && !form.expiresAt) {
@@ -211,20 +249,26 @@ export function DashboardShareModal({
     }
 
     const existing = form.id ? links.find((link) => link.id === form.id) : undefined
+    const shortUrlText = form.shortenUrl ? slugifyShareName(form.shortUrlText) : undefined
+    const urlUnchanged =
+      existing &&
+      existing.shortenUrl === form.shortenUrl &&
+      existing.name === name &&
+      (existing.shortUrlText ?? '') === (shortUrlText ?? '')
+
     const saved: PublicShareLink = {
       id: existing?.id ?? `share_${dashboardId}_${Date.now()}`,
       dashboardId,
       name,
-      url:
-        existing && existing.shortenUrl === form.shortenUrl && existing.name === name
-          ? existing.url
-          : buildPublicShareUrl(dashboardId, name, form.shortenUrl),
+      url: urlUnchanged
+        ? existing.url
+        : buildPublicShareUrl(dashboardId, name, form.shortenUrl, shortUrlText),
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       status: form.status,
       passwordProtected: form.passwordProtected,
       password: form.passwordProtected ? form.password.trim() : undefined,
-      includeQrCode: form.includeQrCode,
       shortenUrl: form.shortenUrl,
+      shortUrlText,
       hasExpiry: form.hasExpiry,
       expiresAt: form.hasExpiry ? form.expiresAt : undefined,
       includedTabIds: form.includedTabIds,
@@ -284,11 +328,20 @@ export function DashboardShareModal({
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => (
-        <WuToggle
-          checked={row.original.status === 'active'}
-          onChange={(checked) => toggleStatus(row.original, checked)}
-          Label=""
-        />
+        <div className="w-[120px]">
+          <WuSelect
+            data={STATUS_OPTIONS}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={getStatusOption(row.original.status)}
+            onSelect={(value: unknown) => {
+              const selected = value as StatusOption | StatusOption[]
+              const next = Array.isArray(selected) ? selected[0] : selected
+              if (!next) return
+              updateStatus(row.original, next.value)
+            }}
+            variant="outlined"
+          />
+        </div>
       ),
     },
     {
@@ -314,6 +367,7 @@ export function DashboardShareModal({
   ]
 
   const isEditing = Boolean(form.id)
+  const formTitle = isEditing ? 'Edit sharing link' : 'Create sharing link'
 
   return (
     <>
@@ -327,11 +381,21 @@ export function DashboardShareModal({
         maxWidth="920px"
       >
         <WuModalHeader>
-          {view === 'list'
-            ? 'Public Sharing Links'
-            : isEditing
-              ? 'Edit sharing link'
-              : 'Create sharing link'}
+          {view === 'list' ? (
+            'Public Sharing Links'
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={backToList}
+                aria-label="Back to sharing links"
+                className="flex size-8 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
+              >
+                <span className="wm-arrow-back text-xl leading-none" aria-hidden />
+              </button>
+              <span>{formTitle}</span>
+            </div>
+          )}
         </WuModalHeader>
         <WuModalContent {...preventModalDismiss}>
           {view === 'list' ? (
@@ -390,50 +454,65 @@ export function DashboardShareModal({
                   variant="outlined"
                   placeholder="e.g. Executive Overview"
                   value={form.name}
-                  onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, name: event.target.value }))
+                  }
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-lg border border-gray-200 p-3">
-                  <WuToggle
-                    checked={form.passwordProtected}
-                    onChange={(checked) =>
-                      setForm((current) => ({ ...current, passwordProtected: checked }))
-                    }
-                    Label="Password protected"
-                  />
-                  {form.passwordProtected && (
-                    <div className="mt-3">
-                      <WuInput
-                        variant="outlined"
-                        type="password"
-                        placeholder="Enter password"
-                        value={form.password}
-                        onChange={(event) =>
-                          setForm((current) => ({ ...current, password: event.target.value }))
-                        }
-                      />
-                    </div>
-                  )}
-                </div>
+              <div className="rounded-lg border border-gray-200 p-3">
+                <WuToggle
+                  checked={form.passwordProtected}
+                  onChange={(checked) =>
+                    setForm((current) => ({ ...current, passwordProtected: checked }))
+                  }
+                  Label="Password protected"
+                />
+                {form.passwordProtected && (
+                  <div className="mt-3 space-y-1.5">
+                    <WuInput
+                      variant="outlined"
+                      type="password"
+                      placeholder="Enter a strong alphanumeric password"
+                      value={form.password}
+                      onChange={(event) =>
+                        setForm((current) => ({ ...current, password: event.target.value }))
+                      }
+                    />
+                    <WuText size="sm" as="p" className="text-xs text-gray-400">
+                      Use at least 8 alphanumeric characters with both letters and numbers (A–Z,
+                      0–9). No special characters.
+                    </WuText>
+                  </div>
+                )}
+              </div>
 
-                <div className="space-y-3 rounded-lg border border-gray-200 p-3">
-                  <WuToggle
-                    checked={form.includeQrCode}
-                    onChange={(checked) =>
-                      setForm((current) => ({ ...current, includeQrCode: checked }))
-                    }
-                    Label="Include QR code"
-                  />
-                  <WuToggle
-                    checked={form.shortenUrl}
-                    onChange={(checked) =>
-                      setForm((current) => ({ ...current, shortenUrl: checked }))
-                    }
-                    Label="Shorten URL"
-                  />
-                </div>
+              <div className="rounded-lg border border-gray-200 p-3">
+                <WuToggle
+                  checked={form.shortenUrl}
+                  onChange={(checked) =>
+                    setForm((current) => ({ ...current, shortenUrl: checked }))
+                  }
+                  Label="Shorten URL"
+                />
+                {form.shortenUrl && (
+                  <div className="mt-3 space-y-1.5">
+                    <WuText size="sm" as="p" className="font-medium text-gray-700">
+                      Custom URL text
+                    </WuText>
+                    <WuInput
+                      variant="outlined"
+                      placeholder="e.g. executive-overview"
+                      value={form.shortUrlText}
+                      onChange={(event) =>
+                        setForm((current) => ({ ...current, shortUrlText: event.target.value }))
+                      }
+                    />
+                    <WuText size="sm" as="p" className="text-xs text-gray-400">
+                      Preview: {shortUrlPreview}
+                    </WuText>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-lg border border-gray-200 p-3">
@@ -493,7 +572,7 @@ export function DashboardShareModal({
           ) : (
             <div className="flex w-full justify-end gap-2">
               <WuButton variant="secondary" onClick={backToList}>
-                Back
+                Cancel
               </WuButton>
               <WuButton variant="primary" onClick={handleSave}>
                 {isEditing ? 'Save changes' : 'Create link'}

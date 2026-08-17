@@ -2,7 +2,6 @@ import type { ID, PublicShareLink } from '@/types'
 
 /** Seed public sharing links for dashboard prototypes. */
 export function createMockPublicShareLinks(dashboardId: ID): PublicShareLink[] {
-  const base = `https://bilabs.questionpro.com/sd/${dashboardId.slice(0, 8)}`
   const createdAt = '2026-05-14T10:00:00.000Z'
 
   return [
@@ -10,12 +9,12 @@ export function createMockPublicShareLinks(dashboardId: ID): PublicShareLink[] {
       id: `share_${dashboardId}_1`,
       dashboardId,
       name: 'Strategic Insights Hub',
-      url: `${base}/strategic-insights`,
+      url: 'https://bilabs.questionpro.com/sd/strategic-insights',
       createdAt,
       status: 'active',
       passwordProtected: false,
-      includeQrCode: true,
       shortenUrl: true,
+      shortUrlText: 'strategic-insights',
       hasExpiry: false,
       includedTabIds: [],
     },
@@ -23,13 +22,13 @@ export function createMockPublicShareLinks(dashboardId: ID): PublicShareLink[] {
       id: `share_${dashboardId}_2`,
       dashboardId,
       name: 'Quarterly Performance Review',
-      url: `${base}/quarterly-review`,
+      url: 'https://bilabs.questionpro.com/sd/quarterly-review',
       createdAt,
       status: 'active',
       passwordProtected: true,
-      password: 'demo1234',
-      includeQrCode: false,
+      password: 'Pulse2026',
       shortenUrl: true,
+      shortUrlText: 'quarterly-review',
       hasExpiry: true,
       expiresAt: '2026-12-31',
       includedTabIds: [],
@@ -38,11 +37,10 @@ export function createMockPublicShareLinks(dashboardId: ID): PublicShareLink[] {
       id: `share_${dashboardId}_3`,
       dashboardId,
       name: 'Business Health Snapshot',
-      url: `${base}/business-health`,
+      url: `https://bilabs.questionpro.com/sd/${dashboardId.slice(0, 8)}/business-health`,
       createdAt,
       status: 'active',
       passwordProtected: false,
-      includeQrCode: false,
       shortenUrl: false,
       hasExpiry: false,
       includedTabIds: [],
@@ -51,12 +49,12 @@ export function createMockPublicShareLinks(dashboardId: ID): PublicShareLink[] {
       id: `share_${dashboardId}_4`,
       dashboardId,
       name: 'Leadership Pulse',
-      url: `${base}/leadership-pulse`,
+      url: 'https://bilabs.questionpro.com/sd/leadership-pulse',
       createdAt,
       status: 'active',
       passwordProtected: false,
-      includeQrCode: true,
       shortenUrl: true,
+      shortUrlText: 'leadership-pulse',
       hasExpiry: false,
       includedTabIds: [],
     },
@@ -64,13 +62,13 @@ export function createMockPublicShareLinks(dashboardId: ID): PublicShareLink[] {
       id: `share_${dashboardId}_5`,
       dashboardId,
       name: 'Executive Overview',
-      url: `${base}/executive-overview`,
+      url: 'https://bilabs.questionpro.com/sd/executive-overview',
       createdAt,
       status: 'active',
       passwordProtected: true,
-      password: 'exec2026',
-      includeQrCode: false,
+      password: 'Exec2026x',
       shortenUrl: true,
+      shortUrlText: 'executive-overview',
       hasExpiry: true,
       expiresAt: '2026-09-30',
       includedTabIds: [],
@@ -89,15 +87,24 @@ export function slugifyShareName(name: string): string {
   )
 }
 
+/** Alphanumeric only, ≥8 chars, at least one letter and one number. */
+export function isStrongAlphanumericPassword(password: string): boolean {
+  if (password.length < 8) return false
+  if (!/^[A-Za-z0-9]+$/.test(password)) return false
+  return /[A-Za-z]/.test(password) && /[0-9]/.test(password)
+}
+
 export function buildPublicShareUrl(
   dashboardId: ID,
   name: string,
   shortenUrl: boolean,
+  shortUrlText?: string,
 ): string {
+  if (shortenUrl) {
+    const custom = slugifyShareName(shortUrlText || name)
+    return `https://bilabs.questionpro.com/sd/${custom}`
+  }
   const slug = slugifyShareName(name)
   const token = Math.random().toString(36).slice(2, 10)
-  if (shortenUrl) {
-    return `https://bilabs.questionpro.com/sd/${token}`
-  }
   return `https://bilabs.questionpro.com/sd/${dashboardId.slice(0, 8)}/${slug}-${token}`
 }

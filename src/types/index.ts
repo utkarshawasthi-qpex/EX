@@ -655,6 +655,22 @@ export type Dashboard = {
   tabs: DashboardTab[]
 }
 
+export type PublicShareLink = {
+  id: ID
+  dashboardId: ID
+  name: string
+  url: string
+  createdAt: string
+  status: 'active' | 'closed'
+  passwordProtected: boolean
+  password?: string
+  includeQrCode: boolean
+  shortenUrl: boolean
+  hasExpiry: boolean
+  expiresAt?: string
+  includedTabIds: ID[]
+}
+
 export function getDashboardCapabilities(
   dashboard: Dashboard,
   user: { email: string; role: 'hr_admin' | 'manager' | 'employee' },

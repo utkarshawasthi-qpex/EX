@@ -10,6 +10,7 @@ import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { AddWidgetModal } from '@/components/modules/analytics/AddWidgetModal'
 import type { AddWidgetConfig } from '@/components/modules/analytics/AddWidgetModal'
 import { DashboardFilterPanel } from '@/components/modules/analytics/DashboardFilterPanel'
+import { DashboardShareModal } from '@/components/modules/analytics/DashboardShareModal'
 import { DashboardWidgetProvider } from '@/components/modules/analytics/DashboardWidgetContext'
 import { ExportPptModal } from '@/components/modules/analytics/ExportPptModal'
 import { DashboardWidgetRenderer } from '@/components/modules/analytics/widgetRegistry'
@@ -106,6 +107,7 @@ export default function DashboardCanvasPage() {
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false)
   const [exportModalOpen, setExportModalOpen] = useState(false)
+  const [shareModalOpen, setShareModalOpen] = useState(false)
   const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([])
   const [widgetContentHeights, setWidgetContentHeights] = useState<Record<string, number>>({})
 
@@ -525,6 +527,12 @@ export default function DashboardCanvasPage() {
               </button>
               <button
                 type="button"
+                className="wm-share text-xl leading-none text-gray-400 hover:text-gray-600"
+                onClick={() => setShareModalOpen(true)}
+                aria-label="Share dashboard"
+              />
+              <button
+                type="button"
                 className="wc-downloads text-xl text-gray-400 hover:text-gray-600"
                 onClick={() => setExportModalOpen(true)}
                 aria-label="Download"
@@ -741,6 +749,13 @@ export default function DashboardCanvasPage() {
             activeFilters={activeFiltersToLabels(activeFilters)}
           />
         )}
+        <DashboardShareModal
+          open={shareModalOpen}
+          onClose={() => setShareModalOpen(false)}
+          dashboardId={dashboard.id}
+          dashboardName={dashboard.name}
+          tabs={tabs}
+        />
       </main>
     </div>
   )

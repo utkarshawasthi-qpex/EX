@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   activeFiltersToConditions,
   conditionsToActiveFilters,
@@ -16,6 +16,13 @@ type ShareFilterPickerProps = {
   onChange: (next: ActiveFilter[]) => void
 }
 
+function filtersSignature(filters: ActiveFilter[]): string {
+  return filters
+    .map((filter) => `${filter.fieldId}:${filter.value}`)
+    .sort()
+    .join('|')
+}
+
 /** Static filter editor — IF / AND condition rows (admin share config). */
 export function ShareFilterPicker({
   label,
@@ -26,14 +33,29 @@ export function ShareFilterPicker({
   const [conditions, setConditions] = useState<FilterCondition[]>(() =>
     activeFiltersToConditions(selected),
   )
+  const skipNextSelectedSync = useRef(false)
+  const lastSelectedSignature = useRef(filtersSignature(selected))
 
   useEffect(() => {
+    const signature = filtersSignature(selected)
+    if (skipNextSelectedSync.current) {
+      skipNextSelectedSync.current = false
+      lastSelectedSignature.current = signature
+      return
+    }
+    if (signature === lastSelectedSignature.current) return
+    lastSelectedSignature.current = signature
     setConditions(activeFiltersToConditions(selected))
   }, [selected])
 
   function handleChange(next: FilterCondition[]) {
+    // Keep empty/incomplete rows locally so "+" can add another IF/AND line
+    // without the parent selected[] sync wiping them away.
+    skipNextSelectedSync.current = true
     setConditions(next)
-    onChange(conditionsToActiveFilters(next))
+    const nextFilters = conditionsToActiveFilters(next)
+    lastSelectedSignature.current = filtersSignature(nextFilters)
+    onChange(nextFilters)
   }
 
   return (

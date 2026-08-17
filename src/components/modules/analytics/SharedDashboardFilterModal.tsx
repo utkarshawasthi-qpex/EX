@@ -98,75 +98,59 @@ export function SharedDashboardFilterModal({
     >
       <WuModalHeader>Filters</WuModalHeader>
       <WuModalContent {...preventModalDismiss}>
-        <div className="space-y-5">
-          <div className="flex items-center gap-2">
-            <span className="wm-account-tree text-sm text-blue-600" aria-hidden />
-            <button type="button" className="text-sm text-blue-600 hover:underline">
-              Hierarchy based rule
-            </button>
+        <div>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <WuText size="sm" as="span" className="font-semibold text-gray-800">
+                Filters
+              </WuText>
+              <button
+                type="button"
+                className="flex size-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-medium text-white"
+                aria-label="Filters information"
+              >
+                ?
+              </button>
+            </div>
             <button
               type="button"
-              className="flex size-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-medium text-white"
-              aria-label="Hierarchy rule information"
+              onClick={clearAll}
+              className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
             >
-              ?
+              <span className="text-base leading-none" aria-hidden>
+                ↺
+              </span>
+              Clear all
             </button>
           </div>
 
-          <div>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <WuText size="sm" as="span" className="font-semibold text-gray-800">
-                  Filters
-                </WuText>
-                <button
-                  type="button"
-                  className="flex size-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-medium text-white"
-                  aria-label="Filters information"
-                >
-                  ?
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={clearAll}
-                className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
-              >
-                <span className="text-base leading-none" aria-hidden>
-                  ↺
-                </span>
-                Clear all
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {DASHBOARD_FILTER_FIELDS.map((field) => {
-                const options = field.values.map((value) => ({ value, label: value }))
-                const selected = draftByField[field.id] ?? []
-                return (
-                  <div key={field.id}>
-                    <p className="mb-1.5 text-xs font-medium text-gray-500">{field.label}</p>
-                    <WuSelect
-                      data={options}
-                      accessorKey={{ value: 'value', label: 'label' }}
-                      value={selected}
-                      onSelect={(value: unknown) => {
-                        const next = (
-                          Array.isArray(value) ? value : value ? [value] : []
-                        ) as SelectOption[]
-                        setDraftByField((current) => ({
-                          ...current,
-                          [field.id]: next,
-                        }))
-                      }}
-                      multiple
-                      variant="outlined"
-                      placeholder="Select value(s)"
-                    />
-                  </div>
-                )
-              })}
-            </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {DASHBOARD_FILTER_FIELDS.map((field) => {
+              const options = field.values.map((value) => ({ value, label: value }))
+              const selected = draftByField[field.id] ?? []
+              return (
+                <div key={field.id}>
+                  <p className="mb-1.5 text-xs font-medium text-gray-500">{field.label}</p>
+                  <WuSelect
+                    data={options}
+                    accessorKey={{ value: 'value', label: 'label' }}
+                    value={selected}
+                    onSelect={(value: unknown) => {
+                      const next = (
+                        Array.isArray(value) ? value : value ? [value] : []
+                      ) as SelectOption[]
+                      setDraftByField((current) => ({
+                        ...current,
+                        [field.id]: next,
+                      }))
+                    }}
+                    multiple
+                    variant="outlined"
+                    placeholder="Select value(s)"
+                  />
+                </div>
+              )
+            })}
           </div>
         </div>
       </WuModalContent>

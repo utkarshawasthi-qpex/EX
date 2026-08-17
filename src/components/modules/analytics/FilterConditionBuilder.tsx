@@ -33,7 +33,7 @@ const FIELD_OPTIONS: SelectOption[] = DASHBOARD_FILTER_FIELDS.map((field) => ({
 export function createEmptyCondition(): FilterCondition {
   return {
     id: `cond_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    fieldId: DASHBOARD_FILTER_FIELDS[0]?.id ?? '',
+    fieldId: '',
     values: [],
   }
 }

@@ -655,11 +655,18 @@ export type Dashboard = {
   tabs: DashboardTab[]
 }
 
+export type ShareTitleAlign = 'left' | 'center' | 'right'
+
 export type PublicShareLink = {
   id: ID
   dashboardId: ID
   name: string
+  /** Display title on the shared page (defaults to dashboard name). */
+  displayTitle: string
+  titleAlign: ShareTitleAlign
   url: string
+  /** Path slug used in /share/[slug] */
+  slug: string
   createdAt: string
   status: 'active' | 'closed'
   passwordProtected: boolean
@@ -670,6 +677,14 @@ export type PublicShareLink = {
   hasExpiry: boolean
   expiresAt?: string
   includedTabIds: ID[]
+  /** Locked filters applied to shared data (dashboard-level). */
+  staticDashboardFilters: ActiveFilter[]
+  /** Locked filters applied per tab. */
+  staticTabFilters: Record<string, ActiveFilter[]>
+  /** When true, recipients can change dashboard-level filters. */
+  allowDynamicDashboardFilters: boolean
+  /** When true, recipients can change tab-level filters. */
+  allowDynamicTabFilters: boolean
 }
 
 export function getDashboardCapabilities(

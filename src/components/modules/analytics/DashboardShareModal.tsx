@@ -5,19 +5,28 @@ import { format } from 'date-fns'
 import { useEffect, useMemo, useState } from 'react'
 import type { IWuTableColumnDef } from '@npm-questionpro/wick-ui-lib'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
+import { ShareFilterPicker } from '@/components/modules/analytics/ShareFilterPicker'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { SHARE_TITLE_ALIGN_OPTIONS } from '@/data/mock/publicShareLinks'
 import { preventModalDismiss } from '@/lib/modalProps'
 import {
   buildPublicShareUrl,
   createPublicShareLinkDraft,
   deletePublicShareLink,
   getPublicShareLinks,
-  isStrongAlphanumericPassword,
+  isStrongSharePassword,
+  resolveShareSlug,
   slugifyShareName,
   upsertPublicShareLink,
 } from '@/lib/publicShareLinks'
-import type { DashboardTab, ID, PublicShareLink } from '@/types'
+import type {
+  ActiveFilter,
+  DashboardTab,
+  ID,
+  PublicShareLink,
+  ShareTitleAlign,
+} from '@/types'
 
 const WuButton = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuButton })),
@@ -67,6 +76,7 @@ const WuToggle = dynamic(
 type ModalView = 'list' | 'form'
 
 type StatusOption = { value: 'active' | 'closed'; label: string }
+type AlignOption = { value: ShareTitleAlign; label: string }
 
 const STATUS_OPTIONS: StatusOption[] = [
   { value: 'active', label: 'Active' },
@@ -76,6 +86,8 @@ const STATUS_OPTIONS: StatusOption[] = [
 type FormState = {
   id?: ID
   name: string
+  displayTitle: string
+  titleAlign: ShareTitleAlign
   passwordProtected: boolean
   password: string
   shortenUrl: boolean
@@ -84,6 +96,10 @@ type FormState = {
   expiresAt: string
   includedTabIds: ID[]
   status: 'active' | 'closed'
+  staticDashboardFilters: ActiveFilter[]
+  staticTabFilters: Record<string, ActiveFilter[]>
+  allowDynamicDashboardFilters: boolean
+  allowDynamicTabFilters: boolean
 }
 
 type DashboardShareModalProps = {
@@ -103,10 +119,19 @@ function getStatusOption(status: 'active' | 'closed'): StatusOption {
   return STATUS_OPTIONS.find((option) => option.value === status) ?? STATUS_OPTIONS[0]!
 }
 
-function emptyForm(tabIds: ID[]): FormState {
-  const draft = createPublicShareLinkDraft('', tabIds)
+function getAlignOption(align: ShareTitleAlign): AlignOption {
+  return (
+    SHARE_TITLE_ALIGN_OPTIONS.find((option) => option.value === align) ??
+    SHARE_TITLE_ALIGN_OPTIONS[0]!
+  )
+}
+
+function emptyForm(tabIds: ID[], dashboardName: string): FormState {
+  const draft = createPublicShareLinkDraft('', tabIds, dashboardName)
   return {
     name: draft.name,
+    displayTitle: draft.displayTitle,
+    titleAlign: draft.titleAlign,
     passwordProtected: draft.passwordProtected,
     password: draft.password ?? '',
     shortenUrl: draft.shortenUrl,
@@ -115,13 +140,19 @@ function emptyForm(tabIds: ID[]): FormState {
     expiresAt: draft.expiresAt ?? '',
     includedTabIds: draft.includedTabIds,
     status: draft.status,
+    staticDashboardFilters: [...draft.staticDashboardFilters],
+    staticTabFilters: { ...draft.staticTabFilters },
+    allowDynamicDashboardFilters: draft.allowDynamicDashboardFilters,
+    allowDynamicTabFilters: draft.allowDynamicTabFilters,
   }
 }
 
-function linkToForm(link: PublicShareLink, tabIds: ID[]): FormState {
+function linkToForm(link: PublicShareLink, tabIds: ID[], dashboardName: string): FormState {
   return {
     id: link.id,
     name: link.name,
+    displayTitle: link.displayTitle || dashboardName,
+    titleAlign: link.titleAlign || 'left',
     passwordProtected: link.passwordProtected,
     password: link.password ?? '',
     shortenUrl: link.shortenUrl,
@@ -131,6 +162,10 @@ function linkToForm(link: PublicShareLink, tabIds: ID[]): FormState {
     includedTabIds:
       link.includedTabIds.length > 0 ? [...link.includedTabIds] : [...tabIds],
     status: link.status,
+    staticDashboardFilters: [...(link.staticDashboardFilters ?? [])],
+    staticTabFilters: { ...(link.staticTabFilters ?? {}) },
+    allowDynamicDashboardFilters: link.allowDynamicDashboardFilters,
+    allowDynamicTabFilters: link.allowDynamicTabFilters,
   }
 }
 
@@ -145,17 +180,25 @@ export function DashboardShareModal({
   const [view, setView] = useState<ModalView>('list')
   const [links, setLinks] = useState<PublicShareLink[]>([])
   const [search, setSearch] = useState('')
-  const [form, setForm] = useState<FormState>(() => emptyForm(tabs.map((tab) => tab.id)))
+  const [form, setForm] = useState<FormState>(() =>
+    emptyForm(
+      tabs.map((tab) => tab.id),
+      dashboardName,
+    ),
+  )
   const [deleteTarget, setDeleteTarget] = useState<PublicShareLink | null>(null)
+  const [staticTabExpandedId, setStaticTabExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
-    setLinks(getPublicShareLinks(dashboardId))
+    const tabIds = tabs.map((tab) => tab.id)
+    setLinks(getPublicShareLinks(dashboardId, { dashboardName, tabIds }))
     setView('list')
     setSearch('')
-    setForm(emptyForm(tabs.map((tab) => tab.id)))
+    setForm(emptyForm(tabIds, dashboardName))
     setDeleteTarget(null)
-  }, [open, dashboardId, tabs])
+    setStaticTabExpandedId(null)
+  }, [open, dashboardId, dashboardName, tabs])
 
   const filteredLinks = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -163,23 +206,46 @@ export function DashboardShareModal({
     return links.filter((link) => link.name.toLowerCase().includes(query))
   }, [links, search])
 
-  const shortUrlPreview = form.shortUrlText.trim()
-    ? `https://bilabs.questionpro.com/sd/${slugifyShareName(form.shortUrlText)}`
-    : 'https://bilabs.questionpro.com/sd/…'
+  const includedTabs = tabs.filter((tab) => form.includedTabIds.includes(tab.id))
+
+  const shortUrlPreview = (() => {
+    const slug = form.shortenUrl
+      ? form.shortUrlText.trim()
+        ? slugifyShareName(form.shortUrlText)
+        : '…'
+      : '…'
+    const origin =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : ''
+    return `${origin}/share/${slug}`
+  })()
 
   function openCreate() {
-    setForm(emptyForm(tabs.map((tab) => tab.id)))
+    setForm(emptyForm(
+      tabs.map((tab) => tab.id),
+      dashboardName,
+    ))
     setView('form')
   }
 
   function openEdit(link: PublicShareLink) {
-    setForm(linkToForm(link, tabs.map((tab) => tab.id)))
+    setForm(
+      linkToForm(
+        link,
+        tabs.map((tab) => tab.id),
+        dashboardName,
+      ),
+    )
     setView('form')
   }
 
   function backToList() {
     setView('list')
-    setForm(emptyForm(tabs.map((tab) => tab.id)))
+    setForm(emptyForm(
+      tabs.map((tab) => tab.id),
+      dashboardName,
+    ))
   }
 
   function updateStatus(link: PublicShareLink, status: 'active' | 'closed') {
@@ -206,7 +272,16 @@ export function DashboardShareModal({
     setForm((current) => {
       const included = new Set(current.includedTabIds)
       if (checked) included.add(tabId)
-      else included.delete(tabId)
+      else {
+        included.delete(tabId)
+        const nextStatic = { ...current.staticTabFilters }
+        delete nextStatic[tabId]
+        return {
+          ...current,
+          includedTabIds: [...included],
+          staticTabFilters: nextStatic,
+        }
+      }
       return { ...current, includedTabIds: [...included] }
     })
   }
@@ -222,15 +297,15 @@ export function DashboardShareModal({
       if (!password) {
         showToast({
           variant: 'error',
-          message: 'Enter a strong alphanumeric password or turn off password protection',
+          message: 'Enter a strong password or turn off password protection',
         })
         return
       }
-      if (!isStrongAlphanumericPassword(password)) {
+      if (!isStrongSharePassword(password)) {
         showToast({
           variant: 'error',
           message:
-            'Password must be at least 8 alphanumeric characters and include both letters and numbers',
+            'Password must be at least 8 characters with 1 uppercase letter, 1 number, and 1 special character',
         })
         return
       }
@@ -248,21 +323,33 @@ export function DashboardShareModal({
       return
     }
 
-    const existing = form.id ? links.find((link) => link.id === form.id) : undefined
+    const existing = form.id ? links.find((item) => item.id === form.id) : undefined
     const shortUrlText = form.shortenUrl ? slugifyShareName(form.shortUrlText) : undefined
-    const urlUnchanged =
+    const slug =
       existing &&
       existing.shortenUrl === form.shortenUrl &&
-      existing.name === name &&
-      (existing.shortUrlText ?? '') === (shortUrlText ?? '')
+      (existing.shortUrlText ?? '') === (shortUrlText ?? '') &&
+      existing.name === name
+        ? existing.slug
+        : resolveShareSlug(name, form.shortenUrl, shortUrlText)
+
+    const displayTitle = form.displayTitle.trim() || dashboardName
+    const url = buildPublicShareUrl(
+      dashboardId,
+      name,
+      form.shortenUrl,
+      shortUrlText,
+      slug,
+    )
 
     const saved: PublicShareLink = {
       id: existing?.id ?? `share_${dashboardId}_${Date.now()}`,
       dashboardId,
       name,
-      url: urlUnchanged
-        ? existing.url
-        : buildPublicShareUrl(dashboardId, name, form.shortenUrl, shortUrlText),
+      displayTitle,
+      titleAlign: form.titleAlign,
+      url,
+      slug,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       status: form.status,
       passwordProtected: form.passwordProtected,
@@ -272,6 +359,10 @@ export function DashboardShareModal({
       hasExpiry: form.hasExpiry,
       expiresAt: form.hasExpiry ? form.expiresAt : undefined,
       includedTabIds: form.includedTabIds,
+      staticDashboardFilters: form.staticDashboardFilters,
+      staticTabFilters: form.staticTabFilters,
+      allowDynamicDashboardFilters: form.allowDynamicDashboardFilters,
+      allowDynamicTabFilters: form.allowDynamicTabFilters,
     }
 
     setLinks(upsertPublicShareLink(dashboardId, saved))
@@ -303,9 +394,15 @@ export function DashboardShareModal({
       cell: ({ row }) => (
         <div className="flex max-w-[280px] items-center gap-2 text-gray-500">
           <span className="wm-link shrink-0 text-base leading-none" aria-hidden />
-          <span className="truncate text-sm" title={row.original.url}>
+          <a
+            href={row.original.url.startsWith('http') ? row.original.url : row.original.url}
+            target="_blank"
+            rel="noreferrer"
+            className="truncate text-sm text-blue-600 hover:underline"
+            title={row.original.url}
+          >
             {truncateUrl(row.original.url)}
-          </span>
+          </a>
           <button
             type="button"
             className="wm-content-copy shrink-0 text-base leading-none text-gray-400 hover:text-gray-700"
@@ -378,7 +475,7 @@ export function DashboardShareModal({
         }}
         variant="action"
         size="lg"
-        maxWidth="920px"
+        maxWidth="960px"
       >
         <WuModalHeader>
           {view === 'list' ? (
@@ -401,8 +498,8 @@ export function DashboardShareModal({
           {view === 'list' ? (
             <div className="space-y-4">
               <WuText size="sm" as="p" className="text-gray-500">
-                Share &ldquo;{dashboardName}&rdquo; with a public link. Recipients do not need a
-                QuestionPro login.
+                Share &ldquo;{dashboardName}&rdquo; with a public link. Open or paste a URL to
+                preview the shared dashboard.
               </WuText>
 
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -445,7 +542,7 @@ export function DashboardShareModal({
               )}
             </div>
           ) : (
-            <div className="space-y-5">
+            <div className="max-h-[65vh] space-y-5 overflow-y-auto pr-1">
               <div>
                 <WuText size="sm" as="p" className="mb-1.5 font-medium text-gray-700">
                   Link name
@@ -458,6 +555,42 @@ export function DashboardShareModal({
                     setForm((current) => ({ ...current, name: event.target.value }))
                   }
                 />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <WuText size="sm" as="p" className="mb-1.5 font-medium text-gray-700">
+                    Shared page title
+                  </WuText>
+                  <WuInput
+                    variant="outlined"
+                    placeholder={dashboardName}
+                    value={form.displayTitle}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, displayTitle: event.target.value }))
+                    }
+                  />
+                  <WuText size="sm" as="p" className="mt-1 text-xs text-gray-400">
+                    Defaults to the dashboard name if left blank.
+                  </WuText>
+                </div>
+                <div>
+                  <WuText size="sm" as="p" className="mb-1.5 font-medium text-gray-700">
+                    Title alignment
+                  </WuText>
+                  <WuSelect
+                    data={SHARE_TITLE_ALIGN_OPTIONS}
+                    accessorKey={{ value: 'value', label: 'label' }}
+                    value={getAlignOption(form.titleAlign)}
+                    onSelect={(value: unknown) => {
+                      const selected = value as AlignOption | AlignOption[]
+                      const next = Array.isArray(selected) ? selected[0] : selected
+                      if (!next) return
+                      setForm((current) => ({ ...current, titleAlign: next.value }))
+                    }}
+                    variant="outlined"
+                  />
+                </div>
               </div>
 
               <div className="rounded-lg border border-gray-200 p-3">
@@ -473,15 +606,15 @@ export function DashboardShareModal({
                     <WuInput
                       variant="outlined"
                       type="password"
-                      placeholder="Enter a strong alphanumeric password"
+                      placeholder="Enter a strong password"
                       value={form.password}
                       onChange={(event) =>
                         setForm((current) => ({ ...current, password: event.target.value }))
                       }
                     />
                     <WuText size="sm" as="p" className="text-xs text-gray-400">
-                      Use at least 8 alphanumeric characters with both letters and numbers (A–Z,
-                      0–9). No special characters.
+                      At least 8 characters, with 1 uppercase letter, 1 number, and 1 special
+                      character (e.g. Pulse2026!).
                     </WuText>
                   </div>
                 )}
@@ -555,11 +688,100 @@ export function DashboardShareModal({
                     </label>
                   ))}
                 </div>
-                {tabs.length === 0 && (
-                  <WuText size="sm" as="p" className="text-gray-400">
-                    This dashboard has no tabs yet.
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+                <div>
+                  <WuText size="sm" as="p" className="font-medium text-gray-800">
+                    Static filters
                   </WuText>
+                  <WuText size="sm" as="p" className="text-xs text-gray-400">
+                    Locked by you. Shared data always includes these filters. Recipients cannot
+                    remove them.
+                  </WuText>
+                </div>
+                <ShareFilterPicker
+                  label="Dashboard-level static filters"
+                  selected={form.staticDashboardFilters}
+                  onChange={(next) =>
+                    setForm((current) => ({ ...current, staticDashboardFilters: next }))
+                  }
+                />
+                {includedTabs.length > 0 && (
+                  <div className="space-y-2">
+                    <WuText size="sm" as="p" className="font-medium text-gray-700">
+                      Tab-level static filters
+                    </WuText>
+                    {includedTabs.map((tab) => {
+                      const expanded = staticTabExpandedId === tab.id
+                      const count = (form.staticTabFilters[tab.id] ?? []).length
+                      return (
+                        <div key={tab.id} className="rounded-md border border-gray-100">
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                            onClick={() =>
+                              setStaticTabExpandedId(expanded ? null : tab.id)
+                            }
+                          >
+                            <span>{tab.name}</span>
+                            <span className="text-xs text-gray-400">
+                              {count > 0 ? `${count} set` : 'None'} · {expanded ? 'Hide' : 'Edit'}
+                            </span>
+                          </button>
+                          {expanded && (
+                            <div className="border-t border-gray-100 p-3">
+                              <ShareFilterPicker
+                                label={`Static filters for ${tab.name}`}
+                                selected={form.staticTabFilters[tab.id] ?? []}
+                                onChange={(next) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    staticTabFilters: {
+                                      ...current.staticTabFilters,
+                                      [tab.id]: next,
+                                    },
+                                  }))
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+                <div>
+                  <WuText size="sm" as="p" className="font-medium text-gray-800">
+                    Dynamic filters
+                  </WuText>
+                  <WuText size="sm" as="p" className="text-xs text-gray-400">
+                    Available for recipients to refine their own view on top of static filters.
+                  </WuText>
+                </div>
+                <WuToggle
+                  checked={form.allowDynamicDashboardFilters}
+                  onChange={(checked) =>
+                    setForm((current) => ({
+                      ...current,
+                      allowDynamicDashboardFilters: checked,
+                    }))
+                  }
+                  Label="Allow dashboard filters (top right)"
+                />
+                <WuToggle
+                  checked={form.allowDynamicTabFilters}
+                  onChange={(checked) =>
+                    setForm((current) => ({
+                      ...current,
+                      allowDynamicTabFilters: checked,
+                    }))
+                  }
+                  Label="Allow tab filters (beside tab name)"
+                />
               </div>
             </div>
           )}

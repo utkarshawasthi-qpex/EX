@@ -46,19 +46,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isFullPageEditor = /^\/lifecycle\/surveys\/[^/]+\/edit$/.test(pathname)
   const isAnalyticsPortal = pathname.startsWith('/lifecycle/analytics')
   const isEmpower = pathname.startsWith('/empower')
+  const isPublicShare = pathname.startsWith('/share/')
 
   useEffect(() => {
     setEmployeeMode(isEmployeeContext())
   }, [pathname])
 
   useEffect(() => {
-    if (employeeMode && !isEmpower && !pathname.startsWith('/lifecycle/analytics')) {
+    if (
+      employeeMode &&
+      !isEmpower &&
+      !pathname.startsWith('/lifecycle/analytics') &&
+      !isPublicShare
+    ) {
       router.replace('/lifecycle/analytics')
     }
-  }, [employeeMode, isEmpower, pathname, router])
+  }, [employeeMode, isEmpower, isPublicShare, pathname, router])
 
   // Empower ships its own three-column product shell in src/app/empower/layout.tsx.
-  if (pathname === '/login' || isFullPageEditor || isEmpower) {
+  // Public share links are also chrome-free so recipients see only the dashboard.
+  if (pathname === '/login' || isFullPageEditor || isEmpower || isPublicShare) {
     return (
       <>
         <WuToast />

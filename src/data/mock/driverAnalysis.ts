@@ -208,6 +208,97 @@ export function resolveItemsAtLevel(
   return resolved.length > 0 ? resolved : atLevel
 }
 
+export type MetricTreeNode = {
+  id: string
+  label: string
+  level: DriverMetricKind
+  performance: number
+  impact: number
+  children: MetricTreeNode[]
+}
+
+/**
+ * Hierarchical Marker → Building block → Question tree for the metric list.
+ * Only includes branches that contain selected drivers (selected nodes,
+ * their ancestors, and descendants of selected ancestors). Values use the
+ * same getMetricFavorability / getDriverImpact path as chart dots.
+ */
+export function buildMetricTree(
+  driverMetricIds: string[],
+  outcomeMetricId: string,
+  activeFilters: ActiveFilter[],
+  _respondents?: DashboardRespondent[],
+): MetricTreeNode[] {
+  void _respondents
+  const eligible = getEligibleDriverMetrics().filter((m) => m.id !== outcomeMetricId)
+  const byId = new Map(eligible.map((m) => [m.id, m]))
+  const selected = new Set(driverMetricIds.filter((id) => byId.has(id) && id !== outcomeMetricId))
+
+  function isDescendantOf(metric: DriverMetric, ancestorId: string): boolean {
+    let current: DriverMetric | undefined = metric
+    while (current?.parentId) {
+      if (current.parentId === ancestorId) return true
+      current = byId.get(current.parentId)
+    }
+    return false
+  }
+
+  function isAncestorOfSelected(metric: DriverMetric): boolean {
+    for (const id of selected) {
+      const sel = byId.get(id)
+      if (!sel) continue
+      if (sel.id === metric.id || isDescendantOf(sel, metric.id)) return true
+    }
+    return false
+  }
+
+  function isIncluded(metric: DriverMetric): boolean {
+    if (selected.size === 0) {
+      // Match resolveItemsAtLevel fallback: all eligible at each level
+      return true
+    }
+    if (selected.has(metric.id)) return true
+    for (const id of selected) {
+      if (isDescendantOf(metric, id)) return true
+    }
+    if (isAncestorOfSelected(metric)) return true
+    return false
+  }
+
+  function toNode(metric: DriverMetric, childKind: DriverMetricKind | null): MetricTreeNode {
+    const performance = getMetricFavorability(metric.id, metric.kind, activeFilters)
+    const impact = getDriverImpact(metric.id, outcomeMetricId, activeFilters)
+    const children =
+      childKind == null
+        ? []
+        : eligible
+            .filter(
+              (m) =>
+                m.kind === childKind &&
+                m.parentId === metric.id &&
+                isIncluded(m),
+            )
+            .map((m) =>
+              toNode(
+                m,
+                childKind === 'buildingBlock' ? 'question' : null,
+              ),
+            )
+
+    return {
+      id: metric.id,
+      label: metric.label,
+      level: metric.kind,
+      performance,
+      impact,
+      children,
+    }
+  }
+
+  const markers = eligible.filter((m) => m.kind === 'marker' && isIncluded(m))
+  return markers.map((m) => toNode(m, 'buildingBlock'))
+}
+
 /**
  * Pearson r (computational form):
  * r = [n·Σ(xy) - (Σx)(Σy)] / √{[n·Σx² - (Σx)²] · [n·Σy² - (Σy)²]}

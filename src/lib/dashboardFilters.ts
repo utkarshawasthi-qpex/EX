@@ -17,6 +17,7 @@ export {
 } from '@/data/mock/dashboardFilters'
 export type { CategorySentiment, DashboardRespondent, ScorecardMarker } from '@/data/mock/dashboardFilters'
 export {
+  buildMetricTree,
   computeAxisConfig,
   DRIVER_CORRELATION_MATRIX,
   DRIVER_METRICS,
@@ -38,4 +39,5 @@ export type {
   DriverMetric,
   DriverMetricKind,
   DriverQuestionType,
+  MetricTreeNode,
 } from '@/data/mock/driverAnalysis'

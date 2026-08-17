@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useMemo, useState, type CSSProperties } from 'react'
+import { Fragment, useCallback, useMemo, useState, type CSSProperties } from 'react'
 import {
   CartesianGrid,
   Label,
@@ -17,6 +17,7 @@ import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCa
 import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
 import type { ActiveFilter, DashboardWidget } from '@/types'
 import {
+  buildMetricTree,
   computeAxisConfig,
   getDriverImpact,
   getDriverMetricById,
@@ -26,6 +27,7 @@ import {
   type AxisConfig,
   type DriverMetricKind,
   type DriverQuestionType,
+  type MetricTreeNode,
 } from '@/lib/dashboardFilters'
 
 type MetricLevel = 'marker' | 'buildingBlock' | 'question'
@@ -76,12 +78,6 @@ const LEVEL_SINGULAR: Record<MetricLevel, string> = {
   marker: 'Marker',
   buildingBlock: 'Building block',
   question: 'Question',
-}
-
-const LEVEL_LIST_NOUN: Record<MetricLevel, string> = {
-  marker: 'markers',
-  buildingBlock: 'building blocks',
-  question: 'questions',
 }
 
 /** Priority focus → Celebrate → Monitor → Maintain */
@@ -205,6 +201,7 @@ function makeQuadrantDot(
   xThreshold: number,
   yThreshold: number,
   level: MetricLevel,
+  hoveredMetricId: string | null,
 ) {
   const radius = DOT_RADIUS[level]
   const ringRadius = radius + 5
@@ -219,6 +216,8 @@ function makeQuadrantDot(
     const perf = payload.performance ?? payload.x
     const impact = payload.impact ?? payload.y
     const isPriority = perf < xThreshold && impact >= yThreshold
+    const isHovered = hoveredMetricId != null && hoveredMetricId === payload.id
+    const drawRadius = isHovered ? radius + 3 : radius
 
     return (
       <g>
@@ -226,17 +225,28 @@ function makeQuadrantDot(
           <circle
             cx={cx}
             cy={cy}
-            r={ringRadius}
+            r={ringRadius + (isHovered ? 3 : 0)}
             fill="none"
             stroke="#EF4444"
             strokeWidth={1.5}
             opacity={0.65}
           />
         )}
+        {isHovered && !isPriority && (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={drawRadius + 3}
+            fill="none"
+            stroke={QP_BLUE}
+            strokeWidth={1.5}
+            opacity={0.45}
+          />
+        )}
         <circle
           cx={cx}
           cy={cy}
-          r={radius}
+          r={drawRadius}
           fill={QP_BLUE}
           fillOpacity={0.85}
           stroke="#FFFFFF"
@@ -338,6 +348,47 @@ function getDotsForLevel(
     .filter((d) => Number.isFinite(d.x) && Number.isFinite(d.y))
 }
 
+function sortMetricTreeNodes(
+  nodes: MetricTreeNode[],
+  xThreshold: number,
+  yThreshold: number,
+): MetricTreeNode[] {
+  return [...nodes]
+    .map((node) => ({
+      ...node,
+      children: sortMetricTreeNodes(node.children, xThreshold, yThreshold),
+    }))
+    .sort((a, b) => {
+      const qa = getQuadrant(a.performance, a.impact, xThreshold, yThreshold)
+      const qb = getQuadrant(b.performance, b.impact, xThreshold, yThreshold)
+      const orderDiff = QUADRANT_ORDER[qa.label] - QUADRANT_ORDER[qb.label]
+      if (orderDiff !== 0) return orderDiff
+      return a.performance - b.performance
+    })
+}
+
+function collectExpandableIds(nodes: MetricTreeNode[]): string[] {
+  const ids: string[] = []
+  for (const node of nodes) {
+    if (node.children.length > 0) {
+      ids.push(node.id)
+      ids.push(...collectExpandableIds(node.children))
+    }
+  }
+  return ids
+}
+
+const linkButtonStyle: CSSProperties = {
+  fontSize: 12,
+  color: '#6B7280',
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  padding: 0,
+  textDecoration: 'underline',
+  textUnderlineOffset: 2,
+}
+
 export function DriverAnalysisWidget({
   widget,
   activeFilters = [],
@@ -348,6 +399,8 @@ export function DriverAnalysisWidget({
   const title = widget?.title?.trim() || 'Driver analysis'
   const [showMetricList, setShowMetricList] = useState(false)
   const [level, setLevel] = useState<MetricLevel>('marker')
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+  const [hoveredMetricId, setHoveredMetricId] = useState<string | null>(null)
 
   const resolved = useMemo(() => resolveDriverConfig(widget?.config), [widget?.config])
 
@@ -370,22 +423,125 @@ export function DriverAnalysisWidget({
     [dots],
   )
 
+  const metricTree = useMemo(() => {
+    if (!resolved) return [] as MetricTreeNode[]
+    const tree = buildMetricTree(
+      resolved.driverMetricIds,
+      resolved.outcomeMetricId,
+      activeFilters,
+    )
+    return sortMetricTreeNodes(tree, xConfig.threshold, yConfig.threshold)
+  }, [activeFilters, resolved, xConfig.threshold, yConfig.threshold])
+
   const QuadrantDot = useMemo(
-    () => makeQuadrantDot(xConfig.threshold, yConfig.threshold, level),
-    [level, xConfig.threshold, yConfig.threshold],
+    () => makeQuadrantDot(xConfig.threshold, yConfig.threshold, level, hoveredMetricId),
+    [hoveredMetricId, level, xConfig.threshold, yConfig.threshold],
   )
 
-  const dotsSortedByPriority = useMemo(
-    () =>
-      [...dots].sort((a, b) => {
-        const qa = getQuadrant(a.x, a.y, xConfig.threshold, yConfig.threshold)
-        const qb = getQuadrant(b.x, b.y, xConfig.threshold, yConfig.threshold)
-        const orderDiff = QUADRANT_ORDER[qa.label] - QUADRANT_ORDER[qb.label]
-        if (orderDiff !== 0) return orderDiff
-        return a.x - b.x
-      }),
-    [dots, xConfig.threshold, yConfig.threshold],
+  const toggleNode = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const expandAll = useCallback(() => {
+    setExpandedIds(new Set(collectExpandableIds(metricTree)))
+  }, [metricTree])
+
+  const collapseAll = useCallback(() => {
+    setExpandedIds(new Set())
+  }, [])
+
+  const handleRowHover = useCallback(
+    (node: MetricTreeNode | null) => {
+      if (!node || node.level !== level) {
+        setHoveredMetricId(null)
+        return
+      }
+      setHoveredMetricId(node.id)
+    },
+    [level],
   )
+
+  function MetricRow({ node, depth }: { node: MetricTreeNode; depth: number }) {
+    const q = getQuadrant(
+      node.performance,
+      node.impact,
+      xConfig.threshold,
+      yConfig.threshold,
+    )
+    const isPriority = q.label === 'Priority focus'
+    const hasChildren = node.children.length > 0
+    const isExpanded = expandedIds.has(node.id)
+
+    return (
+      <Fragment>
+        <div
+          onClick={hasChildren ? () => toggleNode(node.id) : undefined}
+          onMouseEnter={() => handleRowHover(node)}
+          onMouseLeave={() => handleRowHover(null)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            paddingLeft: 4 + depth * 18,
+            paddingTop: 4,
+            paddingBottom: 4,
+            borderLeft: isPriority ? '3px solid #EF4444' : '3px solid transparent',
+            cursor: hasChildren ? 'pointer' : 'default',
+          }}
+        >
+          {hasChildren ? (
+            <i
+              className={isExpanded ? 'wc-chevron-down' : 'wc-chevron-right'}
+              style={{ fontSize: 9, color: '#9CA3AF', width: 10 }}
+              aria-hidden
+            />
+          ) : (
+            <span style={{ width: 10 }} />
+          )}
+          <span
+            style={{
+              fontSize: 12,
+              color: depth === 0 ? '#1B2E4A' : '#374151',
+              fontWeight: depth === 0 ? 500 : 400,
+            }}
+          >
+            {node.label}
+          </span>
+        </div>
+
+        <span style={{ fontSize: 12, color: '#6B7280', textAlign: 'right' }}>
+          {node.performance.toFixed(0)}%
+        </span>
+
+        <span style={{ fontSize: 12, color: '#6B7280', textAlign: 'right' }}>
+          {node.impact.toFixed(3)}
+        </span>
+
+        <span
+          style={{
+            fontSize: 11,
+            padding: '2px 7px',
+            borderRadius: 10,
+            background: q.bg,
+            color: q.color,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {q.label}
+        </span>
+
+        {isExpanded &&
+          node.children.map((child) => (
+            <MetricRow key={child.id} node={child} depth={depth + 1} />
+          ))}
+      </Fragment>
+    )
+  }
 
   const levelToggle = (
     <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
@@ -583,94 +739,82 @@ export function DriverAnalysisWidget({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowMetricList((v) => !v)}
+            <div
               style={{
-                fontSize: 12,
-                color: '#6B7280',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '8px 0',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 4,
+                gap: 12,
+                padding: '8px 0',
+                flexWrap: 'wrap',
               }}
             >
-              <i
-                className={showMetricList ? 'wc-chevron-down' : 'wc-chevron-right'}
-                style={{ fontSize: 10 }}
-                aria-hidden
-              />
-              {showMetricList ? 'Hide' : 'Show'} all metrics
-            </button>
+              <button
+                type="button"
+                onClick={() => setShowMetricList((v) => !v)}
+                style={{
+                  fontSize: 12,
+                  color: '#6B7280',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <i
+                  className={showMetricList ? 'wc-chevron-down' : 'wc-chevron-right'}
+                  style={{ fontSize: 10 }}
+                  aria-hidden
+                />
+                {showMetricList ? 'Hide' : 'Show'} all metrics
+              </button>
+              {showMetricList && (
+                <>
+                  <button type="button" onClick={expandAll} style={linkButtonStyle}>
+                    Expand all
+                  </button>
+                  <button type="button" onClick={collapseAll} style={linkButtonStyle}>
+                    Collapse all
+                  </button>
+                </>
+              )}
+            </div>
 
             {showMetricList && (
               <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 12 }}>
-                <p
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 500,
-                    color: '#6B7280',
-                    marginBottom: 8,
-                  }}
-                >
-                  All {LEVEL_LIST_NOUN[level]}
-                </p>
                 <div
                   style={{
-                    maxHeight: 280,
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto auto auto',
+                    gap: '0 12px',
+                    paddingBottom: 6,
+                    borderBottom: '1px solid var(--wu-border, #E5E7EB)',
+                    fontSize: 10,
+                    color: '#9CA3AF',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  <span style={{ paddingLeft: 7 }}>Metric</span>
+                  <span style={{ textAlign: 'right' }}>Performance</span>
+                  <span style={{ textAlign: 'right' }}>Impact</span>
+                  <span>Quadrant</span>
+                </div>
+                <div
+                  style={{
+                    maxHeight: 320,
                     overflowY: 'auto',
                     display: 'grid',
-                    gridTemplateColumns: '1fr auto auto',
-                    gap: '2px 12px',
+                    gridTemplateColumns: '1fr auto auto auto',
+                    gap: '0 12px',
                     alignItems: 'center',
                   }}
                 >
-                  {dotsSortedByPriority.map((d) => {
-                    const q = getQuadrant(d.x, d.y, xConfig.threshold, yConfig.threshold)
-                    return (
-                      <Fragment key={d.id}>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            color: '#1B2E4A',
-                            paddingLeft: 4,
-                            paddingTop: 2,
-                            paddingBottom: 2,
-                            borderLeft:
-                              q.label === 'Priority focus'
-                                ? '3px solid #EF4444'
-                                : '3px solid transparent',
-                          }}
-                        >
-                          {d.name}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            color: '#6B7280',
-                            textAlign: 'right',
-                          }}
-                        >
-                          {d.x.toFixed(0)}%
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            padding: '1px 7px',
-                            borderRadius: 10,
-                            background: q.bg,
-                            color: q.color,
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {q.label}
-                        </span>
-                      </Fragment>
-                    )
-                  })}
+                  {metricTree.map((node) => (
+                    <MetricRow key={node.id} node={node} depth={0} />
+                  ))}
                 </div>
               </div>
             )}

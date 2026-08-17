@@ -6,10 +6,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'reac
 import type { Layout } from 'react-grid-layout/legacy'
 import ReactGridLayout, { WidthProvider } from 'react-grid-layout/legacy'
 import 'react-grid-layout/css/styles.css'
-import { DashboardFilterPanel } from '@/components/modules/analytics/DashboardFilterPanel'
 import { DashboardWidgetProvider } from '@/components/modules/analytics/DashboardWidgetContext'
 import { DashboardWidgetRenderer } from '@/components/modules/analytics/widgetRegistry'
-import { ShareTabFilterPopover } from '@/components/modules/analytics/ShareTabFilterPopover'
+import { SharedDashboardFilterModal } from '@/components/modules/analytics/SharedDashboardFilterModal'
+import { ShareTabFilterModal } from '@/components/modules/analytics/ShareTabFilterModal'
 import {
   buildGridLayout,
   loadDashboardTabLayout,
@@ -35,7 +35,6 @@ import type {
   Dashboard,
   DashboardTab,
   DashboardWidget,
-  FilterField,
   PublicShareLink,
   WidgetType,
 } from '@/types'
@@ -208,25 +207,18 @@ export default function SharedDashboardPage() {
     })
   }, [])
 
-  function toggleDynamicDashboardFilter(field: FilterField, value: string) {
-    setDynamicDashboardFilters((prev) => {
-      const exists = prev.some((filter) => filter.fieldId === field.id && filter.value === value)
-      if (exists) {
-        return prev.filter((filter) => !(filter.fieldId === field.id && filter.value === value))
-      }
-      return [...prev, { fieldId: field.id, fieldLabel: field.label, value }]
-    })
+  function applyDynamicDashboardFilters(filters: ActiveFilter[]) {
+    setDynamicDashboardFilters(filters)
   }
 
-  function toggleDynamicTabFilter(field: FilterField, value: string) {
-    setDynamicTabFiltersByTab((prev) => {
-      const current = prev[activeTabId] ?? []
-      const exists = current.some((filter) => filter.fieldId === field.id && filter.value === value)
-      const next = exists
-        ? current.filter((filter) => !(filter.fieldId === field.id && filter.value === value))
-        : [...current, { fieldId: field.id, fieldLabel: field.label, value }]
-      return { ...prev, [activeTabId]: next }
-    })
+  function applyDynamicTabFilters(filters: ActiveFilter[]) {
+    setDynamicTabFiltersByTab((prev) => ({ ...prev, [activeTabId]: filters }))
+  }
+
+  function removeDynamicDashboardFilter(fieldId: string, value: string) {
+    setDynamicDashboardFilters((prev) =>
+      prev.filter((filter) => !(filter.fieldId === fieldId && filter.value === value)),
+    )
   }
 
   function handleUnlock() {
@@ -379,12 +371,7 @@ export default function SharedDashboardPage() {
                 {filter.value}
                 <button
                   type="button"
-                  onClick={() =>
-                    toggleDynamicDashboardFilter(
-                      { id: filter.fieldId, label: filter.fieldLabel, values: [] },
-                      filter.value,
-                    )
-                  }
+                  onClick={() => removeDynamicDashboardFilter(filter.fieldId, filter.value)}
                   className="ml-1 text-blue-400 hover:text-blue-700"
                   aria-label={`Remove ${filter.fieldLabel} ${filter.value}`}
                 >
@@ -403,13 +390,11 @@ export default function SharedDashboardPage() {
         )}
 
         {link.allowDynamicDashboardFilters && (
-          <DashboardFilterPanel
+          <SharedDashboardFilterModal
             open={isFilterOpen}
             activeFilters={dynamicDashboardFilters}
-            onToggleFilter={toggleDynamicDashboardFilter}
-            onClearAll={() => setDynamicDashboardFilters([])}
+            onApply={applyDynamicDashboardFilters}
             onClose={() => setIsFilterOpen(false)}
-            panelClassName="fixed right-0 top-0 z-40 flex h-screen w-[280px] flex-col border-l border-gray-200 bg-white shadow-lg"
           />
         )}
       </header>
@@ -477,36 +462,34 @@ export default function SharedDashboardPage() {
                   {tab.name}
                 </button>
                 {link.allowDynamicTabFilters && isActive && (
-                  <>
-                    <button
-                      type="button"
-                      className="relative mr-1 text-gray-400 hover:text-gray-600"
-                      aria-label={`Filters for ${tab.name}`}
-                      onClick={() => setTabFilterOpen((open) => !open)}
-                    >
-                      <span className="wm-filter-alt text-base leading-none" aria-hidden />
-                      {tabFilterCount > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white">
-                          {tabFilterCount}
-                        </span>
-                      )}
-                    </button>
-                    <ShareTabFilterPopover
-                      open={tabFilterOpen}
-                      activeFilters={dynamicTabFilters}
-                      onToggleFilter={toggleDynamicTabFilter}
-                      onClearAll={() =>
-                        setDynamicTabFiltersByTab((prev) => ({ ...prev, [activeTabId]: [] }))
-                      }
-                      onClose={() => setTabFilterOpen(false)}
-                    />
-                  </>
+                  <button
+                    type="button"
+                    className="relative mr-1 text-gray-400 hover:text-gray-600"
+                    aria-label={`Filters for ${tab.name}`}
+                    onClick={() => setTabFilterOpen(true)}
+                  >
+                    <span className="wm-filter-alt text-base leading-none" aria-hidden />
+                    {tabFilterCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white">
+                        {tabFilterCount}
+                      </span>
+                    )}
+                  </button>
                 )}
               </div>
             )
           })}
         </div>
       </footer>
+
+      {link.allowDynamicTabFilters && (
+        <ShareTabFilterModal
+          open={tabFilterOpen}
+          activeFilters={dynamicTabFilters}
+          onApply={applyDynamicTabFilters}
+          onClose={() => setTabFilterOpen(false)}
+        />
+      )}
     </div>
   )
 }

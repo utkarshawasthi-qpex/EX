@@ -1,7 +1,13 @@
 'use client'
 
-import { DASHBOARD_FILTER_FIELDS } from '@/lib/dashboardFilters'
-import type { ActiveFilter, FilterField } from '@/types'
+import { useEffect, useState } from 'react'
+import {
+  activeFiltersToConditions,
+  conditionsToActiveFilters,
+  FilterConditionBuilder,
+  type FilterCondition,
+} from '@/components/modules/analytics/FilterConditionBuilder'
+import type { ActiveFilter } from '@/types'
 
 type ShareFilterPickerProps = {
   label: string
@@ -10,28 +16,24 @@ type ShareFilterPickerProps = {
   onChange: (next: ActiveFilter[]) => void
 }
 
-function isSelected(selected: ActiveFilter[], fieldId: string, value: string): boolean {
-  return selected.some((filter) => filter.fieldId === fieldId && filter.value === value)
-}
-
+/** Static filter editor — IF / AND condition rows (admin share config). */
 export function ShareFilterPicker({
   label,
   description,
   selected,
   onChange,
 }: ShareFilterPickerProps) {
-  function toggle(field: FilterField, value: string) {
-    const exists = isSelected(selected, field.id, value)
-    if (exists) {
-      onChange(
-        selected.filter((filter) => !(filter.fieldId === field.id && filter.value === value)),
-      )
-      return
-    }
-    onChange([
-      ...selected,
-      { fieldId: field.id, fieldLabel: field.label, value },
-    ])
+  const [conditions, setConditions] = useState<FilterCondition[]>(() =>
+    activeFiltersToConditions(selected),
+  )
+
+  useEffect(() => {
+    setConditions(activeFiltersToConditions(selected))
+  }, [selected])
+
+  function handleChange(next: FilterCondition[]) {
+    setConditions(next)
+    onChange(conditionsToActiveFilters(next))
   }
 
   return (
@@ -40,33 +42,13 @@ export function ShareFilterPicker({
         <p className="text-sm font-medium text-gray-700">{label}</p>
         {description && <p className="text-xs text-gray-400">{description}</p>}
       </div>
-      <div className="max-h-48 space-y-3 overflow-y-auto rounded-md border border-gray-200 p-3">
-        {DASHBOARD_FILTER_FIELDS.map((field) => (
-          <div key={field.id}>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-              {field.label}
-            </p>
-            <div className="flex flex-wrap gap-x-3 gap-y-1">
-              {field.values.map((value) => (
-                <label
-                  key={value}
-                  className="flex cursor-pointer items-center gap-1.5 text-xs text-gray-700"
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected(selected, field.id, value)}
-                    onChange={() => toggle(field, value)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  {value}
-                </label>
-              ))}
-            </div>
-          </div>
-        ))}
+      <div className="rounded-md border border-gray-200 bg-white p-3">
+        <FilterConditionBuilder conditions={conditions} onChange={handleChange} />
       </div>
-      {selected.length > 0 && (
-        <p className="text-xs text-gray-500">{selected.length} filter value(s) selected</p>
+      {conditionsToActiveFilters(conditions).length > 0 && (
+        <p className="text-xs text-gray-500">
+          {conditionsToActiveFilters(conditions).length} filter value(s) selected
+        </p>
       )}
     </div>
   )

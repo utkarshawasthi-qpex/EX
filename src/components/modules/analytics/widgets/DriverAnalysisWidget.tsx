@@ -574,9 +574,9 @@ export function DriverAnalysisWidget({
       subtitle={
         resolved ? (
           <span>
-            Impact on{' '}
+            The selected drivers explain the impact on &quot;
             <span className="font-medium text-gray-600">{resolved.outcomeLabel}</span>
-            {' · Thresholds set to median of your data'}
+            &quot;.
           </span>
         ) : undefined
       }

@@ -1,5 +1,14 @@
-import { PlaceholderPage } from '@/components/shared/PlaceholderPage'
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function Feedback360HomePage() {
-  return <PlaceholderPage title="360 Feedback" />
+  const router = useRouter()
+
+  useEffect(() => {
+    router.replace('/360/surveys')
+  }, [router])
+
+  return null
 }

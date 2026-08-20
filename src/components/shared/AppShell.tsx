@@ -43,7 +43,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [employeeMode, setEmployeeMode] = useState(false)
-  const isFullPageEditor = /^\/lifecycle\/surveys\/[^/]+\/edit$/.test(pathname)
+  const isFullPageEditor =
+    /^\/lifecycle\/surveys\/[^/]+\/edit$/.test(pathname) ||
+    /^\/360\/surveys\/[^/]+\/edit$/.test(pathname)
   const isAnalyticsPortal = pathname.startsWith('/lifecycle/analytics')
   const isEmpower = pathname.startsWith('/empower')
   const isPublicShare = pathname.startsWith('/share/')

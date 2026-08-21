@@ -1,5 +1,17 @@
 'use client'
 
+/**
+ * RECONCILE (current → target) — AddWidgetModal driver_analysis flow:
+ * - CURRENT: step 0 Widget → 1 Settings → 2 Source (survey+deployment+questions) →
+ *   3 "Select outcome & drivers" (outcome radio + driver checkboxes).
+ * - CURRENT: driver_analysis NOT in NO_QUESTION_WIDGETS; standardSourceValid requires
+ *   selectedQuestions.length > 0. Outcome/drivers in widgetConfig as outcomeMetricId,
+ *   outcomeLabel, driverMetricIds (DO NOT rename).
+ * - TARGET: Outcome moves to step 2 Source; step 3 is drivers-only ("Select drivers");
+ *   bypass question gate for driver_analysis; use overlapsOutcome for disable/prune.
+ * - ANONYMITY: ANONYMITY_THRESHOLD (=5) exists in dashboardFilters — used by widget empty state.
+ * - Other widget types unchanged.
+ */
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Layout } from 'react-grid-layout/legacy'
@@ -20,7 +32,9 @@ import {
 import { getSurveys } from '@/lib/mockDb'
 import {
   DRIVER_METRICS,
+  descendantQuestionsOf,
   getEligibleDriverMetrics,
+  overlapsOutcome,
 } from '@/lib/dashboardFilters'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { getCurrentUser } from '@/lib/userContext'
@@ -521,7 +535,7 @@ export function AddWidgetModal({
     if (isSummaryFlow) return SUMMARY_STEPS
     if (selectedType === 'driver_analysis') {
       return WIDGET_STEPS.map((stepItem, index) =>
-        index === 3 ? { ...stepItem, label: 'Select outcome & drivers' } : stepItem,
+        index === 3 ? { ...stepItem, label: 'Select drivers' } : stepItem,
       )
     }
     return WIDGET_STEPS
@@ -548,6 +562,12 @@ export function AddWidgetModal({
   const needsQuestions = widgetNeedsQuestions(selectedType)
   const standardSourceValid =
     Boolean(selectedSurveyId) && (!needsQuestions || selectedQuestions.length > 0)
+  const sourceValid =
+    selectedType === 'driver_analysis'
+      ? Boolean(selectedSurveyId) &&
+        Boolean(selectedDeployment) &&
+        Boolean(widgetConfig.outcomeMetricId)
+      : standardSourceValid
   const driverOutcomeId = widgetConfig.outcomeMetricId as string | undefined
   const driverMetricIds = (widgetConfig.driverMetricIds as string[] | undefined) ?? []
   const driverStepValid =
@@ -558,10 +578,10 @@ export function AddWidgetModal({
     (isSummaryFlow && step === 1 && widgetName.trim().length > 0) ||
     (isSummaryFlow && step === 2 && dataWidgetsOnTab.length > 0) ||
     (!isSummaryFlow && step === 1 && widgetName.trim().length > 0) ||
-    (!isSummaryFlow && step === 2 && standardSourceValid) ||
+    (!isSummaryFlow && step === 2 && sourceValid) ||
     (!isSummaryFlow &&
       step === 3 &&
-      standardSourceValid &&
+      sourceValid &&
       widgetName.trim().length > 0 &&
       driverStepValid)
 
@@ -675,25 +695,8 @@ export function AddWidgetModal({
     setSelectedSurveyId(surveyId)
     setSelectedDeployment(MOCK_DEPLOYMENTS[0].value)
     setSelectedQuestions([])
-    if (selectedType === 'driver_analysis') {
-      const eligible = getEligibleDriverMetrics()
-      const defaultOutcome = eligible.find((m) => m.kind === 'marker') ?? eligible[0]
-      const defaultDrivers = eligible
-        .filter((m) => m.id !== defaultOutcome?.id && m.kind === 'marker')
-        .slice(0, 5)
-        .map((m) => m.id)
-      setWidgetConfig(
-        defaultOutcome
-          ? {
-              outcomeMetricId: defaultOutcome.id,
-              outcomeLabel: defaultOutcome.label,
-              driverMetricIds: defaultDrivers,
-            }
-          : {},
-      )
-    } else {
-      setWidgetConfig({})
-    }
+    // Survey change resets outcome + drivers for driver_analysis (and config for others).
+    setWidgetConfig({})
   }
 
   function getConfigOption(key: string, options: SelectOption[], fallback: SelectOption): SelectOption {
@@ -796,56 +799,15 @@ export function AddWidgetModal({
     if (selectedType === 'driver_analysis') {
       const outcomeMetricId = (widgetConfig.outcomeMetricId as string | undefined) ?? ''
       const driverMetricIds = (widgetConfig.driverMetricIds as string[] | undefined) ?? []
+      const outcomeQuestions = outcomeMetricId
+        ? descendantQuestionsOf(outcomeMetricId)
+        : new Set<string>()
       const allMetrics = DRIVER_METRICS
 
       return (
         <div className="space-y-6">
-          <div>
-            <WuText size="sm" as="p" className="mb-2 font-medium text-gray-900">
-              Outcome variable
-            </WuText>
-            <WuText size="sm" as="p" className="mb-3 text-xs text-gray-500">
-              Pick one metric. All other selected metrics will be plotted as drivers of this
-              outcome.
-            </WuText>
-            <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-2">
-              {allMetrics.map((metric) => {
-                const disabled = Boolean(metric.excluded)
-                return (
-                  <label
-                    key={`outcome-${metric.id}`}
-                    className={cn(
-                      'flex items-center gap-2 py-1.5',
-                      disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
-                    )}
-                    title={disabled ? (metric.excludeReason ?? 'This metric type cannot be used in driver analysis') : undefined}
-                  >
-                    <input
-                      type="radio"
-                      name="driver-outcome"
-                      className="accent-blue-600"
-                      disabled={disabled}
-                      checked={outcomeMetricId === metric.id}
-                      onChange={() => {
-                        if (disabled) return
-                        updateWidgetConfig('outcomeMetricId', metric.id)
-                        updateWidgetConfig('outcomeLabel', metric.label)
-                        updateWidgetConfig(
-                          'driverMetricIds',
-                          driverMetricIds.filter((id) => id !== metric.id),
-                        )
-                      }}
-                    />
-                    <span className="text-sm text-gray-700">
-                      {metric.label}
-                      <span className="ml-1 text-xs text-gray-400">
-                        ({metric.kind === 'buildingBlock' ? 'Building block' : metric.kind})
-                      </span>
-                    </span>
-                  </label>
-                )
-              })}
-            </div>
+          <div className="mb-3 rounded border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            Outcome: <strong>{(widgetConfig.outcomeLabel as string) || '—'}</strong>
           </div>
 
           <div>
@@ -853,10 +815,9 @@ export function AddWidgetModal({
               Driver metrics
             </WuText>
             <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-2">
-              {allMetrics
-                .filter((metric) => metric.id !== outcomeMetricId)
-                .map((metric) => {
-                  const disabled = Boolean(metric.excluded)
+              {allMetrics.map((metric) => {
+                  const disabled =
+                    Boolean(metric.excluded) || overlapsOutcome(metric.id, outcomeQuestions)
                   const checked = driverMetricIds.includes(metric.id)
                   return (
                     <label
@@ -867,8 +828,10 @@ export function AddWidgetModal({
                       )}
                       title={
                         disabled
-                          ? (metric.excludeReason ??
-                            'This metric type cannot be used in driver analysis')
+                          ? metric.excluded
+                            ? (metric.excludeReason ??
+                              'This metric type cannot be used in driver analysis')
+                            : "Overlaps with your outcome — can't also be a driver"
                           : undefined
                       }
                     >
@@ -1137,46 +1100,107 @@ export function AddWidgetModal({
                 variant="outlined"
               />
             </FieldRow>
-            <div className="my-3 border-b border-gray-100" />
-            {!needsQuestions ? (
-              <WuText size="sm" as="p" className="text-gray-500 italic">
-                This widget uses all available data from the selected survey.
-              </WuText>
-            ) : (
-              <div className="max-h-[280px] overflow-y-auto">
-                <div className="sticky top-0 z-10 flex items-center gap-3 bg-white py-2">
-                  <WuCheckbox
-                    checked={Boolean(selectedSurvey?.questions.length) && selectedQuestions.length === selectedSurvey?.questions.length}
-                    partial={Boolean(selectedQuestions.length && selectedQuestions.length !== selectedSurvey?.questions.length)}
-                    onChange={toggleAllQuestions}
-                  />
-                  <WuText size="sm" as="span" className="font-medium text-gray-700">
-                    Questions
+            {selectedType === 'driver_analysis' && (
+              <>
+                <div className="my-3 border-b border-gray-100" />
+                <FieldRow label="Outcome">
+                  <WuText size="sm" as="p" className="text-gray-500">
+                    Choose the metric you want to explain. Drivers on the next step are filtered
+                    to avoid overlap with your outcome.
                   </WuText>
-                </div>
-                {selectedSurvey?.questions.length ? (
-                  selectedSurvey.questions.map((question) => (
-                    <button
-                      key={question.id}
-                      type="button"
-                      className="flex w-full items-start gap-3 px-1 py-2 text-left hover:bg-gray-50"
-                      onClick={() => toggleQuestion(question.id)}
-                    >
-                      <WuCheckbox
-                        checked={selectedQuestions.includes(question.id)}
-                        onChange={() => undefined}
-                      />
-                      <WuText size="sm" as="span" className="text-gray-700">
-                        {getQuestionLabel(question)}
-                      </WuText>
-                    </button>
-                  ))
+                  <div className="mt-2 max-h-64 overflow-y-auto rounded border border-gray-200 bg-white p-2">
+                    {(['marker', 'buildingBlock', 'question'] as const).map((kind) => {
+                      const bucket = DRIVER_METRICS.filter((m) => m.kind === kind && !m.excluded)
+                      if (bucket.length === 0) return null
+                      return (
+                        <div key={kind} className="mb-2 last:mb-0">
+                          <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                            {kind === 'marker'
+                              ? 'Markers'
+                              : kind === 'buildingBlock'
+                                ? 'Building blocks'
+                                : 'Questions'}
+                          </div>
+                          {bucket.map((metric) => (
+                            <label
+                              key={metric.id}
+                              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-gray-50"
+                            >
+                              <input
+                                type="radio"
+                                name="driver-outcome-source"
+                                className="accent-blue-600"
+                                checked={widgetConfig.outcomeMetricId === metric.id}
+                                onChange={() => {
+                                  updateWidgetConfig('outcomeMetricId', metric.id)
+                                  updateWidgetConfig('outcomeLabel', metric.label)
+                                  const outcomeQs = descendantQuestionsOf(metric.id)
+                                  const nextDrivers = (
+                                    (widgetConfig.driverMetricIds as string[] | undefined) ?? []
+                                  ).filter((id) => !overlapsOutcome(id, outcomeQs))
+                                  updateWidgetConfig('driverMetricIds', nextDrivers)
+                                }}
+                              />
+                              <span>{metric.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </FieldRow>
+              </>
+            )}
+            {selectedType !== 'driver_analysis' && (
+              <>
+                <div className="my-3 border-b border-gray-100" />
+                {!needsQuestions ? (
+                  <WuText size="sm" as="p" className="text-gray-500 italic">
+                    This widget uses all available data from the selected survey.
+                  </WuText>
                 ) : (
-                  <WuText size="sm" as="p" className="py-4 text-gray-500">
-                    No questions available
-                  </WuText>
+                  <div className="max-h-[280px] overflow-y-auto">
+                    <div className="sticky top-0 z-10 flex items-center gap-3 bg-white py-2">
+                      <WuCheckbox
+                        checked={
+                          Boolean(selectedSurvey?.questions.length) &&
+                          selectedQuestions.length === selectedSurvey?.questions.length
+                        }
+                        partial={Boolean(
+                          selectedQuestions.length &&
+                            selectedQuestions.length !== selectedSurvey?.questions.length,
+                        )}
+                        onChange={toggleAllQuestions}
+                      />
+                      <WuText size="sm" as="span" className="font-medium text-gray-700">
+                        Questions
+                      </WuText>
+                    </div>
+                    {selectedSurvey?.questions.length ? (
+                      selectedSurvey.questions.map((question) => (
+                        <button
+                          key={question.id}
+                          type="button"
+                          className="flex w-full items-start gap-3 px-1 py-2 text-left hover:bg-gray-50"
+                          onClick={() => toggleQuestion(question.id)}
+                        >
+                          <WuCheckbox
+                            checked={selectedQuestions.includes(question.id)}
+                            onChange={() => undefined}
+                          />
+                          <WuText size="sm" as="span" className="text-gray-700">
+                            {getQuestionLabel(question)}
+                          </WuText>
+                        </button>
+                      ))
+                    ) : (
+                      <WuText size="sm" as="p" className="py-4 text-gray-500">
+                        No questions available
+                      </WuText>
+                    )}
+                  </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         </div>

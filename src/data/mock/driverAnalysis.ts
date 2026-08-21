@@ -1,3 +1,12 @@
+/**
+ * RECONCILE (current → target) — this file:
+ * - CURRENT: DriverMetric has kind + parentId; resolveItemsAtLevel / buildMetricTree walk parents;
+ *   pearsonR, getDriverImpact, getMetricFavorability exist and are used by the widget.
+ * - CURRENT: No question-set intersection helpers; exclusion is id-equality only.
+ * - TARGET: Add descendantQuestionsOf / questionSetsIntersect / overlapsOutcome BELOW tree helpers.
+ * - DO NOT TOUCH: pearsonR, getDriverImpact, normalizeToFavorability, getMetricFavorability,
+ *   DriverMetric type, DRIVER_METRICS, MetricTreeNode, buildMetricTree, resolveItemsAtLevel.
+ */
 import {
   CATEGORY_BASELINES,
   CATEGORY_KEYS,
@@ -297,6 +306,69 @@ export function buildMetricTree(
 
   const markers = eligible.filter((m) => m.kind === 'marker' && isIncluded(m))
   return markers.map((m) => toNode(m, 'buildingBlock'))
+}
+
+// -----------------------------------------------------------------------------
+// Question-set intersection helpers.
+//
+// The rule that governs both creation-time driver disable AND render-time
+// per-level dot filtering is a single predicate:
+//
+//   "A node is valid iff its descendant-question set does not intersect the
+//    outcome's descendant-question set."
+//
+// Same predicate at both times. Because a node's questions are exactly its
+// leaf descendants, this correctly catches: the outcome itself, descendants
+// (subset), ancestors (superset — including any resurrected by level roll-up),
+// and disjoint siblings/cousins (kept).
+// -----------------------------------------------------------------------------
+
+const descendantQuestionsCache = new Map<string, ReadonlySet<string>>()
+
+/** All question IDs at or below a metric. Cached; safe to call in hot paths. */
+export function descendantQuestionsOf(metricId: string): ReadonlySet<string> {
+  const cached = descendantQuestionsCache.get(metricId)
+  if (cached) return cached
+
+  const metric = DRIVER_METRICS.find((m) => m.id === metricId)
+  const result = new Set<string>()
+  if (!metric) {
+    descendantQuestionsCache.set(metricId, result)
+    return result
+  }
+
+  if (metric.kind === 'question') {
+    result.add(metricId)
+  } else {
+    for (const child of DRIVER_METRICS) {
+      if (child.parentId === metricId) {
+        for (const q of descendantQuestionsOf(child.id)) result.add(q)
+      }
+    }
+  }
+
+  descendantQuestionsCache.set(metricId, result)
+  return result
+}
+
+/** True iff the two sets share at least one question id. */
+export function questionSetsIntersect(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  const [small, large] = a.size <= b.size ? [a, b] : [b, a]
+  for (const q of small) if (large.has(q)) return true
+  return false
+}
+
+/**
+ * True iff `candidateId` overlaps the outcome by any question — i.e. must be
+ * excluded (self / descendant / ancestor / any node whose subtree contains
+ * an outcome question).
+ */
+export function overlapsOutcome(
+  candidateId: string,
+  outcomeQuestions: ReadonlySet<string>,
+): boolean {
+  if (outcomeQuestions.size === 0) return false
+  return questionSetsIntersect(descendantQuestionsOf(candidateId), outcomeQuestions)
 }
 
 /**

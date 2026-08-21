@@ -1,6 +1,16 @@
 'use client'
 
-import { Fragment, useCallback, useMemo, useState, type CSSProperties } from 'react'
+/**
+ * RECONCILE (current → target) — DriverAnalysisWidget:
+ * - CURRENT: getDotsForLevel filters only `item.id !== outcomeMetricId`, then computes
+ *   favorability/impact; axes/medians from those dots. Level toggles always show all 3.
+ * - CURRENT: config keys outcomeMetricId / outcomeLabel / driverMetricIds (keep).
+ * - CURRENT: FilteredWidgetGuard uses meetsAnonymityThreshold (ANONYMITY_THRESHOLD = 5).
+ * - TARGET: overlapsOutcome exclude-first before Pearson/favorability/axis/median;
+ *   hide empty level toggles + auto-switch; empty-state with reason; question-outcome note.
+ * - DO NOT TOUCH: pearsonR / getDriverImpact / getMetricFavorability internals; widget shell.
+ */
+import { Fragment, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   CartesianGrid,
   Label,
@@ -17,13 +27,17 @@ import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCa
 import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
 import type { ActiveFilter, DashboardWidget } from '@/types'
 import {
+  ANONYMITY_THRESHOLD,
   buildMetricTree,
   computeAxisConfig,
+  descendantQuestionsOf,
   getDriverImpact,
   getDriverMetricById,
   getEligibleDriverMetrics,
   getMetricFavorability,
+  overlapsOutcome,
   resolveItemsAtLevel,
+  respondentCount,
   type AxisConfig,
   type DriverMetricKind,
   type DriverQuestionType,
@@ -285,12 +299,11 @@ function resolveDriverConfig(config?: Record<string, unknown>): ResolvedConfig |
 
   const rawDrivers = config?.driverMetricIds
   let driverMetricIds: string[] = []
+  const outcomeQuestions = descendantQuestionsOf(outcome.id)
   if (Array.isArray(rawDrivers) && rawDrivers.every((id) => typeof id === 'string')) {
+    // Keep configured drivers (including overlapping); plot pipeline excludes via overlapsOutcome.
     driverMetricIds = (rawDrivers as string[]).filter(
-      (id) =>
-        id !== outcome.id &&
-        Boolean(getDriverMetricById(id)) &&
-        !getDriverMetricById(id)?.excluded,
+      (id) => Boolean(getDriverMetricById(id)) && !getDriverMetricById(id)?.excluded,
     )
   } else if (Array.isArray(config?.columns)) {
     driverMetricIds = config.columns
@@ -299,12 +312,13 @@ function resolveDriverConfig(config?: Record<string, unknown>): ResolvedConfig |
         const id = (item as { id?: string }).id
         return typeof id === 'string' ? id : null
       })
-      .filter((id): id is string => Boolean(id) && id !== outcome.id)
+      .filter((id): id is string => Boolean(id))
   }
 
-  if (driverMetricIds.length === 0) {
+  // Invent defaults only when legacy config omitted driverMetricIds entirely.
+  if (driverMetricIds.length === 0 && !Array.isArray(rawDrivers)) {
     driverMetricIds = eligible
-      .filter((m) => m.id !== outcome.id)
+      .filter((m) => !overlapsOutcome(m.id, outcomeQuestions))
       .slice(0, 6)
       .map((m) => m.id)
   }
@@ -325,12 +339,16 @@ function getDotsForLevel(
   level: MetricLevel,
   driverMetricIds: string[],
   outcomeMetricId: string,
+  outcomeQuestions: ReadonlySet<string>,
   activeFilters: ActiveFilter[],
 ): DotPoint[] {
-  const items = resolveItemsAtLevel(level, driverMetricIds)
+  const rawNodesAtLevel = resolveItemsAtLevel(level, driverMetricIds)
+  const validNodesAtLevel = rawNodesAtLevel.filter(
+    (node) => !overlapsOutcome(node.id, outcomeQuestions),
+  )
 
-  return items
-    .filter((item) => item.id !== outcomeMetricId)
+  // Exclude first, then compute — axes/medians must never see contaminated nodes.
+  return validNodesAtLevel
     .map((item) => {
       const performance = getMetricFavorability(item.id, item.kind, activeFilters)
       const impact = getDriverImpact(item.id, outcomeMetricId, activeFilters)
@@ -346,6 +364,18 @@ function getDotsForLevel(
       } satisfies DotPoint
     })
     .filter((d) => Number.isFinite(d.x) && Number.isFinite(d.y))
+}
+
+function filterTreeByOverlap(
+  nodes: MetricTreeNode[],
+  outcomeQuestions: ReadonlySet<string>,
+): MetricTreeNode[] {
+  return nodes
+    .filter((node) => !overlapsOutcome(node.id, outcomeQuestions))
+    .map((node) => ({
+      ...node,
+      children: filterTreeByOverlap(node.children, outcomeQuestions),
+    }))
 }
 
 function sortMetricTreeNodes(
@@ -404,15 +434,45 @@ export function DriverAnalysisWidget({
 
   const resolved = useMemo(() => resolveDriverConfig(widget?.config), [widget?.config])
 
+  const outcomeQuestions = useMemo(
+    () =>
+      resolved?.outcomeMetricId
+        ? descendantQuestionsOf(resolved.outcomeMetricId)
+        : new Set<string>(),
+    [resolved?.outcomeMetricId],
+  )
+
+  const driverMetricIds = resolved?.driverMetricIds ?? []
+
+  const nodesByLevel = useMemo(() => {
+    const compute = (metricLevel: DriverMetricKind) => {
+      const raw = resolveItemsAtLevel(metricLevel, driverMetricIds)
+      return raw.filter((n) => !overlapsOutcome(n.id, outcomeQuestions))
+    }
+    return {
+      marker: compute('marker'),
+      buildingBlock: compute('buildingBlock'),
+      question: compute('question'),
+    }
+  }, [driverMetricIds, outcomeQuestions])
+
+  useEffect(() => {
+    const preferredOrder: DriverMetricKind[] = ['marker', 'buildingBlock', 'question']
+    if (nodesByLevel[level].length > 0) return
+    const nextLevel = preferredOrder.find((l) => nodesByLevel[l].length > 0)
+    if (nextLevel && nextLevel !== level) setLevel(nextLevel)
+  }, [nodesByLevel, level])
+
   const dots = useMemo(() => {
     if (!resolved) return [] as DotPoint[]
     return getDotsForLevel(
       level,
       resolved.driverMetricIds,
       resolved.outcomeMetricId,
+      outcomeQuestions,
       activeFilters,
     )
-  }, [activeFilters, level, resolved])
+  }, [activeFilters, level, outcomeQuestions, resolved])
 
   const xConfig: AxisConfig = useMemo(
     () => computeAxisConfig(dots.map((d) => d.x)),
@@ -430,8 +490,22 @@ export function DriverAnalysisWidget({
       resolved.outcomeMetricId,
       activeFilters,
     )
-    return sortMetricTreeNodes(tree, xConfig.threshold, yConfig.threshold)
-  }, [activeFilters, resolved, xConfig.threshold, yConfig.threshold])
+    const filtered = filterTreeByOverlap(tree, outcomeQuestions)
+    return sortMetricTreeNodes(filtered, xConfig.threshold, yConfig.threshold)
+  }, [activeFilters, outcomeQuestions, resolved, xConfig.threshold, yConfig.threshold])
+
+  const outcomeMetric = resolved
+    ? getDriverMetricById(resolved.outcomeMetricId)
+    : undefined
+
+  const totalRespondents = respondentCount(activeFilters)
+  const anonymityFloor = ANONYMITY_THRESHOLD
+  const noDriversSelected = driverMetricIds.length === 0
+  const allExcludedByOverlap =
+    driverMetricIds.length > 0 &&
+    Object.values(nodesByLevel).every((arr) => arr.length === 0)
+  const belowAnonymity = totalRespondents < anonymityFloor
+  const isEmpty = noDriversSelected || allExcludedByOverlap || belowAnonymity
 
   const QuadrantDot = useMemo(
     () => makeQuadrantDot(xConfig.threshold, yConfig.threshold, level, hoveredMetricId),
@@ -545,26 +619,28 @@ export function DriverAnalysisWidget({
 
   const levelToggle = (
     <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-      {(['marker', 'buildingBlock', 'question'] as const).map((l) => (
-        <button
-          key={l}
-          type="button"
-          onClick={() => setLevel(l)}
-          style={{
-            fontSize: 11,
-            padding: '3px 10px',
-            borderRadius: 4,
-            border: '1px solid',
-            cursor: 'pointer',
-            borderColor: level === l ? '#1B87E6' : '#E5E7EB',
-            background: level === l ? '#EFF6FF' : '#FFFFFF',
-            color: level === l ? '#1B87E6' : '#6B7280',
-            fontWeight: level === l ? 500 : 400,
-          }}
-        >
-          {LEVEL_LABEL[l]}
-        </button>
-      ))}
+      {(['marker', 'buildingBlock', 'question'] as const)
+        .filter((l) => nodesByLevel[l].length > 0)
+        .map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => setLevel(l)}
+            style={{
+              fontSize: 11,
+              padding: '3px 10px',
+              borderRadius: 4,
+              border: '1px solid',
+              cursor: 'pointer',
+              borderColor: level === l ? '#1B87E6' : '#E5E7EB',
+              background: level === l ? '#EFF6FF' : '#FFFFFF',
+              color: level === l ? '#1B87E6' : '#6B7280',
+              fontWeight: level === l ? 500 : 400,
+            }}
+          >
+            {LEVEL_LABEL[l]}
+          </button>
+        ))}
     </div>
   )
 
@@ -577,6 +653,12 @@ export function DriverAnalysisWidget({
             The selected drivers explain the impact on &quot;
             <span className="font-medium text-gray-600">{resolved.outcomeLabel}</span>
             &quot;.
+            {outcomeMetric?.kind === 'question' && (
+              <span className="mt-1 block text-xs text-gray-500">
+                Single-question outcome — impact values are systematically smaller than against a
+                composite outcome.
+              </span>
+            )}
           </span>
         ) : undefined
       }
@@ -588,6 +670,21 @@ export function DriverAnalysisWidget({
         {!resolved ? (
           <div className="flex h-[280px] items-center justify-center text-sm text-gray-500">
             Select an outcome and drivers in widget settings.
+          </div>
+        ) : isEmpty ? (
+          <div className="flex min-h-[280px] flex-col items-center justify-center px-6 py-10 text-center">
+            <div className="mb-2 text-sm font-medium text-gray-900">Nothing to plot</div>
+            <div className="max-w-md text-sm text-gray-600">
+              {noDriversSelected &&
+                'No drivers selected. Edit the widget to add drivers for your outcome.'}
+              {!noDriversSelected &&
+                allExcludedByOverlap &&
+                'All selected drivers overlap with the outcome, so there is nothing valid to compare. Pick drivers from a different marker.'}
+              {!noDriversSelected &&
+                !allExcludedByOverlap &&
+                belowAnonymity &&
+                `Response count is below the anonymity threshold (${anonymityFloor}). Widen the dashboard filters or wait for more responses.`}
+            </div>
           </div>
         ) : (
           <div className="flex flex-col">
@@ -739,84 +836,88 @@ export function DriverAnalysisWidget({
               </div>
             </div>
 
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '8px 0',
-                flexWrap: 'wrap',
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setShowMetricList((v) => !v)}
-                style={{
-                  fontSize: 12,
-                  color: '#6B7280',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                <i
-                  className={showMetricList ? 'wc-chevron-down' : 'wc-chevron-right'}
-                  style={{ fontSize: 10 }}
-                  aria-hidden
-                />
-                {showMetricList ? 'Hide' : 'Show'} all metrics
-              </button>
-              {showMetricList && (
-                <>
-                  <button type="button" onClick={expandAll} style={linkButtonStyle}>
-                    Expand all
-                  </button>
-                  <button type="button" onClick={collapseAll} style={linkButtonStyle}>
-                    Collapse all
-                  </button>
-                </>
-              )}
-            </div>
-
-            {showMetricList && (
-              <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 12 }}>
+            {dots.length > 0 && (
+              <>
                 <div
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto auto auto',
-                    gap: '0 12px',
-                    paddingBottom: 6,
-                    borderBottom: '1px solid var(--wu-border, #E5E7EB)',
-                    fontSize: 10,
-                    color: '#9CA3AF',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                  }}
-                >
-                  <span style={{ paddingLeft: 7 }}>Metric</span>
-                  <span style={{ textAlign: 'right' }}>Performance</span>
-                  <span style={{ textAlign: 'right' }}>Impact</span>
-                  <span>Quadrant</span>
-                </div>
-                <div
-                  style={{
-                    maxHeight: 320,
-                    overflowY: 'auto',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto auto auto',
-                    gap: '0 12px',
+                    display: 'flex',
                     alignItems: 'center',
+                    gap: 12,
+                    padding: '8px 0',
+                    flexWrap: 'wrap',
                   }}
                 >
-                  {metricTree.map((node) => (
-                    <MetricRow key={node.id} node={node} depth={0} />
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setShowMetricList((v) => !v)}
+                    style={{
+                      fontSize: 12,
+                      color: '#6B7280',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <i
+                      className={showMetricList ? 'wc-chevron-down' : 'wc-chevron-right'}
+                      style={{ fontSize: 10 }}
+                      aria-hidden
+                    />
+                    {showMetricList ? 'Hide' : 'Show'} all metrics
+                  </button>
+                  {showMetricList && (
+                    <>
+                      <button type="button" onClick={expandAll} style={linkButtonStyle}>
+                        Expand all
+                      </button>
+                      <button type="button" onClick={collapseAll} style={linkButtonStyle}>
+                        Collapse all
+                      </button>
+                    </>
+                  )}
                 </div>
-              </div>
+
+                {showMetricList && (
+                  <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 12 }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr auto auto auto',
+                        gap: '0 12px',
+                        paddingBottom: 6,
+                        borderBottom: '1px solid var(--wu-border, #E5E7EB)',
+                        fontSize: 10,
+                        color: '#9CA3AF',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      <span style={{ paddingLeft: 7 }}>Metric</span>
+                      <span style={{ textAlign: 'right' }}>Performance</span>
+                      <span style={{ textAlign: 'right' }}>Impact</span>
+                      <span>Quadrant</span>
+                    </div>
+                    <div
+                      style={{
+                        maxHeight: 320,
+                        overflowY: 'auto',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr auto auto auto',
+                        gap: '0 12px',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {metricTree.map((node) => (
+                        <MetricRow key={node.id} node={node} depth={0} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

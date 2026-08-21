@@ -564,36 +564,26 @@ function labelClassForKind(kind: DriverMetric['kind']): string {
 function MetricHierarchyRow({
   node,
   depth,
-  mode,
   expandedIds,
   onToggleExpand,
   outcomeQuestions,
-  selectedId,
   selectedIds,
-  onSelect,
   onToggle,
 }: {
   node: DriverPickerNode
   depth: number
-  mode: 'checkbox' | 'radio'
   expandedIds: Set<string>
   onToggleExpand: (id: string) => void
   outcomeQuestions: ReadonlySet<string>
-  selectedId?: string
-  selectedIds?: string[]
-  onSelect?: (metric: DriverMetric) => void
-  onToggle?: (metricId: string, checked: boolean) => void
+  selectedIds: string[]
+  onToggle: (metricId: string, checked: boolean) => void
 }) {
   const { metric } = node
   const hasChildren = node.children.length > 0
   const isExpanded = expandedIds.has(metric.id)
-  const overlaps =
-    mode === 'checkbox' && overlapsOutcome(metric.id, outcomeQuestions)
+  const overlaps = overlapsOutcome(metric.id, outcomeQuestions)
   const disabled = Boolean(metric.excluded) || overlaps
-  const checked =
-    mode === 'checkbox'
-      ? Boolean(selectedIds?.includes(metric.id))
-      : selectedId === metric.id
+  const checked = selectedIds.includes(metric.id)
   const overlapCaption = overlaps && !metric.excluded
 
   return (
@@ -621,61 +611,39 @@ function MetricHierarchyRow({
         ) : (
           <span className="size-5 shrink-0" />
         )}
-        {mode === 'checkbox' ? (
-          <label
-            className={cn(
-              'min-w-0 flex-1',
-              disabled ? 'cursor-not-allowed' : 'cursor-pointer',
-            )}
-            title={
-              disabled
-                ? metric.excluded
-                  ? (metric.excludeReason ??
-                    'This metric type cannot be used in driver analysis')
-                  : "Overlaps with your outcome — can't also be a driver"
-                : undefined
-            }
-          >
-            <span className="flex items-start gap-2">
-              <WuCheckbox
-                checked={checked}
-                disabled={disabled}
-                onChange={(nextChecked) => {
-                  if (disabled) return
-                  onToggle?.(metric.id, nextChecked)
-                }}
-              />
-              <span>
-                <span className={labelClassForKind(metric.kind)}>{metric.label}</span>
-                {overlapCaption && (
-                  <span className="mt-0.5 block text-xs text-gray-400">
-                    Overlaps with your outcome
-                  </span>
-                )}
-              </span>
-            </span>
-          </label>
-        ) : (
-          <label
-            className={cn(
-              'flex min-w-0 flex-1 cursor-pointer items-start gap-2',
-              disabled && 'cursor-not-allowed',
-            )}
-          >
-            <input
-              type="radio"
-              name="driver-outcome-source"
-              className="mt-0.5 accent-blue-600"
-              disabled={disabled}
+        <label
+          className={cn(
+            'min-w-0 flex-1',
+            disabled ? 'cursor-not-allowed' : 'cursor-pointer',
+          )}
+          title={
+            disabled
+              ? metric.excluded
+                ? (metric.excludeReason ??
+                  'This metric type cannot be used in driver analysis')
+                : "Overlaps with your outcome — can't also be a driver"
+              : undefined
+          }
+        >
+          <span className="flex items-start gap-2">
+            <WuCheckbox
               checked={checked}
-              onChange={() => {
+              disabled={disabled}
+              onChange={(nextChecked) => {
                 if (disabled) return
-                onSelect?.(metric)
+                onToggle(metric.id, nextChecked)
               }}
             />
-            <span className={labelClassForKind(metric.kind)}>{metric.label}</span>
-          </label>
-        )}
+            <span>
+              <span className={labelClassForKind(metric.kind)}>{metric.label}</span>
+              {overlapCaption && (
+                <span className="mt-0.5 block text-xs text-gray-400">
+                  Overlaps with your outcome
+                </span>
+              )}
+            </span>
+          </span>
+        </label>
       </div>
       {hasChildren &&
         isExpanded &&
@@ -684,13 +652,10 @@ function MetricHierarchyRow({
             key={child.metric.id}
             node={child}
             depth={depth + 1}
-            mode={mode}
             expandedIds={expandedIds}
             onToggleExpand={onToggleExpand}
             outcomeQuestions={outcomeQuestions}
-            selectedId={selectedId}
             selectedIds={selectedIds}
-            onSelect={onSelect}
             onToggle={onToggle}
           />
         ))}
@@ -700,20 +665,14 @@ function MetricHierarchyRow({
 
 function MetricHierarchyTree({
   metrics,
-  mode,
   outcomeQuestions = new Set(),
-  selectedId,
   selectedIds,
-  onSelect,
   onToggle,
 }: {
   metrics: DriverMetric[]
-  mode: 'checkbox' | 'radio'
   outcomeQuestions?: ReadonlySet<string>
-  selectedId?: string
-  selectedIds?: string[]
-  onSelect?: (metric: DriverMetric) => void
-  onToggle?: (metricId: string, checked: boolean) => void
+  selectedIds: string[]
+  onToggle: (metricId: string, checked: boolean) => void
 }) {
   const tree = useMemo(() => buildDriverPickerTree(metrics), [metrics])
   const markerIds = useMemo(() => collectMarkerExpandableIds(tree), [tree])
@@ -753,13 +712,10 @@ function MetricHierarchyTree({
             key={node.metric.id}
             node={node}
             depth={0}
-            mode={mode}
             expandedIds={expandedIds}
             onToggleExpand={toggleExpand}
             outcomeQuestions={outcomeQuestions}
-            selectedId={selectedId}
             selectedIds={selectedIds}
-            onSelect={onSelect}
             onToggle={onToggle}
           />
         ))}
@@ -1089,7 +1045,6 @@ export function AddWidgetModal({
             </WuText>
             <MetricHierarchyTree
               metrics={DRIVER_METRICS}
-              mode="checkbox"
               outcomeQuestions={outcomeQuestions}
               selectedIds={driverMetricIds}
               onToggle={toggleDriver}
@@ -1354,24 +1309,50 @@ export function AddWidgetModal({
               <>
                 <div className="my-3 border-b border-gray-100" />
                 <FieldRow label="Outcome">
-                  <WuText size="sm" as="p" className="mb-2 text-gray-500">
+                  <WuText size="sm" as="p" className="text-gray-500">
                     Choose the metric you want to explain. Drivers on the next step are filtered
                     to avoid overlap with your outcome.
                   </WuText>
-                  <MetricHierarchyTree
-                    metrics={DRIVER_METRICS.filter((metric) => !metric.excluded)}
-                    mode="radio"
-                    selectedId={widgetConfig.outcomeMetricId as string | undefined}
-                    onSelect={(metric) => {
-                      updateWidgetConfig('outcomeMetricId', metric.id)
-                      updateWidgetConfig('outcomeLabel', metric.label)
-                      const outcomeQs = descendantQuestionsOf(metric.id)
-                      const nextDrivers = (
-                        (widgetConfig.driverMetricIds as string[] | undefined) ?? []
-                      ).filter((id) => !overlapsOutcome(id, outcomeQs))
-                      updateWidgetConfig('driverMetricIds', nextDrivers)
-                    }}
-                  />
+                  <div className="mt-2 max-h-64 overflow-y-auto rounded border border-gray-200 bg-white p-2">
+                    {(['marker', 'buildingBlock', 'question'] as const).map((kind) => {
+                      const bucket = DRIVER_METRICS.filter((m) => m.kind === kind && !m.excluded)
+                      if (bucket.length === 0) return null
+                      return (
+                        <div key={kind} className="mb-2 last:mb-0">
+                          <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                            {kind === 'marker'
+                              ? 'Markers'
+                              : kind === 'buildingBlock'
+                                ? 'Building blocks'
+                                : 'Questions'}
+                          </div>
+                          {bucket.map((metric) => (
+                            <label
+                              key={metric.id}
+                              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-gray-50"
+                            >
+                              <input
+                                type="radio"
+                                name="driver-outcome-source"
+                                className="accent-blue-600"
+                                checked={widgetConfig.outcomeMetricId === metric.id}
+                                onChange={() => {
+                                  updateWidgetConfig('outcomeMetricId', metric.id)
+                                  updateWidgetConfig('outcomeLabel', metric.label)
+                                  const outcomeQs = descendantQuestionsOf(metric.id)
+                                  const nextDrivers = (
+                                    (widgetConfig.driverMetricIds as string[] | undefined) ?? []
+                                  ).filter((id) => !overlapsOutcome(id, outcomeQs))
+                                  updateWidgetConfig('driverMetricIds', nextDrivers)
+                                }}
+                              />
+                              <span>{metric.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </FieldRow>
               </>
             )}

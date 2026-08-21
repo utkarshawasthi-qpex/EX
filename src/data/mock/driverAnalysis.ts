@@ -33,6 +33,9 @@ export const DRIVER_EXCLUDED_QUESTION_TYPES = [
   'multi_select',
 ] as const
 
+/** Minimum selected drivers / plotted dots required to create or draw the chart. */
+export const MIN_DRIVER_PLOT_POINTS = 4
+
 export type DriverMetric = {
   id: string
   label: string

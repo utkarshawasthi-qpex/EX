@@ -32,9 +32,11 @@ import {
 import { getSurveys } from '@/lib/mockDb'
 import {
   DRIVER_METRICS,
+  MIN_DRIVER_PLOT_POINTS,
   descendantQuestionsOf,
   getEligibleDriverMetrics,
   overlapsOutcome,
+  type DriverMetric,
 } from '@/lib/dashboardFilters'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { getCurrentUser } from '@/lib/userContext'
@@ -150,7 +152,6 @@ const ANALYTICS_TYPE_WIDGETS: WidgetType[] = [
   'heatmap',
   'scorecard',
   'time_trend',
-  'driver_analysis',
 ]
 
 const NO_QUESTION_WIDGETS: WidgetType[] = ['notes', 'summary']
@@ -504,6 +505,269 @@ function FieldRow({
   )
 }
 
+type DriverPickerNode = {
+  metric: DriverMetric
+  children: DriverPickerNode[]
+}
+
+/**
+ * Marker → building block → question tree for outcome/driver pickers.
+ * Selecting a node toggles only that metric id (children are not auto-selected).
+ */
+function buildDriverPickerTree(metrics: DriverMetric[]): DriverPickerNode[] {
+  const childrenByParent = new Map<string, DriverMetric[]>()
+  for (const metric of metrics) {
+    if (metric.kind === 'marker' || !metric.parentId) continue
+    const siblings = childrenByParent.get(metric.parentId) ?? []
+    siblings.push(metric)
+    childrenByParent.set(metric.parentId, siblings)
+  }
+
+  function toNode(metric: DriverMetric): DriverPickerNode {
+    const childMetrics = childrenByParent.get(metric.id) ?? []
+    return {
+      metric,
+      children: childMetrics.map(toNode),
+    }
+  }
+
+  const roots = metrics.filter((metric) => metric.kind === 'marker').map(toNode)
+  const orphans = metrics.filter(
+    (metric) => metric.kind !== 'marker' && !metric.parentId,
+  )
+  return [...roots, ...orphans.map(toNode)]
+}
+
+function collectExpandableIds(nodes: DriverPickerNode[]): string[] {
+  const ids: string[] = []
+  for (const node of nodes) {
+    if (node.children.length > 0) {
+      ids.push(node.metric.id)
+      ids.push(...collectExpandableIds(node.children))
+    }
+  }
+  return ids
+}
+
+function collectMarkerExpandableIds(nodes: DriverPickerNode[]): string[] {
+  return nodes
+    .filter((node) => node.metric.kind === 'marker' && node.children.length > 0)
+    .map((node) => node.metric.id)
+}
+
+function labelClassForKind(kind: DriverMetric['kind']): string {
+  if (kind === 'marker') return 'text-sm font-medium text-gray-900'
+  if (kind === 'buildingBlock') return 'text-sm font-normal text-gray-800'
+  return 'text-sm text-gray-600'
+}
+
+function MetricHierarchyRow({
+  node,
+  depth,
+  mode,
+  expandedIds,
+  onToggleExpand,
+  outcomeQuestions,
+  selectedId,
+  selectedIds,
+  onSelect,
+  onToggle,
+}: {
+  node: DriverPickerNode
+  depth: number
+  mode: 'checkbox' | 'radio'
+  expandedIds: Set<string>
+  onToggleExpand: (id: string) => void
+  outcomeQuestions: ReadonlySet<string>
+  selectedId?: string
+  selectedIds?: string[]
+  onSelect?: (metric: DriverMetric) => void
+  onToggle?: (metricId: string, checked: boolean) => void
+}) {
+  const { metric } = node
+  const hasChildren = node.children.length > 0
+  const isExpanded = expandedIds.has(metric.id)
+  const overlaps =
+    mode === 'checkbox' && overlapsOutcome(metric.id, outcomeQuestions)
+  const disabled = Boolean(metric.excluded) || overlaps
+  const checked =
+    mode === 'checkbox'
+      ? Boolean(selectedIds?.includes(metric.id))
+      : selectedId === metric.id
+  const overlapCaption = overlaps && !metric.excluded
+
+  return (
+    <div>
+      <div
+        className={cn(
+          'flex items-start gap-1.5 py-1',
+          disabled && 'opacity-50',
+        )}
+        style={{ paddingLeft: 8 + depth * 24 }}
+      >
+        {hasChildren ? (
+          <button
+            type="button"
+            className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-gray-400 hover:text-gray-600"
+            aria-label={isExpanded ? 'Collapse' : 'Expand'}
+            onClick={() => onToggleExpand(metric.id)}
+          >
+            <i
+              className={isExpanded ? 'wc-chevron-down' : 'wc-chevron-right'}
+              style={{ fontSize: 10 }}
+              aria-hidden
+            />
+          </button>
+        ) : (
+          <span className="size-5 shrink-0" />
+        )}
+        {mode === 'checkbox' ? (
+          <label
+            className={cn(
+              'min-w-0 flex-1',
+              disabled ? 'cursor-not-allowed' : 'cursor-pointer',
+            )}
+            title={
+              disabled
+                ? metric.excluded
+                  ? (metric.excludeReason ??
+                    'This metric type cannot be used in driver analysis')
+                  : "Overlaps with your outcome — can't also be a driver"
+                : undefined
+            }
+          >
+            <span className="flex items-start gap-2">
+              <WuCheckbox
+                checked={checked}
+                disabled={disabled}
+                onChange={(nextChecked) => {
+                  if (disabled) return
+                  onToggle?.(metric.id, nextChecked)
+                }}
+              />
+              <span>
+                <span className={labelClassForKind(metric.kind)}>{metric.label}</span>
+                {overlapCaption && (
+                  <span className="mt-0.5 block text-xs text-gray-400">
+                    Overlaps with your outcome
+                  </span>
+                )}
+              </span>
+            </span>
+          </label>
+        ) : (
+          <label
+            className={cn(
+              'flex min-w-0 flex-1 cursor-pointer items-start gap-2',
+              disabled && 'cursor-not-allowed',
+            )}
+          >
+            <input
+              type="radio"
+              name="driver-outcome-source"
+              className="mt-0.5 accent-blue-600"
+              disabled={disabled}
+              checked={checked}
+              onChange={() => {
+                if (disabled) return
+                onSelect?.(metric)
+              }}
+            />
+            <span className={labelClassForKind(metric.kind)}>{metric.label}</span>
+          </label>
+        )}
+      </div>
+      {hasChildren &&
+        isExpanded &&
+        node.children.map((child) => (
+          <MetricHierarchyRow
+            key={child.metric.id}
+            node={child}
+            depth={depth + 1}
+            mode={mode}
+            expandedIds={expandedIds}
+            onToggleExpand={onToggleExpand}
+            outcomeQuestions={outcomeQuestions}
+            selectedId={selectedId}
+            selectedIds={selectedIds}
+            onSelect={onSelect}
+            onToggle={onToggle}
+          />
+        ))}
+    </div>
+  )
+}
+
+function MetricHierarchyTree({
+  metrics,
+  mode,
+  outcomeQuestions = new Set(),
+  selectedId,
+  selectedIds,
+  onSelect,
+  onToggle,
+}: {
+  metrics: DriverMetric[]
+  mode: 'checkbox' | 'radio'
+  outcomeQuestions?: ReadonlySet<string>
+  selectedId?: string
+  selectedIds?: string[]
+  onSelect?: (metric: DriverMetric) => void
+  onToggle?: (metricId: string, checked: boolean) => void
+}) {
+  const tree = useMemo(() => buildDriverPickerTree(metrics), [metrics])
+  const markerIds = useMemo(() => collectMarkerExpandableIds(tree), [tree])
+  const allExpandableIds = useMemo(() => collectExpandableIds(tree), [tree])
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(markerIds))
+
+  function toggleExpand(id: string) {
+    setExpandedIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center gap-3">
+        <button
+          type="button"
+          className="text-xs text-gray-500 underline underline-offset-2 hover:text-gray-700"
+          onClick={() => setExpandedIds(new Set(allExpandableIds))}
+        >
+          Expand all
+        </button>
+        <button
+          type="button"
+          className="text-xs text-gray-500 underline underline-offset-2 hover:text-gray-700"
+          onClick={() => setExpandedIds(new Set())}
+        >
+          Collapse all
+        </button>
+      </div>
+      <div className="max-h-72 overflow-y-auto rounded-md border border-gray-200 bg-white p-2">
+        {tree.map((node) => (
+          <MetricHierarchyRow
+            key={node.metric.id}
+            node={node}
+            depth={0}
+            mode={mode}
+            expandedIds={expandedIds}
+            onToggleExpand={toggleExpand}
+            outcomeQuestions={outcomeQuestions}
+            selectedId={selectedId}
+            selectedIds={selectedIds}
+            onSelect={onSelect}
+            onToggle={onToggle}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function getDefaultSurvey(surveys: LifecycleSurvey[]): LifecycleSurvey | undefined {
   return surveys[0]
 }
@@ -572,7 +836,7 @@ export function AddWidgetModal({
   const driverMetricIds = (widgetConfig.driverMetricIds as string[] | undefined) ?? []
   const driverStepValid =
     selectedType !== 'driver_analysis' ||
-    (Boolean(driverOutcomeId) && driverMetricIds.length > 0)
+    (Boolean(driverOutcomeId) && driverMetricIds.length >= MIN_DRIVER_PLOT_POINTS)
   const canContinue =
     (step === 0 && Boolean(selectedType)) ||
     (isSummaryFlow && step === 1 && widgetName.trim().length > 0) ||
@@ -802,7 +1066,13 @@ export function AddWidgetModal({
       const outcomeQuestions = outcomeMetricId
         ? descendantQuestionsOf(outcomeMetricId)
         : new Set<string>()
-      const allMetrics = DRIVER_METRICS
+
+      function toggleDriver(metricId: string, nextChecked: boolean) {
+        const next = nextChecked
+          ? [...driverMetricIds, metricId]
+          : driverMetricIds.filter((id) => id !== metricId)
+        updateWidgetConfig('driverMetricIds', next)
+      }
 
       return (
         <div className="space-y-6">
@@ -811,51 +1081,31 @@ export function AddWidgetModal({
           </div>
 
           <div>
-            <WuText size="sm" as="p" className="mb-2 font-medium text-gray-900">
+            <WuText size="sm" as="p" className="mb-1 font-medium text-gray-900">
               Driver metrics
             </WuText>
-            <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-gray-200 p-2">
-              {allMetrics.map((metric) => {
-                  const disabled =
-                    Boolean(metric.excluded) || overlapsOutcome(metric.id, outcomeQuestions)
-                  const checked = driverMetricIds.includes(metric.id)
-                  return (
-                    <label
-                      key={`driver-${metric.id}`}
-                      className={cn(
-                        'flex items-center gap-2 py-1.5',
-                        disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
-                      )}
-                      title={
-                        disabled
-                          ? metric.excluded
-                            ? (metric.excludeReason ??
-                              'This metric type cannot be used in driver analysis')
-                            : "Overlaps with your outcome — can't also be a driver"
-                          : undefined
-                      }
-                    >
-                      <WuCheckbox
-                        checked={checked}
-                        disabled={disabled}
-                        onChange={(nextChecked) => {
-                          if (disabled) return
-                          const next = nextChecked
-                            ? [...driverMetricIds, metric.id]
-                            : driverMetricIds.filter((id) => id !== metric.id)
-                          updateWidgetConfig('driverMetricIds', next)
-                        }}
-                      />
-                      <span className="text-sm text-gray-700">
-                        {metric.label}
-                        <span className="ml-1 text-xs text-gray-400">
-                          ({metric.kind === 'buildingBlock' ? 'Building block' : metric.kind})
-                        </span>
-                      </span>
-                    </label>
-                  )
-                })}
-            </div>
+            <WuText size="sm" as="p" className="mb-2 text-xs text-gray-500">
+              Checking a parent selects only that level — children are not auto-selected.
+            </WuText>
+            <MetricHierarchyTree
+              metrics={DRIVER_METRICS}
+              mode="checkbox"
+              outcomeQuestions={outcomeQuestions}
+              selectedIds={driverMetricIds}
+              onToggle={toggleDriver}
+            />
+            <WuText
+              size="sm"
+              as="p"
+              className={cn(
+                'mt-2 text-xs',
+                driverMetricIds.length >= MIN_DRIVER_PLOT_POINTS
+                  ? 'text-gray-500'
+                  : 'text-amber-700',
+              )}
+            >
+              {driverMetricIds.length} of {MIN_DRIVER_PLOT_POINTS} selected
+            </WuText>
           </div>
         </div>
       )
@@ -1104,50 +1354,24 @@ export function AddWidgetModal({
               <>
                 <div className="my-3 border-b border-gray-100" />
                 <FieldRow label="Outcome">
-                  <WuText size="sm" as="p" className="text-gray-500">
+                  <WuText size="sm" as="p" className="mb-2 text-gray-500">
                     Choose the metric you want to explain. Drivers on the next step are filtered
                     to avoid overlap with your outcome.
                   </WuText>
-                  <div className="mt-2 max-h-64 overflow-y-auto rounded border border-gray-200 bg-white p-2">
-                    {(['marker', 'buildingBlock', 'question'] as const).map((kind) => {
-                      const bucket = DRIVER_METRICS.filter((m) => m.kind === kind && !m.excluded)
-                      if (bucket.length === 0) return null
-                      return (
-                        <div key={kind} className="mb-2 last:mb-0">
-                          <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">
-                            {kind === 'marker'
-                              ? 'Markers'
-                              : kind === 'buildingBlock'
-                                ? 'Building blocks'
-                                : 'Questions'}
-                          </div>
-                          {bucket.map((metric) => (
-                            <label
-                              key={metric.id}
-                              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-gray-50"
-                            >
-                              <input
-                                type="radio"
-                                name="driver-outcome-source"
-                                className="accent-blue-600"
-                                checked={widgetConfig.outcomeMetricId === metric.id}
-                                onChange={() => {
-                                  updateWidgetConfig('outcomeMetricId', metric.id)
-                                  updateWidgetConfig('outcomeLabel', metric.label)
-                                  const outcomeQs = descendantQuestionsOf(metric.id)
-                                  const nextDrivers = (
-                                    (widgetConfig.driverMetricIds as string[] | undefined) ?? []
-                                  ).filter((id) => !overlapsOutcome(id, outcomeQs))
-                                  updateWidgetConfig('driverMetricIds', nextDrivers)
-                                }}
-                              />
-                              <span>{metric.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      )
-                    })}
-                  </div>
+                  <MetricHierarchyTree
+                    metrics={DRIVER_METRICS.filter((metric) => !metric.excluded)}
+                    mode="radio"
+                    selectedId={widgetConfig.outcomeMetricId as string | undefined}
+                    onSelect={(metric) => {
+                      updateWidgetConfig('outcomeMetricId', metric.id)
+                      updateWidgetConfig('outcomeLabel', metric.label)
+                      const outcomeQs = descendantQuestionsOf(metric.id)
+                      const nextDrivers = (
+                        (widgetConfig.driverMetricIds as string[] | undefined) ?? []
+                      ).filter((id) => !overlapsOutcome(id, outcomeQs))
+                      updateWidgetConfig('driverMetricIds', nextDrivers)
+                    }}
+                  />
                 </FieldRow>
               </>
             )}
@@ -1211,27 +1435,29 @@ export function AddWidgetModal({
       return (
       <div className="space-y-5">
         {renderColumnsSet()}
-        <div className="border-t border-gray-100 pt-5">
-          <FieldRow label="Widget size">
-            <div className="flex gap-2">
-              {(['half', 'full'] as const).map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  className={cn(
-                    'rounded border px-4 py-2 text-sm font-medium',
-                    widgetSize === size
-                      ? 'border-blue-600 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
-                  )}
-                  onClick={() => setWidgetSize(size)}
-                >
-                  {size === 'half' ? 'Half width' : 'Full width'}
-                </button>
-              ))}
-            </div>
-          </FieldRow>
-        </div>
+        {selectedType !== 'driver_analysis' && (
+          <div className="border-t border-gray-100 pt-5">
+            <FieldRow label="Widget size">
+              <div className="flex gap-2">
+                {(['half', 'full'] as const).map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    className={cn(
+                      'rounded border px-4 py-2 text-sm font-medium',
+                      widgetSize === size
+                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50',
+                    )}
+                    onClick={() => setWidgetSize(size)}
+                  >
+                    {size === 'half' ? 'Half width' : 'Full width'}
+                  </button>
+                ))}
+              </div>
+            </FieldRow>
+          </div>
+        )}
       </div>
       )
     }

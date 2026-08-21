@@ -35,6 +35,7 @@ import {
   getDriverMetricById,
   getEligibleDriverMetrics,
   getMetricFavorability,
+  MIN_DRIVER_PLOT_POINTS,
   overlapsOutcome,
   resolveItemsAtLevel,
   respondentCount,
@@ -458,8 +459,8 @@ export function DriverAnalysisWidget({
 
   useEffect(() => {
     const preferredOrder: DriverMetricKind[] = ['marker', 'buildingBlock', 'question']
-    if (nodesByLevel[level].length > 0) return
-    const nextLevel = preferredOrder.find((l) => nodesByLevel[l].length > 0)
+    if (nodesByLevel[level].length >= MIN_DRIVER_PLOT_POINTS) return
+    const nextLevel = preferredOrder.find((l) => nodesByLevel[l].length >= MIN_DRIVER_PLOT_POINTS)
     if (nextLevel && nextLevel !== level) setLevel(nextLevel)
   }, [nodesByLevel, level])
 
@@ -504,8 +505,12 @@ export function DriverAnalysisWidget({
   const allExcludedByOverlap =
     driverMetricIds.length > 0 &&
     Object.values(nodesByLevel).every((arr) => arr.length === 0)
+  const tooFewPoints =
+    driverMetricIds.length > 0 &&
+    !allExcludedByOverlap &&
+    Object.values(nodesByLevel).every((arr) => arr.length < MIN_DRIVER_PLOT_POINTS)
   const belowAnonymity = totalRespondents < anonymityFloor
-  const isEmpty = noDriversSelected || allExcludedByOverlap || belowAnonymity
+  const isEmpty = noDriversSelected || allExcludedByOverlap || tooFewPoints || belowAnonymity
 
   const QuadrantDot = useMemo(
     () => makeQuadrantDot(xConfig.threshold, yConfig.threshold, level, hoveredMetricId),
@@ -620,7 +625,7 @@ export function DriverAnalysisWidget({
   const levelToggle = (
     <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
       {(['marker', 'buildingBlock', 'question'] as const)
-        .filter((l) => nodesByLevel[l].length > 0)
+        .filter((l) => nodesByLevel[l].length >= MIN_DRIVER_PLOT_POINTS)
         .map((l) => (
           <button
             key={l}
@@ -682,6 +687,11 @@ export function DriverAnalysisWidget({
                 'All selected drivers overlap with the outcome, so there is nothing valid to compare. Pick drivers from a different marker.'}
               {!noDriversSelected &&
                 !allExcludedByOverlap &&
+                tooFewPoints &&
+                `Need at least ${MIN_DRIVER_PLOT_POINTS} data points to plot. Add more drivers that don’t overlap the outcome.`}
+              {!noDriversSelected &&
+                !allExcludedByOverlap &&
+                !tooFewPoints &&
                 belowAnonymity &&
                 `Response count is below the anonymity threshold (${anonymityFloor}). Widen the dashboard filters or wait for more responses.`}
             </div>
@@ -690,6 +700,8 @@ export function DriverAnalysisWidget({
           <div className="flex flex-col">
             {levelToggle}
 
+            {dots.length >= MIN_DRIVER_PLOT_POINTS && (
+            <>
             <div style={{ position: 'relative', marginTop: 8 }}>
               <ResponsiveContainer width="100%" height={340}>
                 <ScatterChart margin={{ top: 24, right: 24, bottom: 52, left: 60 }}>
@@ -836,8 +848,6 @@ export function DriverAnalysisWidget({
               </div>
             </div>
 
-            {dots.length > 0 && (
-              <>
                 <div
                   style={{
                     display: 'flex',

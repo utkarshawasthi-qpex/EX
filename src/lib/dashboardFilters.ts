@@ -28,6 +28,7 @@ export {
   descendantQuestionsOf,
   DRIVER_CORRELATION_MATRIX,
   DRIVER_METRICS,
+  MIN_DRIVER_PLOT_POINTS,
   getCorrelation,
   getDriverImpact,
   getDriverMetricById,

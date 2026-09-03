@@ -18,6 +18,8 @@ export const defaultWidgetLayout: Record<WidgetType, LayoutItem> = {
   single_question: { x: 0, y: 20, w: 6, h: 6 },
   survey_comparison: { x: 6, y: 20, w: 6, h: 6 },
   driver_analysis: { x: 0, y: 26, w: 12, h: 8 },
+  driver_analysis_v2: { x: 0, y: 26, w: 12, h: 8 },
+  driver_analysis_v3: { x: 0, y: 26, w: 12, h: 8 },
   text_analysis: { x: 0, y: 34, w: 6, h: 6 },
   text_report: { x: 6, y: 34, w: 6, h: 6 },
   notes: { x: 0, y: 40, w: 6, h: 5 },

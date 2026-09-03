@@ -1,7 +1,7 @@
 'use client'
 
 import type { ComponentType } from 'react'
-import type { ActiveFilter, DashboardWidget, ViewerCapabilities, WidgetType } from '@/types'
+import type { ActiveFilter, DashboardWidget, DriverAnalysisVariant, ViewerCapabilities, WidgetType } from '@/types'
 import { DriverAnalysisWidget } from '@/components/modules/analytics/widgets/DriverAnalysisWidget'
 import { ENPSWidget } from '@/components/modules/analytics/widgets/ENPSWidget'
 import { HeatmapWidget } from '@/components/modules/analytics/widgets/HeatmapWidget'
@@ -108,12 +108,41 @@ export const WIDGET_CATALOG: WidgetCatalogItem[] = [
   },
   {
     type: 'driver_analysis',
-    title: 'Driver analysis',
-    description: 'Understand key drivers of engagement',
+    title: 'Driver Analysis — V1 (Adaptive)',
+    description:
+      'Dynamic axes and quadrants that adapt to your data. Quadrant dividers set to the median of the drivers on the chart.',
+    defaultWidth: 'full',
+    thumbnailClass: 'bg-red-100',
+  },
+  {
+    type: 'driver_analysis_v2',
+    title: 'Driver Analysis — V2 (Adaptive axes, fixed quadrants)',
+    description:
+      'Axes zoom to your data. Quadrant dividers are fixed at 0.30 impact and 60% favorability so classification is comparable across widgets.',
+    defaultWidth: 'full',
+    thumbnailClass: 'bg-red-100',
+  },
+  {
+    type: 'driver_analysis_v3',
+    title: 'Driver Analysis — V3 (Standardized)',
+    description:
+      'Fixed axes (0-1 impact, 0-100% favorability) and fixed quadrant dividers. Every chart uses the same scale and thresholds.',
     defaultWidth: 'full',
     thumbnailClass: 'bg-red-100',
   },
 ]
+
+export function isDriverAnalysisType(type: WidgetType | null | undefined): boolean {
+  return (
+    type === 'driver_analysis' || type === 'driver_analysis_v2' || type === 'driver_analysis_v3'
+  )
+}
+
+export function getDriverAnalysisVariant(type: WidgetType): DriverAnalysisVariant {
+  if (type === 'driver_analysis_v2') return 'hybrid'
+  if (type === 'driver_analysis_v3') return 'fixed'
+  return 'adaptive'
+}
 
 export type WidgetComponentProps = {
   widget?: DashboardWidget
@@ -135,6 +164,8 @@ const WIDGET_COMPONENTS: Record<WidgetType, ComponentType<WidgetComponentProps>>
   time_trend: TimeTrendWidget,
   single_question: SingleQuestionWidget,
   driver_analysis: DriverAnalysisWidget,
+  driver_analysis_v2: DriverAnalysisWidget,
+  driver_analysis_v3: DriverAnalysisWidget,
   survey_comparison: SurveyComparisonWidget,
   text_analysis: TextAnalysisWidget,
   text_report: TextReportWidget,
@@ -160,6 +191,19 @@ export function DashboardWidgetRenderer({
   dashboardWidgets?: DashboardWidget[]
   capabilities?: ViewerCapabilities
 }) {
+  if (isDriverAnalysisType(widget.type)) {
+    return (
+      <DriverAnalysisWidget
+        variant={getDriverAnalysisVariant(widget.type)}
+        widget={widget}
+        onEdit={onEdit}
+        onDuplicate={onDuplicate}
+        onDelete={onDelete}
+        activeFilters={activeFilters}
+      />
+    )
+  }
+
   const Component = WIDGET_COMPONENTS[widget.type]
   if (!Component) return null
   return (
@@ -213,6 +257,8 @@ export function getDefaultWidgetWidth(type: WidgetType): 'full' | 'half' {
 const CHART_WIDGET_TYPES: WidgetType[] = [
   'time_trend',
   'driver_analysis',
+  'driver_analysis_v2',
+  'driver_analysis_v3',
   'enps',
   'heatmap',
   'summary',

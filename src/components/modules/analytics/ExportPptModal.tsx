@@ -61,6 +61,8 @@ const WIDGET_COLORS: Record<WidgetType, string> = {
   notes: 'bg-yellow-500',
   single_question: 'bg-blue-600',
   driver_analysis: 'bg-green-600',
+  driver_analysis_v2: 'bg-green-600',
+  driver_analysis_v3: 'bg-green-600',
 }
 
 function getWidgetTypeLabel(type: WidgetType) {

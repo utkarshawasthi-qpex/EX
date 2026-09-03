@@ -36,6 +36,34 @@ export const DRIVER_EXCLUDED_QUESTION_TYPES = [
 /** Minimum selected drivers / plotted dots required to create or draw the chart. */
 export const MIN_DRIVER_PLOT_POINTS = 4
 
+/**
+ * Static impact threshold for V2 and V3 variants.
+ *
+ * 0.30 is Cohen's boundary between small (0.10-0.29) and medium (0.30-0.49)
+ * effect sizes for Pearson r. Above this line, the correlation represents a
+ * clearly noticeable relationship worth acting on.
+ *
+ * Tunable — stakeholders may want to iterate. Alternatives considered:
+ *   0.20 — Glint's Low/Medium boundary. More permissive; more drivers land
+ *          in the top half of the chart. Use if the current threshold leaves
+ *          Priority Focus consistently empty.
+ *   0.45 — Culture Amp's "considerable" threshold. Stricter; only strong
+ *          drivers earn the top half. Use if 0.30 lets too much through.
+ */
+export const STATIC_IMPACT_THRESHOLD = 0.30
+
+/**
+ * Static performance threshold for V2 and V3 variants.
+ *
+ * 60% favorable is the widely-referenced entry point for healthy EX
+ * favorability. Below this, a driver is scoring below what published EX
+ * benchmarks (Culture Amp, Qualtrics, Gallup) consider a healthy baseline.
+ *
+ * Tunable. Alternatives: 50% (mid-scale, simplest to explain, weakest
+ * anchor), 70% (matches the existing heatmap widget's green threshold).
+ */
+export const STATIC_PERFORMANCE_THRESHOLD = 60
+
 export type DriverMetric = {
   id: string
   label: string
@@ -398,13 +426,61 @@ export function pearsonCorrelation(driverScores: number[], outcomeScores: number
   return pearsonR(driverScores, outcomeScores)
 }
 
+export type AxisRange = { min: number; max: number }
+
 export type AxisConfig = {
   min: number
   max: number
   threshold: number
 }
 
-/** Dynamic domain + median threshold with 2σ outlier removal. */
+/** V1 — pure dynamic. Axis zooms to data range with 15% padding. */
+export function computeAxisAdaptive(values: number[], fallbackSpan: number): AxisRange {
+  if (values.length === 0) return { min: 0, max: fallbackSpan }
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const range = max - min
+  const padding = range < 0.0001 ? fallbackSpan * 0.15 : range * 0.15
+  return { min: min - padding, max: max + padding }
+}
+
+/** V2 — dynamic axis with threshold-inclusion guard. Axis always contains the divider. */
+export function computeAxisWithThreshold(
+  values: number[],
+  threshold: number,
+  fallbackSpan: number,
+): AxisRange {
+  if (values.length === 0) {
+    return { min: threshold - fallbackSpan / 2, max: threshold + fallbackSpan / 2 }
+  }
+  const dataMin = Math.min(...values)
+  const dataMax = Math.max(...values)
+  const min = Math.min(dataMin, threshold)
+  const max = Math.max(dataMax, threshold)
+  const range = max - min
+  const padding = range < 0.0001 ? fallbackSpan * 0.15 : range * 0.15
+  return { min: min - padding, max: max + padding }
+}
+
+/** V3 — fully fixed axis. Ignores data entirely. */
+export function computeAxisFixed(kind: 'impact' | 'performance'): AxisRange {
+  return kind === 'impact' ? { min: 0, max: 1 } : { min: 0, max: 100 }
+}
+
+/** V1 — dynamic median of plotted data. */
+export function computeThresholdDynamic(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
+/** V2 and V3 — static constant. */
+export function getStaticThreshold(kind: 'impact' | 'performance'): number {
+  return kind === 'impact' ? STATIC_IMPACT_THRESHOLD : STATIC_PERFORMANCE_THRESHOLD
+}
+
+/** Dynamic domain + median threshold with 2σ outlier removal. Unused by variant widgets. */
 export function computeAxisConfig(values: number[], padding = 0.15): AxisConfig {
   if (!values.length) return { min: 0, max: 1, threshold: 0.5 }
 

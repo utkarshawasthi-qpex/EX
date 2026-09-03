@@ -22,7 +22,7 @@ import type {
   Question,
   WidgetType,
 } from '@/types'
-import { WIDGET_CATALOG } from '@/components/modules/analytics/widgetRegistry'
+import { isDriverAnalysisType, WIDGET_CATALOG } from '@/components/modules/analytics/widgetRegistry'
 import { DEFAULT_SUMMARY_ADMIN_SETTINGS } from '@/lib/summaryDefaults'
 import {
   buildSummaryAdminConfigFromFields,
@@ -169,7 +169,13 @@ const ANALYTICS_TYPE_OPTIONS = [
 
 const NO_MARKERS_OPTION: SelectOption = { value: '', label: 'No markers available' }
 
-const DEFAULT_FULL_WIDTH_TYPES: WidgetType[] = ['summary', 'scorecard', 'driver_analysis']
+const DEFAULT_FULL_WIDTH_TYPES: WidgetType[] = [
+  'summary',
+  'scorecard',
+  'driver_analysis',
+  'driver_analysis_v2',
+  'driver_analysis_v3',
+]
 
 function getDataWidgets(widgets: DashboardWidget[]): DashboardWidget[] {
   return widgets.filter((widget) => widget.type !== 'summary' && widget.type !== 'notes')
@@ -753,7 +759,7 @@ export function AddWidgetModal({
   const isSummaryFlow = selectedType === 'summary'
   const flowSteps = useMemo(() => {
     if (isSummaryFlow) return SUMMARY_STEPS
-    if (selectedType === 'driver_analysis') {
+    if (isDriverAnalysisType(selectedType)) {
       return WIDGET_STEPS.map((stepItem, index) =>
         index === 3 ? { ...stepItem, label: 'Select drivers' } : stepItem,
       )
@@ -783,7 +789,7 @@ export function AddWidgetModal({
   const standardSourceValid =
     Boolean(selectedSurveyId) && (!needsQuestions || selectedQuestions.length > 0)
   const sourceValid =
-    selectedType === 'driver_analysis'
+    isDriverAnalysisType(selectedType)
       ? Boolean(selectedSurveyId) &&
         Boolean(selectedDeployment) &&
         Boolean(widgetConfig.outcomeMetricId)
@@ -791,7 +797,7 @@ export function AddWidgetModal({
   const driverOutcomeId = widgetConfig.outcomeMetricId as string | undefined
   const driverMetricIds = (widgetConfig.driverMetricIds as string[] | undefined) ?? []
   const driverStepValid =
-    selectedType !== 'driver_analysis' ||
+    !isDriverAnalysisType(selectedType) ||
     (Boolean(driverOutcomeId) && driverMetricIds.length >= MIN_DRIVER_PLOT_POINTS)
   const canContinue =
     (step === 0 && Boolean(selectedType)) ||
@@ -836,7 +842,7 @@ export function AddWidgetModal({
     setWidgetName(type === 'summary' ? 'Summary & Recommendations' : getWidgetDisplayName(type))
     setWidgetDescription('')
     setSelectedQuestions([])
-    if (type === 'driver_analysis') {
+    if (isDriverAnalysisType(type)) {
       const eligible = getEligibleDriverMetrics()
       const defaultOutcome = eligible.find((m) => m.kind === 'marker') ?? eligible[0]
       const defaultDrivers = eligible
@@ -1016,7 +1022,7 @@ export function AddWidgetModal({
       )
     }
 
-    if (selectedType === 'driver_analysis') {
+    if (isDriverAnalysisType(selectedType)) {
       const outcomeMetricId = (widgetConfig.outcomeMetricId as string | undefined) ?? ''
       const driverMetricIds = (widgetConfig.driverMetricIds as string[] | undefined) ?? []
       const outcomeQuestions = outcomeMetricId
@@ -1305,7 +1311,7 @@ export function AddWidgetModal({
                 variant="outlined"
               />
             </FieldRow>
-            {selectedType === 'driver_analysis' && (
+            {isDriverAnalysisType(selectedType) && (
               <>
                 <div className="my-3 border-b border-gray-100" />
                 <FieldRow label="Outcome">
@@ -1356,7 +1362,7 @@ export function AddWidgetModal({
                 </FieldRow>
               </>
             )}
-            {selectedType !== 'driver_analysis' && (
+            {!isDriverAnalysisType(selectedType) && (
               <>
                 <div className="my-3 border-b border-gray-100" />
                 {!needsQuestions ? (
@@ -1416,7 +1422,7 @@ export function AddWidgetModal({
       return (
       <div className="space-y-5">
         {renderColumnsSet()}
-        {selectedType !== 'driver_analysis' && (
+        {!isDriverAnalysisType(selectedType) && (
           <div className="border-t border-gray-100 pt-5">
             <FieldRow label="Widget size">
               <div className="flex gap-2">

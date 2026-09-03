@@ -67,6 +67,8 @@ export function buildDataContext(widgets: DashboardWidget[]): string {
         )
         break
       case 'driver_analysis':
+      case 'driver_analysis_v2':
+      case 'driver_analysis_v3':
         lines.push('DRIVER ANALYSIS:')
         lines.push(
           `Top drivers: ${mockDriverAnalysisData.drivers

@@ -606,7 +606,11 @@ export type WidgetType =
   | 'notes'
   | 'single_question'
   | 'driver_analysis'
+  | 'driver_analysis_v2'
+  | 'driver_analysis_v3'
   | 'summary'
+
+export type DriverAnalysisVariant = 'adaptive' | 'hybrid' | 'fixed'
 
 export type WidgetSurveySource = {
   surveyId: ID

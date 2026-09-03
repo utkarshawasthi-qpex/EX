@@ -5,6 +5,10 @@ import {
   ENGAGEMENT_SURVEY_ID,
   WELLBEING_SURVEY_ID,
 } from '@/data/mock/empowerIntegrationSeed'
+import {
+  createDriverCompareDashboard,
+  DRIVER_COMPARE_DASHBOARD_ID,
+} from '@/data/mock/dashboards'
 
 const multiSurveyDemoSummary = buildSummaryContent(
   'Engagement 2026 shows Growth & Development as the clearest gap at 58% favorable company-wide, and lower still for your team at 52%. That means about half of people do not feel they have a clear path to learn or advance. Manager Relationship is a genuine strength at 82%, so the issue is not day-to-day management trust — it is development and progression. Communication sits in between at 64%, and Wellbeing on the annual survey is 71%. Separately, Wellbeing Pulse Q3 is still collecting responses; the Sales-filtered heatmap already shows localized risk at 61% favorable, which is weaker than the company wellbeing picture. Put together, managers should double down on growth conversations with their teams, while HR watches Sales wellbeing closely as the pulse closes. Protecting the strong manager relationship scores while fixing growth and Sales wellbeing will give the clearest lift.',
@@ -136,13 +140,35 @@ export function seedDefaultDashboardsIfNeeded(): void {
     const existing = window.localStorage.getItem(DASHBOARDS_STORAGE_KEY)
     if (existing) {
       const parsed = JSON.parse(existing) as Dashboard[]
-      if (Array.isArray(parsed) && parsed.length > 0) return
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        seedDriverCompareDashboardIfNeeded()
+        return
+      }
     }
 
     const multiSurvey = createMultiSurveyDemoDashboard()
     window.localStorage.setItem(DASHBOARDS_STORAGE_KEY, JSON.stringify([multiSurvey]))
     window.localStorage.setItem(ACTIVE_DASHBOARD_STORAGE_KEY, MULTI_SURVEY_DASHBOARD_ID)
+    seedDriverCompareDashboardIfNeeded()
   } catch (err) {
     console.error('Failed to seed default dashboards:', err)
+  }
+}
+
+/** Additive: insert the variant-comparison dashboard if it is missing. */
+export function seedDriverCompareDashboardIfNeeded(): void {
+  if (typeof window === 'undefined') return
+
+  try {
+    const existing = window.localStorage.getItem(DASHBOARDS_STORAGE_KEY)
+    const parsed = existing ? (JSON.parse(existing) as Dashboard[]) : []
+    if (!Array.isArray(parsed)) return
+    if (parsed.some((dashboard) => dashboard.id === DRIVER_COMPARE_DASHBOARD_ID)) return
+    window.localStorage.setItem(
+      DASHBOARDS_STORAGE_KEY,
+      JSON.stringify([createDriverCompareDashboard(), ...parsed]),
+    )
+  } catch (err) {
+    console.error('Failed to seed driver comparison dashboard:', err)
   }
 }

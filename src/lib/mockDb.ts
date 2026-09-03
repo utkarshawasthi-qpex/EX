@@ -306,7 +306,10 @@ export function getDashboards(): Dashboard[] {
 }
 
 export function getDashboardById(id: ID): Dashboard | undefined {
-  return loadDashboards().find((dashboard) => dashboard.id === id)
+  return (
+    loadDashboards().find((dashboard) => dashboard.id === id) ??
+    mockDashboards.find((dashboard) => dashboard.id === id)
+  )
 }
 
 export function getPptTemplates(): PptTemplate[] {

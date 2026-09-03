@@ -13,7 +13,8 @@ import { DashboardFilterPanel } from '@/components/modules/analytics/DashboardFi
 import { DashboardShareModal } from '@/components/modules/analytics/DashboardShareModal'
 import { DashboardWidgetProvider } from '@/components/modules/analytics/DashboardWidgetContext'
 import { ExportPptModal } from '@/components/modules/analytics/ExportPptModal'
-import { DashboardWidgetRenderer } from '@/components/modules/analytics/widgetRegistry'
+import { DashboardWidgetRenderer, isDriverAnalysisType } from '@/components/modules/analytics/widgetRegistry'
+import { DriverAnalysisDatasetPicker } from '@/components/modules/analytics/DriverAnalysisDatasetPicker'
 import { AuthChecking } from '@/components/shared/AuthChecking'
 import {
   appendLayoutItem,
@@ -155,6 +156,14 @@ export default function DashboardCanvasPage() {
   const capabilities = useMemo(
     () => (dashboard ? getDashboardCapabilities(dashboard, getCurrentUser()) : null),
     [dashboard],
+  )
+
+  const hasDriverAnalysis = useMemo(
+    () =>
+      Object.values(allTabWidgets).some((tabWidgets) =>
+        tabWidgets.some((widget) => isDriverAnalysisType(widget.type)),
+      ),
+    [allTabWidgets],
   )
 
   const updateWidgets = useCallback(
@@ -540,20 +549,23 @@ export default function DashboardCanvasPage() {
             </div>
           </div>
 
-          <div className="mt-2 flex items-center gap-2">
-            <span className="wm-account-tree text-sm text-blue-600" aria-hidden />
-            <button type="button" className="text-blue-600 hover:underline">
-              <WuText size="sm" as="span">
-                Hierarchy based rule
-              </WuText>
-            </button>
-            <button
-              type="button"
-              className="flex size-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-medium text-white"
-              aria-label="Hierarchy rule information"
-            >
-              ?
-            </button>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="wm-account-tree text-sm text-blue-600" aria-hidden />
+              <button type="button" className="text-blue-600 hover:underline">
+                <WuText size="sm" as="span">
+                  Hierarchy based rule
+                </WuText>
+              </button>
+              <button
+                type="button"
+                className="flex size-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-medium text-white"
+                aria-label="Hierarchy rule information"
+              >
+                ?
+              </button>
+            </div>
+            {hasDriverAnalysis && <DriverAnalysisDatasetPicker />}
           </div>
 
           {activeFilters.length > 0 && (

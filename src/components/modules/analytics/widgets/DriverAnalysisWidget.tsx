@@ -31,6 +31,8 @@ import {
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
 import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
 import type { ActiveFilter, DashboardWidget, DriverAnalysisVariant } from '@/types'
+import { useCurrentDataset } from '@/lib/datasetContext'
+import type { DatasetProfile } from '@/data/mock/driverAnalysisDatasets'
 import {
   ANONYMITY_THRESHOLD,
   buildMetricTree,
@@ -50,6 +52,7 @@ import {
   respondentCount,
   STATIC_IMPACT_THRESHOLD,
   STATIC_PERFORMANCE_THRESHOLD,
+  clampMetricValue,
   type AxisRange,
   type DriverMetricKind,
   type DriverQuestionType,
@@ -288,6 +291,31 @@ type ResolvedConfig = {
   outcomeMetricId: string
   outcomeLabel: string
   driverMetricIds: string[]
+  datasetOverrideNote?: string
+}
+
+function applyDatasetOverrides(resolved: ResolvedConfig, dataset: DatasetProfile): ResolvedConfig {
+  let { outcomeMetricId, outcomeLabel, driverMetricIds } = resolved
+  let datasetOverrideNote: string | undefined
+
+  if (dataset.outcomeOverride) {
+    const override = getDriverMetricById(dataset.outcomeOverride)
+    if (override && !override.excluded) {
+      outcomeMetricId = override.id
+      outcomeLabel = override.label
+      datasetOverrideNote = `Dataset override: outcome = ${override.label}`
+    }
+  }
+
+  if (dataset.driverSubset && dataset.driverSubset.length > 0) {
+    const subset = dataset.driverSubset.filter((id) => {
+      const metric = getDriverMetricById(id)
+      return Boolean(metric) && !metric?.excluded
+    })
+    if (subset.length > 0) driverMetricIds = subset
+  }
+
+  return { outcomeMetricId, outcomeLabel, driverMetricIds, datasetOverrideNote }
 }
 
 function resolveDriverConfig(config?: Record<string, unknown>): ResolvedConfig | null {
@@ -363,8 +391,14 @@ function getDotsForLevel(
   // Exclude first, then compute — axes/medians must never see contaminated nodes.
   return validNodesAtLevel
     .map((item) => {
-      const performance = getMetricFavorability(item.id, item.kind, activeFilters)
-      const impact = getDriverImpact(item.id, outcomeMetricId, activeFilters)
+      const performance = clampMetricValue(
+        getMetricFavorability(item.id, item.kind, activeFilters),
+        'performance',
+      )
+      const impact = clampMetricValue(
+        getDriverImpact(item.id, outcomeMetricId, activeFilters),
+        'impact',
+      )
       return {
         id: item.id,
         name: item.label,
@@ -377,6 +411,15 @@ function getDotsForLevel(
       } satisfies DotPoint
     })
     .filter((d) => Number.isFinite(d.x) && Number.isFinite(d.y))
+}
+
+function clampMetricTreeValues(nodes: MetricTreeNode[]): MetricTreeNode[] {
+  return nodes.map((node) => ({
+    ...node,
+    performance: clampMetricValue(node.performance, 'performance'),
+    impact: clampMetricValue(node.impact, 'impact'),
+    children: clampMetricTreeValues(node.children),
+  }))
 }
 
 function filterTreeByOverlap(
@@ -447,13 +490,18 @@ export function DriverAnalysisWidget({
       : widget?.type === 'driver_analysis_v3'
         ? 'fixed'
         : 'adaptive')
+  const { currentDataset, currentDatasetId } = useCurrentDataset()
   const title = widget?.title?.trim() || 'Driver analysis'
   const [showMetricList, setShowMetricList] = useState(false)
   const [level, setLevel] = useState<MetricLevel>('marker')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
   const [hoveredMetricId, setHoveredMetricId] = useState<string | null>(null)
 
-  const resolved = useMemo(() => resolveDriverConfig(widget?.config), [widget?.config])
+  const resolved = useMemo(() => {
+    const base = resolveDriverConfig(widget?.config)
+    if (!base) return null
+    return applyDatasetOverrides(base, currentDataset)
+  }, [currentDataset, widget?.config])
 
   const outcomeQuestions = useMemo(
     () =>
@@ -493,15 +541,15 @@ export function DriverAnalysisWidget({
       outcomeQuestions,
       activeFilters,
     )
-  }, [activeFilters, level, outcomeQuestions, resolved])
+  }, [activeFilters, currentDatasetId, level, outcomeQuestions, resolved])
 
   const impactAxis: AxisRange = useMemo(() => {
     const impacts = dots.map((n) => n.impact)
     switch (variant) {
       case 'adaptive':
-        return computeAxisAdaptive(impacts, 0.05)
+        return computeAxisAdaptive(impacts, 0.05, 'impact')
       case 'hybrid':
-        return computeAxisWithThreshold(impacts, STATIC_IMPACT_THRESHOLD, 0.05)
+        return computeAxisWithThreshold(impacts, STATIC_IMPACT_THRESHOLD, 0.05, 'impact')
       case 'fixed':
         return computeAxisFixed('impact')
     }
@@ -511,21 +559,23 @@ export function DriverAnalysisWidget({
     const perfs = dots.map((n) => n.performance)
     switch (variant) {
       case 'adaptive':
-        return computeAxisAdaptive(perfs, 5)
+        return computeAxisAdaptive(perfs, 5, 'performance')
       case 'hybrid':
-        return computeAxisWithThreshold(perfs, STATIC_PERFORMANCE_THRESHOLD, 5)
+        return computeAxisWithThreshold(perfs, STATIC_PERFORMANCE_THRESHOLD, 5, 'performance')
       case 'fixed':
         return computeAxisFixed('performance')
     }
   }, [dots, variant])
 
   const impactThreshold = useMemo(() => {
-    if (variant === 'adaptive') return computeThresholdDynamic(dots.map((n) => n.impact))
+    if (variant === 'adaptive') return computeThresholdDynamic(dots.map((n) => n.impact), 'impact')
     return getStaticThreshold('impact')
   }, [dots, variant])
 
   const performanceThreshold = useMemo(() => {
-    if (variant === 'adaptive') return computeThresholdDynamic(dots.map((n) => n.performance))
+    if (variant === 'adaptive') {
+      return computeThresholdDynamic(dots.map((n) => n.performance), 'performance')
+    }
     return getStaticThreshold('performance')
   }, [dots, variant])
 
@@ -549,9 +599,9 @@ export function DriverAnalysisWidget({
       resolved.outcomeMetricId,
       activeFilters,
     )
-    const filtered = filterTreeByOverlap(tree, outcomeQuestions)
+    const filtered = clampMetricTreeValues(filterTreeByOverlap(tree, outcomeQuestions))
     return sortMetricTreeNodes(filtered, performanceThreshold, impactThreshold)
-  }, [activeFilters, outcomeQuestions, resolved, performanceThreshold, impactThreshold])
+  }, [activeFilters, currentDatasetId, outcomeQuestions, resolved, performanceThreshold, impactThreshold])
 
   const outcomeMetric = resolved
     ? getDriverMetricById(resolved.outcomeMetricId)
@@ -714,6 +764,11 @@ export function DriverAnalysisWidget({
         resolved ? (
           <span>
             {subHeader}
+            {resolved.datasetOverrideNote && (
+              <span className="mt-1 block text-xs text-amber-700">
+                {resolved.datasetOverrideNote}
+              </span>
+            )}
             {outcomeMetric?.kind === 'question' && (
               <span className="mt-1 block text-xs text-gray-500">
                 Single-question outcome — impact values are systematically smaller than against a

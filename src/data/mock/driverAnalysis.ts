@@ -18,6 +18,8 @@ import {
   type DashboardRespondent,
 } from '@/data/mock/dashboardFilters'
 import type { ActiveFilter } from '@/types'
+import { generateScores, getDatasetById } from '@/data/mock/driverAnalysisDatasets'
+import { getCurrentDatasetId } from '@/lib/datasetStore'
 
 export type DriverMetricKind = 'marker' | 'buildingBlock' | 'question'
 
@@ -170,6 +172,128 @@ export const DRIVER_METRICS: DriverMetric[] = [
     categoryKey: 'inclusion',
     parentId: 'bb_incl_belonging',
     questionType: 'likert',
+  },
+  // Extra metrics for comparison datasets (dense / deep hierarchy / mixed scales).
+  // Unselected in typical widget configs so existing charts stay on the core tree.
+  {
+    id: 'bb_tech_h3',
+    label: 'Hardware reliability',
+    kind: 'buildingBlock',
+    categoryKey: 'technologies',
+    parentId: 'marker_technologies',
+    questionType: 'likert',
+  },
+  {
+    id: 'bb_tech_h4',
+    label: 'IT support',
+    kind: 'buildingBlock',
+    categoryKey: 'technologies',
+    parentId: 'marker_technologies',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_tech_tools_2',
+    label: 'Software is easy to use',
+    kind: 'question',
+    categoryKey: 'technologies',
+    parentId: 'bb_tech_tools',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_tech_tools_3',
+    label: 'I have the right licenses',
+    kind: 'question',
+    categoryKey: 'technologies',
+    parentId: 'bb_tech_tools',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_tech_systems_1',
+    label: 'Systems are available when I need them',
+    kind: 'question',
+    categoryKey: 'technologies',
+    parentId: 'bb_tech_systems',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_tech_systems_2',
+    label: 'Single sign-on works reliably',
+    kind: 'question',
+    categoryKey: 'technologies',
+    parentId: 'bb_tech_systems',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_tech_systems_3',
+    label: 'I can find the data I need',
+    kind: 'question',
+    categoryKey: 'technologies',
+    parentId: 'bb_tech_systems',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_tech_h3_1',
+    label: 'Laptops are up to date',
+    kind: 'question',
+    categoryKey: 'technologies',
+    parentId: 'bb_tech_h3',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_tech_h3_2',
+    label: 'Peripherals work as expected',
+    kind: 'question',
+    categoryKey: 'technologies',
+    parentId: 'bb_tech_h3',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_tech_h3_3',
+    label: 'Network performance is adequate',
+    kind: 'question',
+    categoryKey: 'technologies',
+    parentId: 'bb_tech_h3',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_tech_h4_1',
+    label: 'IT tickets are resolved quickly',
+    kind: 'question',
+    categoryKey: 'technologies',
+    parentId: 'bb_tech_h4',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_tech_h4_2',
+    label: 'IT communicates status clearly',
+    kind: 'question',
+    categoryKey: 'technologies',
+    parentId: 'bb_tech_h4',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_tech_h4_3',
+    label: 'I know how to get help',
+    kind: 'question',
+    categoryKey: 'technologies',
+    parentId: 'bb_tech_h4',
+    questionType: 'likert',
+  },
+  {
+    id: 'q_enps_company',
+    label: 'I would recommend this company',
+    kind: 'question',
+    categoryKey: 'inclusion',
+    parentId: 'bb_incl_belonging',
+    questionType: 'enps',
+  },
+  {
+    id: 'q_enps_team',
+    label: 'I would recommend my team',
+    kind: 'question',
+    categoryKey: 'growth',
+    parentId: 'bb_growth_career',
+    questionType: 'enps',
   },
   // Example excluded metric (open text) — shown disabled in the creation modal
   {
@@ -427,6 +551,28 @@ export function pearsonCorrelation(driverScores: number[], outcomeScores: number
 }
 
 export type AxisRange = { min: number; max: number }
+export type DriverAxisKind = 'impact' | 'performance'
+
+/** Impact is Pearson |r| (0–1). Performance is favorability (0–100). Never exceed these. */
+export const IMPACT_BOUNDS: AxisRange = { min: 0, max: 1 }
+export const PERFORMANCE_BOUNDS: AxisRange = { min: 0, max: 100 }
+
+export function boundsForAxis(kind: DriverAxisKind): AxisRange {
+  return kind === 'impact' ? IMPACT_BOUNDS : PERFORMANCE_BOUNDS
+}
+
+export function clampMetricValue(value: number, kind: DriverAxisKind): number {
+  const bounds = boundsForAxis(kind)
+  if (!Number.isFinite(value)) return bounds.min
+  return Math.min(bounds.max, Math.max(bounds.min, value))
+}
+
+export function clampAxisRange(range: AxisRange, kind: DriverAxisKind): AxisRange {
+  const bounds = boundsForAxis(kind)
+  const min = Math.max(bounds.min, Math.min(range.min, bounds.max))
+  const max = Math.min(bounds.max, Math.max(range.max, bounds.min))
+  return min < max ? { min, max } : { min: bounds.min, max: bounds.max }
+}
 
 export type AxisConfig = {
   min: number
@@ -434,45 +580,57 @@ export type AxisConfig = {
   threshold: number
 }
 
-/** V1 — pure dynamic. Axis zooms to data range with 15% padding. */
-export function computeAxisAdaptive(values: number[], fallbackSpan: number): AxisRange {
-  if (values.length === 0) return { min: 0, max: fallbackSpan }
-  const min = Math.min(...values)
-  const max = Math.max(...values)
+/** V1 — pure dynamic. Axis zooms to data range with 15% padding, then clamped to legal bounds. */
+export function computeAxisAdaptive(
+  values: number[],
+  fallbackSpan: number,
+  kind: DriverAxisKind,
+): AxisRange {
+  if (values.length === 0) return clampAxisRange({ min: 0, max: fallbackSpan }, kind)
+  const clamped = values.map((value) => clampMetricValue(value, kind))
+  const min = Math.min(...clamped)
+  const max = Math.max(...clamped)
   const range = max - min
   const padding = range < 0.0001 ? fallbackSpan * 0.15 : range * 0.15
-  return { min: min - padding, max: max + padding }
+  return clampAxisRange({ min: min - padding, max: max + padding }, kind)
 }
 
-/** V2 — dynamic axis with threshold-inclusion guard. Axis always contains the divider. */
+/** V2 — dynamic axis with threshold-inclusion guard. Axis always contains the divider, then clamped. */
 export function computeAxisWithThreshold(
   values: number[],
   threshold: number,
   fallbackSpan: number,
+  kind: DriverAxisKind,
 ): AxisRange {
+  const clampedThreshold = clampMetricValue(threshold, kind)
   if (values.length === 0) {
-    return { min: threshold - fallbackSpan / 2, max: threshold + fallbackSpan / 2 }
+    return clampAxisRange(
+      { min: clampedThreshold - fallbackSpan / 2, max: clampedThreshold + fallbackSpan / 2 },
+      kind,
+    )
   }
-  const dataMin = Math.min(...values)
-  const dataMax = Math.max(...values)
-  const min = Math.min(dataMin, threshold)
-  const max = Math.max(dataMax, threshold)
+  const clamped = values.map((value) => clampMetricValue(value, kind))
+  const dataMin = Math.min(...clamped)
+  const dataMax = Math.max(...clamped)
+  const min = Math.min(dataMin, clampedThreshold)
+  const max = Math.max(dataMax, clampedThreshold)
   const range = max - min
   const padding = range < 0.0001 ? fallbackSpan * 0.15 : range * 0.15
-  return { min: min - padding, max: max + padding }
+  return clampAxisRange({ min: min - padding, max: max + padding }, kind)
 }
 
 /** V3 — fully fixed axis. Ignores data entirely. */
-export function computeAxisFixed(kind: 'impact' | 'performance'): AxisRange {
-  return kind === 'impact' ? { min: 0, max: 1 } : { min: 0, max: 100 }
+export function computeAxisFixed(kind: DriverAxisKind): AxisRange {
+  return boundsForAxis(kind)
 }
 
-/** V1 — dynamic median of plotted data. */
-export function computeThresholdDynamic(values: number[]): number {
-  if (values.length === 0) return 0
-  const sorted = [...values].sort((a, b) => a - b)
+/** V1 — dynamic median of plotted data, clamped to the legal range for that axis. */
+export function computeThresholdDynamic(values: number[], kind: DriverAxisKind): number {
+  if (values.length === 0) return boundsForAxis(kind).min
+  const sorted = values.map((value) => clampMetricValue(value, kind)).sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+  const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+  return clampMetricValue(median, kind)
 }
 
 /** V2 and V3 — static constant. */
@@ -597,16 +755,38 @@ function scoreForRespondent(respondent: DashboardRespondent, metric: DriverMetri
   return clampScore(base + offset, metric.questionType)
 }
 
-/** Respondent-level raw scores for a metric (respects dashboard filters). */
+/**
+ * Respondent-level raw scores for a metric (respects dashboard filters).
+ * Routes through the selected comparison dataset's generateScores so all
+ * Driver Analysis variants swap data together.
+ */
 export function getRespondentMetricScores(
   metricId: string,
   activeFilters: ActiveFilter[] = [],
+  outcomeId?: string,
 ): number[] {
   const metric = getDriverMetricById(metricId)
   if (!metric || metric.excluded) return []
 
-  const respondents = filterRespondents(activeFilters)
-  return respondents.map((respondent) => scoreForRespondent(respondent, metric))
+  const datasetId = getCurrentDatasetId()
+  const dataset = getDatasetById(datasetId)
+  const respondents = dataset.respondentCount
+    ? Array.from({ length: dataset.respondentCount }, (_, index) => ({
+        id: `synth_${datasetId}_${index}`,
+      }))
+    : filterRespondents(activeFilters)
+  const respondentIds = respondents.map((respondent) => respondent.id)
+  const resolvedOutcomeId = outcomeId ?? dataset.outcomeOverride ?? metricId
+  const outcomeMetric = getDriverMetricById(resolvedOutcomeId)
+  const { driverScores } = generateScores(
+    datasetId,
+    metricId,
+    resolvedOutcomeId,
+    respondentIds,
+    metric.questionType,
+    outcomeMetric?.questionType ?? 'likert',
+  )
+  return driverScores
 }
 
 /**
@@ -636,8 +816,8 @@ export function getDriverImpact(
   if (driverId === outcomeId) return 1
   return Math.abs(
     pearsonR(
-      getRespondentMetricScores(driverId, activeFilters),
-      getRespondentMetricScores(outcomeId, activeFilters),
+      getRespondentMetricScores(driverId, activeFilters, outcomeId),
+      getRespondentMetricScores(outcomeId, activeFilters, outcomeId),
     ),
   )
 }

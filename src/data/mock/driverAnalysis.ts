@@ -18,8 +18,6 @@ import {
   type DashboardRespondent,
 } from '@/data/mock/dashboardFilters'
 import type { ActiveFilter } from '@/types'
-import { generateScores, getDatasetById } from '@/data/mock/driverAnalysisDatasets'
-import { getCurrentDatasetId } from '@/lib/datasetStore'
 
 export type DriverMetricKind = 'marker' | 'buildingBlock' | 'question'
 
@@ -39,32 +37,20 @@ export const DRIVER_EXCLUDED_QUESTION_TYPES = [
 export const MIN_DRIVER_PLOT_POINTS = 4
 
 /**
- * Static impact threshold for V2 and V3 variants.
+ * Static impact threshold for quadrant dividers.
  *
- * 0.30 is Cohen's boundary between small (0.10-0.29) and medium (0.30-0.49)
- * effect sizes for Pearson r. Above this line, the correlation represents a
- * clearly noticeable relationship worth acting on.
- *
- * Tunable — stakeholders may want to iterate. Alternatives considered:
- *   0.20 — Glint's Low/Medium boundary. More permissive; more drivers land
- *          in the top half of the chart. Use if the current threshold leaves
- *          Priority Focus consistently empty.
- *   0.45 — Culture Amp's "considerable" threshold. Stricter; only strong
- *          drivers earn the top half. Use if 0.30 lets too much through.
+ * 0.50 is the midpoint of Pearson |r| (0–1). Drivers at or above this line
+ * have a clearly substantial relationship with the outcome.
  */
-export const STATIC_IMPACT_THRESHOLD = 0.30
+export const STATIC_IMPACT_THRESHOLD = 0.5
 
 /**
- * Static performance threshold for V2 and V3 variants.
+ * Static performance threshold for quadrant dividers.
  *
- * 60% favorable is the widely-referenced entry point for healthy EX
- * favorability. Below this, a driver is scoring below what published EX
- * benchmarks (Culture Amp, Qualtrics, Gallup) consider a healthy baseline.
- *
- * Tunable. Alternatives: 50% (mid-scale, simplest to explain, weakest
- * anchor), 70% (matches the existing heatmap widget's green threshold).
+ * 80% favorable is the healthy-performance line used for this widget.
+ * Drivers below this sit in the left half of the chart (Priority focus / Monitor).
  */
-export const STATIC_PERFORMANCE_THRESHOLD = 60
+export const STATIC_PERFORMANCE_THRESHOLD = 80
 
 export type DriverMetric = {
   id: string
@@ -172,128 +158,6 @@ export const DRIVER_METRICS: DriverMetric[] = [
     categoryKey: 'inclusion',
     parentId: 'bb_incl_belonging',
     questionType: 'likert',
-  },
-  // Extra metrics for comparison datasets (dense / deep hierarchy / mixed scales).
-  // Unselected in typical widget configs so existing charts stay on the core tree.
-  {
-    id: 'bb_tech_h3',
-    label: 'Hardware reliability',
-    kind: 'buildingBlock',
-    categoryKey: 'technologies',
-    parentId: 'marker_technologies',
-    questionType: 'likert',
-  },
-  {
-    id: 'bb_tech_h4',
-    label: 'IT support',
-    kind: 'buildingBlock',
-    categoryKey: 'technologies',
-    parentId: 'marker_technologies',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_tech_tools_2',
-    label: 'Software is easy to use',
-    kind: 'question',
-    categoryKey: 'technologies',
-    parentId: 'bb_tech_tools',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_tech_tools_3',
-    label: 'I have the right licenses',
-    kind: 'question',
-    categoryKey: 'technologies',
-    parentId: 'bb_tech_tools',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_tech_systems_1',
-    label: 'Systems are available when I need them',
-    kind: 'question',
-    categoryKey: 'technologies',
-    parentId: 'bb_tech_systems',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_tech_systems_2',
-    label: 'Single sign-on works reliably',
-    kind: 'question',
-    categoryKey: 'technologies',
-    parentId: 'bb_tech_systems',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_tech_systems_3',
-    label: 'I can find the data I need',
-    kind: 'question',
-    categoryKey: 'technologies',
-    parentId: 'bb_tech_systems',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_tech_h3_1',
-    label: 'Laptops are up to date',
-    kind: 'question',
-    categoryKey: 'technologies',
-    parentId: 'bb_tech_h3',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_tech_h3_2',
-    label: 'Peripherals work as expected',
-    kind: 'question',
-    categoryKey: 'technologies',
-    parentId: 'bb_tech_h3',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_tech_h3_3',
-    label: 'Network performance is adequate',
-    kind: 'question',
-    categoryKey: 'technologies',
-    parentId: 'bb_tech_h3',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_tech_h4_1',
-    label: 'IT tickets are resolved quickly',
-    kind: 'question',
-    categoryKey: 'technologies',
-    parentId: 'bb_tech_h4',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_tech_h4_2',
-    label: 'IT communicates status clearly',
-    kind: 'question',
-    categoryKey: 'technologies',
-    parentId: 'bb_tech_h4',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_tech_h4_3',
-    label: 'I know how to get help',
-    kind: 'question',
-    categoryKey: 'technologies',
-    parentId: 'bb_tech_h4',
-    questionType: 'likert',
-  },
-  {
-    id: 'q_enps_company',
-    label: 'I would recommend this company',
-    kind: 'question',
-    categoryKey: 'inclusion',
-    parentId: 'bb_incl_belonging',
-    questionType: 'enps',
-  },
-  {
-    id: 'q_enps_team',
-    label: 'I would recommend my team',
-    kind: 'question',
-    categoryKey: 'growth',
-    parentId: 'bb_growth_career',
-    questionType: 'enps',
   },
   // Example excluded metric (open text) — shown disabled in the creation modal
   {
@@ -580,22 +444,7 @@ export type AxisConfig = {
   threshold: number
 }
 
-/** V1 — pure dynamic. Axis zooms to data range with 15% padding, then clamped to legal bounds. */
-export function computeAxisAdaptive(
-  values: number[],
-  fallbackSpan: number,
-  kind: DriverAxisKind,
-): AxisRange {
-  if (values.length === 0) return clampAxisRange({ min: 0, max: fallbackSpan }, kind)
-  const clamped = values.map((value) => clampMetricValue(value, kind))
-  const min = Math.min(...clamped)
-  const max = Math.max(...clamped)
-  const range = max - min
-  const padding = range < 0.0001 ? fallbackSpan * 0.15 : range * 0.15
-  return clampAxisRange({ min: min - padding, max: max + padding }, kind)
-}
-
-/** V2 — dynamic axis with threshold-inclusion guard. Axis always contains the divider, then clamped. */
+/** Dynamic axis that always includes the static quadrant divider, then clamped to 0–1 / 0–100. */
 export function computeAxisWithThreshold(
   values: number[],
   threshold: number,
@@ -619,26 +468,11 @@ export function computeAxisWithThreshold(
   return clampAxisRange({ min: min - padding, max: max + padding }, kind)
 }
 
-/** V3 — fully fixed axis. Ignores data entirely. */
-export function computeAxisFixed(kind: DriverAxisKind): AxisRange {
-  return boundsForAxis(kind)
-}
-
-/** V1 — dynamic median of plotted data, clamped to the legal range for that axis. */
-export function computeThresholdDynamic(values: number[], kind: DriverAxisKind): number {
-  if (values.length === 0) return boundsForAxis(kind).min
-  const sorted = values.map((value) => clampMetricValue(value, kind)).sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
-  return clampMetricValue(median, kind)
-}
-
-/** V2 and V3 — static constant. */
 export function getStaticThreshold(kind: 'impact' | 'performance'): number {
   return kind === 'impact' ? STATIC_IMPACT_THRESHOLD : STATIC_PERFORMANCE_THRESHOLD
 }
 
-/** Dynamic domain + median threshold with 2σ outlier removal. Unused by variant widgets. */
+/** Dynamic domain + median threshold with 2σ outlier removal. Unused by the widget. */
 export function computeAxisConfig(values: number[], padding = 0.15): AxisConfig {
   if (!values.length) return { min: 0, max: 1, threshold: 0.5 }
 
@@ -755,38 +589,16 @@ function scoreForRespondent(respondent: DashboardRespondent, metric: DriverMetri
   return clampScore(base + offset, metric.questionType)
 }
 
-/**
- * Respondent-level raw scores for a metric (respects dashboard filters).
- * Routes through the selected comparison dataset's generateScores so all
- * Driver Analysis variants swap data together.
- */
+/** Respondent-level raw scores for a metric (respects dashboard filters). */
 export function getRespondentMetricScores(
   metricId: string,
   activeFilters: ActiveFilter[] = [],
-  outcomeId?: string,
 ): number[] {
   const metric = getDriverMetricById(metricId)
   if (!metric || metric.excluded) return []
 
-  const datasetId = getCurrentDatasetId()
-  const dataset = getDatasetById(datasetId)
-  const respondents = dataset.respondentCount
-    ? Array.from({ length: dataset.respondentCount }, (_, index) => ({
-        id: `synth_${datasetId}_${index}`,
-      }))
-    : filterRespondents(activeFilters)
-  const respondentIds = respondents.map((respondent) => respondent.id)
-  const resolvedOutcomeId = outcomeId ?? dataset.outcomeOverride ?? metricId
-  const outcomeMetric = getDriverMetricById(resolvedOutcomeId)
-  const { driverScores } = generateScores(
-    datasetId,
-    metricId,
-    resolvedOutcomeId,
-    respondentIds,
-    metric.questionType,
-    outcomeMetric?.questionType ?? 'likert',
-  )
-  return driverScores
+  const respondents = filterRespondents(activeFilters)
+  return respondents.map((respondent) => scoreForRespondent(respondent, metric))
 }
 
 /**
@@ -816,8 +628,8 @@ export function getDriverImpact(
   if (driverId === outcomeId) return 1
   return Math.abs(
     pearsonR(
-      getRespondentMetricScores(driverId, activeFilters, outcomeId),
-      getRespondentMetricScores(outcomeId, activeFilters, outcomeId),
+      getRespondentMetricScores(driverId, activeFilters),
+      getRespondentMetricScores(outcomeId, activeFilters),
     ),
   )
 }

@@ -29,11 +29,34 @@ import type {
   SurveyStatus,
   SurveyType,
   Task,
+  WidgetType,
 } from '@/types'
 
 const CREATED_SURVEYS_STORAGE_KEY = 'pp_created_surveys'
 const CREATED_DASHBOARDS_STORAGE_KEY = 'pp_created_dashboards'
 const CREATED_INITIATIVES_STORAGE_KEY = 'pp_created_initiatives'
+const LEGACY_DRIVER_ANALYSIS_TYPES = new Set(['driver_analysis_v2', 'driver_analysis_v3'])
+const DRIVER_COMPARE_DASHBOARD_ID = 'dash_driver_variants_compare'
+
+function migrateWidgetType(type: string): WidgetType {
+  if (LEGACY_DRIVER_ANALYSIS_TYPES.has(type)) return 'driver_analysis'
+  return type as WidgetType
+}
+
+function migrateWidget(widget: DashboardWidget): DashboardWidget {
+  const type = migrateWidgetType(String(widget.type))
+  return type === widget.type ? widget : { ...widget, type }
+}
+
+function migrateDashboard(dashboard: Dashboard): Dashboard {
+  return {
+    ...dashboard,
+    tabs: dashboard.tabs.map((tab) => ({
+      ...tab,
+      widgets: tab.widgets.map(migrateWidget),
+    })),
+  }
+}
 
 function getCreatedSurveys(): LifecycleSurvey[] {
   if (typeof window === 'undefined') return []
@@ -189,7 +212,15 @@ export function loadDashboards(): Dashboard[] {
     if (stored) {
       const parsed = JSON.parse(stored) as Dashboard[]
       if (parsed.length > 0) {
-        return parsed
+        const withoutCompare = parsed.filter(
+          (dashboard) => dashboard.id !== DRIVER_COMPARE_DASHBOARD_ID,
+        )
+        const migrated = withoutCompare.map(migrateDashboard)
+        const changed =
+          withoutCompare.length !== parsed.length ||
+          migrated.some((dashboard, index) => dashboard !== withoutCompare[index])
+        if (changed) saveDashboards(migrated)
+        return migrated
       }
     }
   } catch {
@@ -230,7 +261,15 @@ export function getDashboardWidgets(dashboardId: ID, tabId: ID): DashboardWidget
       return getDefaultWidgets(dashboardId, tabId)
     }
     const parsed = JSON.parse(stored) as Record<string, DashboardWidget[]>
-    return parsed[tabId] ?? getDefaultWidgets(dashboardId, tabId)
+    let changed = false
+    const migrated: Record<string, DashboardWidget[]> = {}
+    for (const [tabId, widgets] of Object.entries(parsed)) {
+      const nextWidgets = widgets.map(migrateWidget)
+      if (nextWidgets.some((widget, index) => widget !== widgets[index])) changed = true
+      migrated[tabId] = nextWidgets
+    }
+    if (changed) saveDashboardWidgets(dashboardId, migrated)
+    return migrated[tabId] ?? getDefaultWidgets(dashboardId, tabId)
   } catch {
     return getDefaultWidgets(dashboardId, tabId)
   }

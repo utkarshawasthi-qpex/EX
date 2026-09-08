@@ -169,13 +169,7 @@ const ANALYTICS_TYPE_OPTIONS = [
 
 const NO_MARKERS_OPTION: SelectOption = { value: '', label: 'No markers available' }
 
-const DEFAULT_FULL_WIDTH_TYPES: WidgetType[] = [
-  'summary',
-  'scorecard',
-  'driver_analysis',
-  'driver_analysis_v2',
-  'driver_analysis_v3',
-]
+const DEFAULT_FULL_WIDTH_TYPES: WidgetType[] = ['summary', 'scorecard', 'driver_analysis']
 
 function getDataWidgets(widgets: DashboardWidget[]): DashboardWidget[] {
   return widgets.filter((widget) => widget.type !== 'summary' && widget.type !== 'notes')

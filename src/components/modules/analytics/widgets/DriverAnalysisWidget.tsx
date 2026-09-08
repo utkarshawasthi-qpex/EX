@@ -1,19 +1,9 @@
 'use client'
 
 /**
- * RECONCILE — Driver Analysis variants (adaptive / hybrid / fixed):
- * - CONFIRMED: axes currently via computeAxisConfig (data min/max + 15% padding, with
- *   2σ filter). Threshold = median of those values. Quote:
- *     `const range = dataMax - dataMin || 1; const pad = range * padding`
- *     `threshold = even ? (sorted[mid-1]+sorted[mid])/2 : sorted[mid]`
- *   Widget: `computeAxisConfig(dots.map((d) => d.x|y))`. V1 now uses
- *   computeAxisAdaptive + computeThresholdDynamic (same padding/median, no 2σ).
- * - CONFIRMED: widget type `'driver_analysis'` in WidgetType (`src/types/index.ts`)
- *   and WIDGET_CATALOG / WIDGET_COMPONENTS (`widgetRegistry.tsx`).
- * - CONFIRMED: overlapsOutcome, resolveItemsAtLevel, buildMetricTree,
- *   MIN_DRIVER_PLOT_POINTS, empty states live outside axis/threshold paths.
- * - CONFIRMED: picker enumerates WIDGET_CATALOG (AddWidgetModal `catalogItems`).
- * Variants share this component; only axis + threshold computation branches.
+ * Driver Analysis: dynamic axes (data range + padding, always includes the
+ * divider) and static quadrants at STATIC_IMPACT_THRESHOLD (0.5) /
+ * STATIC_PERFORMANCE_THRESHOLD (80%).
  */
 import { Fragment, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
@@ -30,22 +20,16 @@ import {
 } from 'recharts'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
 import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
-import type { ActiveFilter, DashboardWidget, DriverAnalysisVariant } from '@/types'
-import { useCurrentDataset } from '@/lib/datasetContext'
-import type { DatasetProfile } from '@/data/mock/driverAnalysisDatasets'
+import type { ActiveFilter, DashboardWidget } from '@/types'
 import {
   ANONYMITY_THRESHOLD,
   buildMetricTree,
-  computeAxisAdaptive,
-  computeAxisFixed,
   computeAxisWithThreshold,
-  computeThresholdDynamic,
   descendantQuestionsOf,
   getDriverImpact,
   getDriverMetricById,
   getEligibleDriverMetrics,
   getMetricFavorability,
-  getStaticThreshold,
   MIN_DRIVER_PLOT_POINTS,
   overlapsOutcome,
   resolveItemsAtLevel,
@@ -83,7 +67,6 @@ type QuadrantInfo = {
 
 type DriverAnalysisWidgetProps = {
   widget?: DashboardWidget
-  variant?: DriverAnalysisVariant
   activeFilters?: ActiveFilter[]
   onEdit?: () => void
   onDuplicate?: () => void
@@ -291,31 +274,6 @@ type ResolvedConfig = {
   outcomeMetricId: string
   outcomeLabel: string
   driverMetricIds: string[]
-  datasetOverrideNote?: string
-}
-
-function applyDatasetOverrides(resolved: ResolvedConfig, dataset: DatasetProfile): ResolvedConfig {
-  let { outcomeMetricId, outcomeLabel, driverMetricIds } = resolved
-  let datasetOverrideNote: string | undefined
-
-  if (dataset.outcomeOverride) {
-    const override = getDriverMetricById(dataset.outcomeOverride)
-    if (override && !override.excluded) {
-      outcomeMetricId = override.id
-      outcomeLabel = override.label
-      datasetOverrideNote = `Dataset override: outcome = ${override.label}`
-    }
-  }
-
-  if (dataset.driverSubset && dataset.driverSubset.length > 0) {
-    const subset = dataset.driverSubset.filter((id) => {
-      const metric = getDriverMetricById(id)
-      return Boolean(metric) && !metric?.excluded
-    })
-    if (subset.length > 0) driverMetricIds = subset
-  }
-
-  return { outcomeMetricId, outcomeLabel, driverMetricIds, datasetOverrideNote }
 }
 
 function resolveDriverConfig(config?: Record<string, unknown>): ResolvedConfig | null {
@@ -477,31 +435,18 @@ const linkButtonStyle: CSSProperties = {
 
 export function DriverAnalysisWidget({
   widget,
-  variant: variantProp,
   activeFilters = [],
   onEdit,
   onDuplicate,
   onDelete,
 }: DriverAnalysisWidgetProps) {
-  const variant: DriverAnalysisVariant =
-    variantProp ??
-    (widget?.type === 'driver_analysis_v2'
-      ? 'hybrid'
-      : widget?.type === 'driver_analysis_v3'
-        ? 'fixed'
-        : 'adaptive')
-  const { currentDataset, currentDatasetId } = useCurrentDataset()
   const title = widget?.title?.trim() || 'Driver analysis'
   const [showMetricList, setShowMetricList] = useState(false)
   const [level, setLevel] = useState<MetricLevel>('marker')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
   const [hoveredMetricId, setHoveredMetricId] = useState<string | null>(null)
 
-  const resolved = useMemo(() => {
-    const base = resolveDriverConfig(widget?.config)
-    if (!base) return null
-    return applyDatasetOverrides(base, currentDataset)
-  }, [currentDataset, widget?.config])
+  const resolved = useMemo(() => resolveDriverConfig(widget?.config), [widget?.config])
 
   const outcomeQuestions = useMemo(
     () =>
@@ -541,56 +486,30 @@ export function DriverAnalysisWidget({
       outcomeQuestions,
       activeFilters,
     )
-  }, [activeFilters, currentDatasetId, level, outcomeQuestions, resolved])
+  }, [activeFilters, level, outcomeQuestions, resolved])
 
-  const impactAxis: AxisRange = useMemo(() => {
-    const impacts = dots.map((n) => n.impact)
-    switch (variant) {
-      case 'adaptive':
-        return computeAxisAdaptive(impacts, 0.05, 'impact')
-      case 'hybrid':
-        return computeAxisWithThreshold(impacts, STATIC_IMPACT_THRESHOLD, 0.05, 'impact')
-      case 'fixed':
-        return computeAxisFixed('impact')
-    }
-  }, [dots, variant])
+  const impactAxis: AxisRange = useMemo(
+    () => computeAxisWithThreshold(dots.map((n) => n.impact), STATIC_IMPACT_THRESHOLD, 0.05, 'impact'),
+    [dots],
+  )
 
-  const performanceAxis: AxisRange = useMemo(() => {
-    const perfs = dots.map((n) => n.performance)
-    switch (variant) {
-      case 'adaptive':
-        return computeAxisAdaptive(perfs, 5, 'performance')
-      case 'hybrid':
-        return computeAxisWithThreshold(perfs, STATIC_PERFORMANCE_THRESHOLD, 5, 'performance')
-      case 'fixed':
-        return computeAxisFixed('performance')
-    }
-  }, [dots, variant])
+  const performanceAxis: AxisRange = useMemo(
+    () =>
+      computeAxisWithThreshold(
+        dots.map((n) => n.performance),
+        STATIC_PERFORMANCE_THRESHOLD,
+        5,
+        'performance',
+      ),
+    [dots],
+  )
 
-  const impactThreshold = useMemo(() => {
-    if (variant === 'adaptive') return computeThresholdDynamic(dots.map((n) => n.impact), 'impact')
-    return getStaticThreshold('impact')
-  }, [dots, variant])
+  const impactThreshold = STATIC_IMPACT_THRESHOLD
+  const performanceThreshold = STATIC_PERFORMANCE_THRESHOLD
 
-  const performanceThreshold = useMemo(() => {
-    if (variant === 'adaptive') {
-      return computeThresholdDynamic(dots.map((n) => n.performance), 'performance')
-    }
-    return getStaticThreshold('performance')
-  }, [dots, variant])
-
-  const subHeader = (() => {
-    if (!resolved) return ''
-    const base = `Impact on ${resolved.outcomeLabel}`
-    switch (variant) {
-      case 'adaptive':
-        return `${base} · Adaptive axes and quadrants (median-based)`
-      case 'hybrid':
-        return `${base} · Adaptive axes · Quadrants at ${STATIC_IMPACT_THRESHOLD} impact, ${STATIC_PERFORMANCE_THRESHOLD}% favorable`
-      case 'fixed':
-        return `${base} · Standard scale · Quadrants at ${STATIC_IMPACT_THRESHOLD} impact, ${STATIC_PERFORMANCE_THRESHOLD}% favorable`
-    }
-  })()
+  const subHeader = resolved
+    ? `Impact on ${resolved.outcomeLabel} · Adaptive axes · Quadrants at ${STATIC_IMPACT_THRESHOLD} impact, ${STATIC_PERFORMANCE_THRESHOLD}% favorable`
+    : ''
 
   const metricTree = useMemo(() => {
     if (!resolved) return [] as MetricTreeNode[]
@@ -601,7 +520,7 @@ export function DriverAnalysisWidget({
     )
     const filtered = clampMetricTreeValues(filterTreeByOverlap(tree, outcomeQuestions))
     return sortMetricTreeNodes(filtered, performanceThreshold, impactThreshold)
-  }, [activeFilters, currentDatasetId, outcomeQuestions, resolved, performanceThreshold, impactThreshold])
+  }, [activeFilters, outcomeQuestions, resolved, performanceThreshold, impactThreshold])
 
   const outcomeMetric = resolved
     ? getDriverMetricById(resolved.outcomeMetricId)
@@ -764,11 +683,6 @@ export function DriverAnalysisWidget({
         resolved ? (
           <span>
             {subHeader}
-            {resolved.datasetOverrideNote && (
-              <span className="mt-1 block text-xs text-amber-700">
-                {resolved.datasetOverrideNote}
-              </span>
-            )}
             {outcomeMetric?.kind === 'question' && (
               <span className="mt-1 block text-xs text-gray-500">
                 Single-question outcome — impact values are systematically smaller than against a

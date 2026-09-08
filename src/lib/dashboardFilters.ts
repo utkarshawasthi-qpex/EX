@@ -27,13 +27,8 @@ export {
   boundsForAxis,
   clampAxisRange,
   clampMetricValue,
-  computeAxisAdaptive,
   computeAxisConfig,
-  computeAxisFixed,
   computeAxisWithThreshold,
-  computeThresholdDynamic,
-  IMPACT_BOUNDS,
-  PERFORMANCE_BOUNDS,
   descendantQuestionsOf,
   DRIVER_CORRELATION_MATRIX,
   DRIVER_METRICS,
@@ -56,13 +51,6 @@ export {
   STATIC_IMPACT_THRESHOLD,
   STATIC_PERFORMANCE_THRESHOLD,
 } from '@/data/mock/driverAnalysis'
-export {
-  DATASETS,
-  DEFAULT_DATASET_ID,
-  generateScores,
-  getDatasetById,
-} from '@/data/mock/driverAnalysisDatasets'
-export type { DatasetId, DatasetProfile } from '@/data/mock/driverAnalysisDatasets'
 export type {
   AxisConfig,
   AxisRange,

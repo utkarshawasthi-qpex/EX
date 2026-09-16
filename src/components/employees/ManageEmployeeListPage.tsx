@@ -916,7 +916,12 @@ export function ManageEmployeeListPage() {
           ) : secondaryTab === 'custom-fields' ? (
             <CustomFieldsPage />
           ) : secondaryTab === 'filters' ? (
-            <EmployeeFiltersPage />
+            <EmployeeFiltersPage
+              onGoToFilterAccessRules={() => {
+                setPrimaryTab('Portal')
+                setPortalTab('permissions')
+              }}
+            />
           ) : (
             <div className="flex min-w-0 flex-1 flex-col px-6 py-4">
               <div className="mb-6 flex flex-wrap items-start justify-between gap-4">

@@ -60,13 +60,23 @@ export function getMatchingAccessRules(userId: string, rules: PortalAccessRule[]
   return rules.filter((rule) => rule.userIds.includes(userId))
 }
 
+export function getFilterAccessRulesUsingSavedFilter(
+  savedFilterId: string,
+  rules: PortalFilterAccessRule[] = getPortalSettings().filterAccessRules,
+): PortalFilterAccessRule[] {
+  return rules.filter((rule) =>
+    rule.audiences.some((audience) => audience.savedFilterId === savedFilterId),
+  )
+}
+
 function resolveAudiencePeopleGroups(
   audience: FilterAudience,
   savedFilters: EmployeeFilterPreset[],
 ): EmployeeFilterGroup[] {
-  if (audience.source === 'saved' && audience.savedFilterId) {
+  if (audience.source === 'saved') {
+    if (!audience.savedFilterId) return []
     const preset = savedFilters.find((filter) => filter.id === audience.savedFilterId)
-    if (preset) return preset.groups
+    return preset ? preset.groups : []
   }
   return audience.peopleGroups
 }

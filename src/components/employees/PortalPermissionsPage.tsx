@@ -158,7 +158,10 @@ function formatFilterAudiences(
         audience.source === 'saved'
           ? savedFilters.find((filter) => filter.id === audience.savedFilterId)?.name
           : undefined
-      const who = savedName ?? summarizeFilterGroups(audience.peopleGroups, fields)
+      const who =
+        audience.source === 'saved'
+          ? savedName ?? 'Missing employee group'
+          : summarizeFilterGroups(audience.peopleGroups, fields)
       return `${who} → ${getPortalFilterAccessLabels(audience.allowedFilterIds)}`
     })
     .join(' | ')

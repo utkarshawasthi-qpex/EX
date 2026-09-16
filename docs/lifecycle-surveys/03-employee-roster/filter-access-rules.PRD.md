@@ -115,6 +115,16 @@ These are the only fields a rule can grant. They map 1:1 to dashboard and tab fi
 
 Applies to dashboard-level and tab-level filters on in-app dashboards the user owns or that were shared with them. Does not apply to public anonymous share-link viewers.
 
+## Deleting an employee group
+
+Delete is blocked while the group is on any Filter access rule.
+
+- Modal title: `Can't delete employee group`
+- Body lists the rule names that use the group
+- CTA: `Go to Filter access rules` — switches to Portal → Permissions
+- After the group is removed from every rule, delete works as today (`Delete filter?` / removed from the Apply New dropdown)
+- A missing saved filter (already-orphaned data) matches nobody and shows as `Missing employee group` on the rule row
+
 ## Prototype implementation
 
 - UI: `src/components/employees/PortalPermissionsPage.tsx`, `src/components/employees/AccessRuleModal.tsx`
@@ -135,3 +145,4 @@ Applies to dashboard-level and tab-level filters on in-app dashboards the user o
 - Rule row edit and delete work. Filter group edit updates the shared Employee Filter.
 - There is no Import action on Filter access rules.
 - Public share-link filter UI is unchanged.
+- Deleting an employee group used by a Filter access rule is blocked and lists those rule names.

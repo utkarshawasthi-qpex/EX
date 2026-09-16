@@ -17,6 +17,7 @@ import {
   type EmployeeFilterGroup,
   type EmployeeFilterPreset,
 } from '@/data/mock-employee-filters'
+import { getFilterAccessRulesUsingSavedFilter } from '@/lib/portalAccess'
 import { useRosterStore } from '@/lib/rosterStore'
 
 const WuButton = dynamic(
@@ -32,7 +33,11 @@ const WuText = dynamic(
   { ssr: false },
 )
 
-export function EmployeeFiltersPage() {
+export function EmployeeFiltersPage({
+  onGoToFilterAccessRules,
+}: {
+  onGoToFilterAccessRules?: () => void
+}) {
   const { showToast } = useWuShowToast()
   const { employees, customFields, savedFilters, saveFilter, deleteFilter } = useRosterStore()
   const visibleCustomFields = useMemo(
@@ -64,6 +69,19 @@ export function EmployeeFiltersPage() {
   function openEdit(filter: EmployeeFilterPreset) {
     setEditingFilter(filter)
     setModalOpen(true)
+  }
+
+  const blockingRules = filterToDelete
+    ? getFilterAccessRulesUsingSavedFilter(filterToDelete.id)
+    : []
+  const isDeleteBlocked = blockingRules.length > 0
+
+  function deleteBlockedDescription(name: string) {
+    const ruleNames = blockingRules.map((rule) => rule.name).join(', ')
+    if (blockingRules.length === 1) {
+      return `${name} is used in 1 filter access rule: ${ruleNames}. Remove it from the rule first.`
+    }
+    return `${name} is used in ${blockingRules.length} filter access rules: ${ruleNames}. Remove it from those rules first.`
   }
 
   const columns: IWuTableColumnDef<EmployeeFilterPreset>[] = [
@@ -172,16 +190,23 @@ export function EmployeeFiltersPage() {
         onOpenChange={(open) => {
           if (!open) setFilterToDelete(null)
         }}
-        title="Delete filter?"
+        title={isDeleteBlocked ? "Can't delete employee group" : 'Delete filter?'}
         description={
           filterToDelete
-            ? `${filterToDelete.name} will be removed from the Apply New dropdown.`
+            ? isDeleteBlocked
+              ? deleteBlockedDescription(filterToDelete.name)
+              : `${filterToDelete.name} will be removed from the Apply New dropdown.`
             : 'This filter will be removed.'
         }
-        confirmLabel="Delete"
-        variant="critical"
+        confirmLabel={isDeleteBlocked ? 'Go to Filter access rules' : 'Delete'}
+        variant={isDeleteBlocked ? 'action' : 'critical'}
         onConfirm={() => {
           if (!filterToDelete) return
+          if (isDeleteBlocked) {
+            setFilterToDelete(null)
+            onGoToFilterAccessRules?.()
+            return
+          }
           deleteFilter(filterToDelete.id)
           setFilterToDelete(null)
           showToast({ message: 'Filter deleted', variant: 'success' })

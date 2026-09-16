@@ -333,7 +333,6 @@ export function CreateInitiativeModal({
       open={open}
       onOpenChange={handleOpenChange}
       size="lg"
-      preventClickOutside
       maxWidth="720px"
       {...preventModalDismiss}
     >

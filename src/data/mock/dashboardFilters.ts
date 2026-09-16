@@ -13,6 +13,7 @@ import {
   type ScorecardMarker,
 } from '@/data/mock/categorySentimentData'
 import type { ActiveFilter, FilterField } from '@/types'
+import { applyRespondentAccessScope } from '@/lib/portalAccess'
 
 export const DASHBOARD_FILTER_FIELDS: FilterField[] = [
   {
@@ -155,20 +156,25 @@ export function activeFiltersToLabels(activeFilters: ActiveFilter[]): string[] {
 }
 
 export function filterRespondents(activeFilters: ActiveFilter[]): DashboardRespondent[] {
-  if (activeFilters.length === 0) return mockDashboardRespondents
+  let respondents: DashboardRespondent[]
+  if (activeFilters.length === 0) {
+    respondents = mockDashboardRespondents
+  } else {
+    const byField = activeFilters.reduce<Record<string, string[]>>((acc, filter) => {
+      acc[filter.fieldId] = acc[filter.fieldId] ?? []
+      acc[filter.fieldId].push(filter.value)
+      return acc
+    }, {})
 
-  const byField = activeFilters.reduce<Record<string, string[]>>((acc, filter) => {
-    acc[filter.fieldId] = acc[filter.fieldId] ?? []
-    acc[filter.fieldId].push(filter.value)
-    return acc
-  }, {})
+    respondents = mockDashboardRespondents.filter((respondent) =>
+      Object.entries(byField).every(([fieldId, values]) => {
+        const fieldValue = respondent[fieldId as keyof DashboardRespondent]
+        return values.includes(String(fieldValue))
+      }),
+    )
+  }
 
-  return mockDashboardRespondents.filter((respondent) =>
-    Object.entries(byField).every(([fieldId, values]) => {
-      const fieldValue = respondent[fieldId as keyof DashboardRespondent]
-      return values.includes(String(fieldValue))
-    }),
-  )
+  return applyRespondentAccessScope(respondents)
 }
 
 export function meetsAnonymityThreshold(activeFilters: ActiveFilter[]): boolean {

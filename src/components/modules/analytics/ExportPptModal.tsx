@@ -140,9 +140,9 @@ export function ExportPptModal({
   }
 
   return (
-    <WuModal open={open} onOpenChange={(isOpen) => !isOpen && onClose()} size="md">
+    <WuModal open={open} onOpenChange={(isOpen) => !isOpen && onClose()} size="md" {...preventModalDismiss}>
       <WuModalHeader>Export tab as PowerPoint</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         {activeTemplate && (
           <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
             <div className="flex items-center justify-between gap-3">

@@ -95,9 +95,10 @@ export function SharedDashboardFilterModal({
       variant="action"
       size="lg"
       maxWidth="880px"
+      {...preventModalDismiss}
     >
       <WuModalHeader>Filters</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         <div>
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">

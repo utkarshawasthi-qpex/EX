@@ -6,6 +6,8 @@
  * STATIC_PERFORMANCE_THRESHOLD (80%).
  */
 import { Fragment, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { canSeeDriverAnalysisColorCode } from '@/lib/portalAccess'
+import { usePortalSettings } from '@/lib/portalSettingsStore'
 import {
   CartesianGrid,
   Label,
@@ -135,11 +137,13 @@ function DriverTooltip({
   payload,
   xThreshold,
   yThreshold,
+  showColorCode,
 }: {
   active?: boolean
   payload?: Array<{ payload?: DotPoint }>
   xThreshold: number
   yThreshold: number
+  showColorCode: boolean
 }) {
   if (!active || !payload?.length) return null
   const d = payload[0]?.payload
@@ -194,18 +198,20 @@ function DriverTooltip({
         <span>Impact</span>
         <span style={{ color: '#1B2E4A', fontWeight: 500 }}>{impact.toFixed(3)}</span>
       </div>
-      <span
-        style={{
-          fontSize: 11,
-          padding: '2px 8px',
-          borderRadius: 10,
-          background: q.bg,
-          color: q.color,
-          fontWeight: 500,
-        }}
-      >
-        {q.label}
-      </span>
+      {showColorCode ? (
+        <span
+          style={{
+            fontSize: 11,
+            padding: '2px 8px',
+            borderRadius: 10,
+            background: q.bg,
+            color: q.color,
+            fontWeight: 500,
+          }}
+        >
+          {q.label}
+        </span>
+      ) : null}
     </div>
   )
 }
@@ -215,6 +221,7 @@ function makeQuadrantDot(
   yThreshold: number,
   level: MetricLevel,
   hoveredMetricId: string | null,
+  showColorCode: boolean,
 ) {
   const radius = DOT_RADIUS[level]
   const ringRadius = radius + 5
@@ -234,7 +241,7 @@ function makeQuadrantDot(
 
     return (
       <g>
-        {isPriority && (
+        {showColorCode && isPriority && (
           <circle
             cx={cx}
             cy={cy}
@@ -440,6 +447,8 @@ export function DriverAnalysisWidget({
   onDuplicate,
   onDelete,
 }: DriverAnalysisWidgetProps) {
+  const { portalAccess } = usePortalSettings()
+  const showColorCode = canSeeDriverAnalysisColorCode(portalAccess)
   const title = widget?.title?.trim() || 'Driver analysis'
   const [showMetricList, setShowMetricList] = useState(false)
   const [level, setLevel] = useState<MetricLevel>('marker')
@@ -540,8 +549,8 @@ export function DriverAnalysisWidget({
   const isEmpty = noDriversSelected || allExcludedByOverlap || tooFewPoints || belowAnonymity
 
   const QuadrantDot = useMemo(
-    () => makeQuadrantDot(performanceThreshold, impactThreshold, level, hoveredMetricId),
-    [hoveredMetricId, level, performanceThreshold, impactThreshold],
+    () => makeQuadrantDot(performanceThreshold, impactThreshold, level, hoveredMetricId, showColorCode),
+    [hoveredMetricId, level, performanceThreshold, impactThreshold, showColorCode],
   )
 
   const toggleNode = useCallback((id: string) => {
@@ -596,7 +605,7 @@ export function DriverAnalysisWidget({
             paddingLeft: 4 + depth * 18,
             paddingTop: 4,
             paddingBottom: 4,
-            borderLeft: isPriority ? '3px solid #EF4444' : '3px solid transparent',
+            borderLeft: showColorCode && isPriority ? '3px solid #EF4444' : '3px solid transparent',
             cursor: hasChildren ? 'pointer' : 'default',
           }}
         >
@@ -628,6 +637,7 @@ export function DriverAnalysisWidget({
           {node.impact.toFixed(3)}
         </span>
 
+        {showColorCode ? (
         <span
           style={{
             fontSize: 11,
@@ -640,6 +650,7 @@ export function DriverAnalysisWidget({
         >
           {q.label}
         </span>
+        ) : null}
 
         {isExpanded &&
           node.children.map((child) => (
@@ -817,6 +828,7 @@ export function DriverAnalysisWidget({
                       <DriverTooltip
                         xThreshold={performanceThreshold}
                         yThreshold={impactThreshold}
+                        showColorCode={showColorCode}
                       />
                     }
                     cursor={{ strokeDasharray: '3 3' }}
@@ -826,6 +838,8 @@ export function DriverAnalysisWidget({
                 </ScatterChart>
               </ResponsiveContainer>
 
+              {showColorCode ? (
+                <>
               <div
                 style={{
                   ...cornerStyle,
@@ -871,6 +885,8 @@ export function DriverAnalysisWidget({
               >
                 Maintain
               </div>
+                </>
+              ) : null}
             </div>
 
                 <div

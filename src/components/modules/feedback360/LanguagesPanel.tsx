@@ -147,9 +147,10 @@ export function LanguagesPanel({ survey, onChange }: LanguagesPanelProps) {
         variant="action"
         size="lg"
         maxWidth="760px"
+        {...preventModalDismiss}
       >
         <WuModalHeader>Add Language Version</WuModalHeader>
-        <WuModalContent {...preventModalDismiss}>
+        <WuModalContent>
           <div className="grid max-h-[420px] grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">
             {ADD_LANGUAGE_OPTIONS.map((language) => {
               const alreadyAdded = survey.languages.includes(language)

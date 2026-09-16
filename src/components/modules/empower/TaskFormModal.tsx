@@ -93,9 +93,9 @@ export function TaskFormModal({
   }
 
   return (
-    <WuModal open={open} onOpenChange={onOpenChange} size="md">
+    <WuModal open={open} onOpenChange={onOpenChange} size="md" {...preventModalDismiss}>
       <WuModalHeader>{task ? 'Edit task' : 'Create task'}</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         <div className="space-y-4">
           <WuFormGroup
             Label="Task name"

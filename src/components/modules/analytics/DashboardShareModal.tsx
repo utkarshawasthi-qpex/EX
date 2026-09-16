@@ -476,6 +476,7 @@ export function DashboardShareModal({
         variant="action"
         size="lg"
         maxWidth="960px"
+        {...preventModalDismiss}
       >
         <WuModalHeader>
           {view === 'list' ? (
@@ -494,7 +495,7 @@ export function DashboardShareModal({
             </div>
           )}
         </WuModalHeader>
-        <WuModalContent {...preventModalDismiss}>
+        <WuModalContent>
           {view === 'list' ? (
             <div className="space-y-4">
               <WuText size="sm" as="p" className="text-gray-500">

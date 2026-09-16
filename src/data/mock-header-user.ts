@@ -7,4 +7,11 @@ export const MOCK_HEADER_USER: IWuAppHeaderAccount = {
     initials: 'UA',
     companyName: 'QuestionPro',
   },
+  settings: [
+    {
+      canDisplay: true,
+      title: 'Account settings',
+      url: '/lifecycle/settings',
+    },
+  ],
 };

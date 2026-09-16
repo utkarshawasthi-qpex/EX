@@ -384,9 +384,9 @@ export function CreateActionPlanModal({
   }
 
   return (
-    <WuModal open={open} onOpenChange={(v) => !v && handleClose()} size="md">
+    <WuModal open={open} onOpenChange={(v) => !v && handleClose()} size="md" {...preventModalDismiss}>
       <WuModalHeader>Create Action Plan</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         {createdId && successKind ? (
           <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
             <WuText size="sm" as="p" className="font-medium text-green-800">

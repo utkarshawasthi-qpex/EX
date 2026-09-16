@@ -76,11 +76,12 @@ export function ShareTabFilterModal({
       variant="action"
       size="md"
       maxWidth="720px"
+      {...preventModalDismiss}
     >
       <WuModalHeader>
         <span className="text-[#1B2E4A]">{title}</span>
       </WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         <div className="py-2">
           <FilterConditionBuilder
             conditions={conditions}

@@ -1,5 +1,7 @@
-import { PlaceholderPage } from '@/components/shared/PlaceholderPage'
+'use client'
+
+import { StudiesListPage } from '@/components/studies/StudiesListPage'
 
 export default function LifecycleHomePage() {
-  return <PlaceholderPage title="Lifecycle Surveys" />
+  return <StudiesListPage />
 }

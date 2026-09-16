@@ -69,9 +69,10 @@ export function Create360SurveyModal({ open, onClose, onSelect }: Create360Surve
       variant="action"
       size="md"
       maxWidth="640px"
+      {...preventModalDismiss}
     >
       <WuModalHeader>Create survey</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         <WuText size="sm" as="p" className="mb-4 text-gray-500">
           Choose how you want to start. Either option opens the survey editor.
         </WuText>

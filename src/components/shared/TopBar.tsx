@@ -10,38 +10,56 @@ import { getCurrentUser, type AppUser } from '@/lib/userContext'
 type TopBarProps = {
   isSidebarCollapsed: boolean
   onToggleSidebar: () => void
+  showSidebarToggle?: boolean
 }
 
 function getModuleName(pathname: string) {
-  if (pathname.startsWith('/lifecycle/analytics')) return 'Analytics Portal'
   if (pathname.startsWith('/360')) return '360 Feedback'
   if (pathname.startsWith('/empower')) return 'Empower'
-  return 'Lifecycle Surveys'
+  return 'Employee Experience'
 }
 
 function getBreadcrumbs(pathname: string) {
   if (pathname.startsWith('/lifecycle/roster/')) {
     return [
-      { label: 'New folks', href: '/lifecycle/roster' },
+      { label: 'New folks', href: '/lifecycle' },
       { label: 'Employee Profile', href: pathname },
     ]
   }
   if (pathname.startsWith('/lifecycle/roster')) {
     return [
-      { label: 'New folks', href: '/lifecycle/roster' },
+      { label: 'New folks', href: '/lifecycle' },
       { label: 'Manage Employee List', href: '/lifecycle/roster' },
     ]
   }
   if (pathname.startsWith('/lifecycle/surveys')) {
     return [
-      { label: 'New folks', href: '/lifecycle/surveys' },
+      { label: 'New folks', href: '/lifecycle' },
       { label: 'Surveys', href: '/lifecycle/surveys' },
     ]
   }
   if (pathname.startsWith('/lifecycle/rules')) {
     return [
-      { label: 'New folks', href: '/lifecycle/rules' },
+      { label: 'New folks', href: '/lifecycle' },
       { label: 'Rules', href: '/lifecycle/rules' },
+    ]
+  }
+  if (pathname.startsWith('/lifecycle/distribution')) {
+    return [
+      { label: 'New folks', href: '/lifecycle' },
+      { label: 'Distribution', href: '/lifecycle/distribution' },
+    ]
+  }
+  if (pathname.startsWith('/lifecycle/settings')) {
+    return [
+      { label: 'New folks', href: '/lifecycle' },
+      { label: 'Settings', href: '/lifecycle/settings' },
+    ]
+  }
+  if (pathname.startsWith('/lifecycle/analytics')) {
+    return [
+      { label: 'New folks', href: '/lifecycle' },
+      { label: 'Analytics', href: '/lifecycle/analytics' },
     ]
   }
   if (pathname.startsWith('/360')) {
@@ -56,10 +74,14 @@ function getBreadcrumbs(pathname: string) {
       { label: pathname.includes('/tasks') ? 'My Tasks' : 'Initiatives', href: pathname },
     ]
   }
-  return [{ label: 'New folks', href: '/lifecycle/surveys' }]
+  return [{ label: 'New folks', href: '/lifecycle' }]
 }
 
-export function TopBar({ isSidebarCollapsed, onToggleSidebar }: TopBarProps) {
+export function TopBar({
+  isSidebarCollapsed,
+  onToggleSidebar,
+  showSidebarToggle = true,
+}: TopBarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { showToast } = useWuShowToast()
@@ -86,22 +108,23 @@ export function TopBar({ isSidebarCollapsed, onToggleSidebar }: TopBarProps) {
       <div
         className={cn(
           'flex shrink-0 items-center gap-2 bg-[#1a6b8a] px-3 transition-all',
-          isSidebarCollapsed ? 'w-16 justify-center' : 'w-60',
+          showSidebarToggle ? (isSidebarCollapsed ? 'w-16 justify-center' : 'w-60') : 'w-auto',
         )}
       >
-        <button type="button" className="font-semibold text-white" onClick={() => router.push('/lifecycle/surveys')} aria-label="Home">
+        <button type="button" className="font-semibold text-white" onClick={() => router.push('/lifecycle')} aria-label="Home">
           P
         </button>
         <ProductSwitcher
           activeLabel={currentModuleName}
           triggerClassName={cn(
             'items-center gap-2 rounded-md px-1 py-1 text-xs font-medium text-white hover:bg-white/10',
-            isSidebarCollapsed ? 'hidden' : 'flex',
+            showSidebarToggle && isSidebarCollapsed ? 'hidden' : 'flex',
           )}
           chevronClassName="text-xs text-white/70"
         />
       </div>
 
+      {showSidebarToggle && (
       <button
         type="button"
         className="flex w-8 items-center justify-center border-r border-white/10 text-white/80 hover:bg-white/10"
@@ -110,6 +133,7 @@ export function TopBar({ isSidebarCollapsed, onToggleSidebar }: TopBarProps) {
       >
         <span className={isSidebarCollapsed ? 'wm-keyboard-arrow-right' : 'wm-keyboard-arrow-left'} aria-hidden />
       </button>
+      )}
 
       <nav className="flex min-w-0 flex-1 items-center gap-2 px-4 text-xs">
         {breadcrumbs.map((crumb, index) => (
@@ -134,12 +158,12 @@ export function TopBar({ isSidebarCollapsed, onToggleSidebar }: TopBarProps) {
           type="button"
           className="wm-search flex size-7 items-center justify-center rounded-full border border-white/30 text-sm text-white"
           aria-label="Search"
-          onClick={() => console.log('Search clicked')}
+          onClick={() => showToast({ variant: 'info', message: 'Search opened' })}
         />
         <button
           type="button"
           className="rounded-full bg-[#ffb21a] px-3 py-1 text-xs font-semibold text-white"
-          onClick={() => console.log('Upgrade Now clicked')}
+          onClick={() => showToast({ variant: 'info', message: 'Upgrade options opened' })}
         >
           Upgrade Now
         </button>
@@ -147,7 +171,7 @@ export function TopBar({ isSidebarCollapsed, onToggleSidebar }: TopBarProps) {
           type="button"
           className="flex size-7 items-center justify-center rounded-full border border-white/30 text-sm text-white"
           aria-label="Help"
-          onClick={() => console.log('Help clicked')}
+          onClick={() => showToast({ variant: 'info', message: 'Help opened' })}
         >
           ?
         </button>

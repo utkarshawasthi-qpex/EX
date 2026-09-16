@@ -106,9 +106,9 @@ export function SummarySettingsModal({
   }
 
   return (
-    <WuModal open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()} size="md">
+    <WuModal open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()} size="md" {...preventModalDismiss}>
       <WuModalHeader>Summary Widget Settings</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         <SummaryAdminSettingsFields
           values={values}
           onChange={(patch) => setValues((current) => ({ ...current, ...patch }))}

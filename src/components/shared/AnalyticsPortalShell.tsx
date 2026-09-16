@@ -2,8 +2,16 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react'
-import { TopBar } from '@/components/shared/TopBar'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { PortalAppHeader } from '@/components/portal/PortalAppHeader'
+import { PortalAppFooter } from '@/components/portal/PortalAppFooter'
+import {
+  getPortalCmsHref,
+  getPortalMainTabPages,
+  getPortalPageCopy,
+  getPortalThemeColor,
+} from '@/data/mock-portal-settings'
+import { usePortalSettings } from '@/lib/portalSettingsStore'
 import { isAdminContext } from '@/lib/userContext'
 import { cn } from '@/lib/utils'
 
@@ -34,7 +42,7 @@ const imgSettings =
 type NavItem = {
   label: string
   href: string
-  icon: 'dashboard' | 'balance' | 'lineGraph' | 'ppt' | 'orgContext' | 'admin' | 'settings'
+  icon: 'dashboard' | 'balance' | 'lineGraph' | 'ppt' | 'orgContext' | 'admin' | 'settings' | 'page'
   adminOnly?: boolean
   isActive: (pathname: string) => boolean
 }
@@ -46,6 +54,7 @@ const RESERVED_ANALYTICS_SEGMENTS = new Set([
   'settings',
   'admin',
   'org-context',
+  'pages',
 ])
 
 function isDashboardsActive(pathname: string): boolean {
@@ -127,29 +136,48 @@ function IconWithFallback({
   )
 }
 
+function PageIcon({ className }: { className?: string }) {
+  return <span className={cn('wm-description text-[20px] leading-none', className)} aria-hidden />
+}
+
 function NavIcon({
   icon,
   active,
+  accentColor,
 }: {
   icon: NavItem['icon']
   active: boolean
+  accentColor: string
 }) {
+  const color = active ? accentColor : '#545E6B'
+  let inner: ReactNode
   switch (icon) {
     case 'dashboard':
-      return <DashboardIcon className={active ? 'text-[#1B87E6]' : 'text-[#545E6B]'} />
+      inner = <DashboardIcon />
+      break
+    case 'page':
+      inner = <PageIcon />
+      break
     case 'orgContext':
-      return <OrgContextIcon className={active ? 'text-[#1B87E6]' : 'text-[#545E6B]'} />
+      inner = <OrgContextIcon />
+      break
     case 'balance':
-      return <IconWithFallback src={imgBalance} fallbackIcon="balance" active={active} />
+      inner = <IconWithFallback src={imgBalance} fallbackIcon="balance" active={active} />
+      break
     case 'lineGraph':
-      return <IconWithFallback src={imgLineGraph} fallbackIcon="lineGraph" active={active} />
+      inner = <IconWithFallback src={imgLineGraph} fallbackIcon="lineGraph" active={active} />
+      break
     case 'ppt':
-      return <IconWithFallback src={imgFileTypePpt} fallbackIcon="ppt" active={active} />
+      inner = <IconWithFallback src={imgFileTypePpt} fallbackIcon="ppt" active={active} />
+      break
     case 'admin':
-      return <IconWithFallback src={imgShieldPerson} fallbackIcon="admin" active={active} />
+      inner = <IconWithFallback src={imgShieldPerson} fallbackIcon="admin" active={active} />
+      break
     case 'settings':
-      return <IconWithFallback src={imgSettings} fallbackIcon="settings" active={active} />
+      inner = <IconWithFallback src={imgSettings} fallbackIcon="settings" active={active} />
+      break
   }
+  return <span style={{ color }}>{inner}</span>
 }
 
 function NavIconFallback({ icon, active }: { icon: NavItem['icon']; active: boolean }) {
@@ -173,9 +201,11 @@ function NavIconFallback({ icon, active }: { icon: NavItem['icon']; active: bool
 function CollapsedNavItem({
   item,
   pathname,
+  accentColor,
 }: {
   item: NavItem
   pathname: string
+  accentColor: string
 }) {
   const [showTooltip, setShowTooltip] = useState(false)
   const active = item.isActive(pathname)
@@ -194,7 +224,7 @@ function CollapsedNavItem({
           active && 'bg-[rgba(27,135,230,0.08)]',
         )}
       >
-        <NavIcon icon={item.icon} active={active} />
+        <NavIcon icon={item.icon} active={active} accentColor={accentColor} />
       </Link>
       {showTooltip && (
         <div className="absolute left-14 z-50 whitespace-nowrap rounded bg-[#1F2E4D] px-2 py-1 text-xs text-white">
@@ -208,9 +238,11 @@ function CollapsedNavItem({
 function ExpandedNavItem({
   item,
   pathname,
+  accentColor,
 }: {
   item: NavItem
   pathname: string
+  accentColor: string
 }) {
   const active = item.isActive(pathname)
 
@@ -219,11 +251,12 @@ function ExpandedNavItem({
       href={item.href}
       className={cn(
         'flex h-8 w-[224px] items-center rounded-[2px] px-1.5',
-        active ? 'bg-[rgba(27,135,230,0.08)] font-medium text-[#1B87E6]' : 'font-normal text-[#545E6B]',
+        active ? 'bg-[rgba(27,135,230,0.08)] font-medium' : 'font-normal text-[#545E6B]',
       )}
+      style={active ? { color: accentColor } : undefined}
     >
       <span className="flex size-8 shrink-0 items-center justify-center">
-        <NavIcon icon={item.icon} active={active} />
+        <NavIcon icon={item.icon} active={active} accentColor={accentColor} />
       </span>
       <span className="font-['Fira_Sans',sans-serif] text-[14px] leading-4">{item.label}</span>
     </Link>
@@ -244,10 +277,14 @@ function AnalyticsSidebar({
   pathname,
   isExpanded,
   onToggle,
+  extraAnalyticsItems,
+  accentColor,
 }: {
   pathname: string
   isExpanded: boolean
   onToggle: () => void
+  extraAnalyticsItems: NavItem[]
+  accentColor: string
 }) {
   const showAdmin = isAdminContext()
   const showOrgContext = isAdminContext()
@@ -259,6 +296,7 @@ function AnalyticsSidebar({
       icon: 'dashboard',
       isActive: isDashboardsActive,
     },
+    ...extraAnalyticsItems,
   ]
 
   const dataItems: NavItem[] = [
@@ -319,12 +357,11 @@ function AnalyticsSidebar({
   return (
     <aside
       className={cn(
-        'fixed left-0 top-10 z-30 flex flex-col bg-[#EEF3FB] transition-[width] duration-200 ease-in-out',
+        'fixed bottom-[2.25rem] left-0 top-12 z-30 flex flex-col bg-[#EEF3FB] transition-[width] duration-200 ease-in-out',
         isExpanded ? 'w-[240px]' : 'w-12',
       )}
       style={{
         boxShadow: SIDEBAR_SHADOW,
-        height: 'calc(100vh - 2.5rem)',
       }}
     >
       <div className="flex h-12 shrink-0 items-center px-2">
@@ -342,12 +379,22 @@ function AnalyticsSidebar({
         <>
           <nav className="flex flex-col overflow-hidden pt-8">
             {collapsedNavItems.map((item) => (
-              <CollapsedNavItem key={item.label} item={item} pathname={pathname} />
+              <CollapsedNavItem
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                accentColor={accentColor}
+              />
             ))}
           </nav>
           <nav className="mt-auto flex flex-col pb-4">
             {collapsedSystemItems.map((item) => (
-              <CollapsedNavItem key={item.label} item={item} pathname={pathname} />
+              <CollapsedNavItem
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                accentColor={accentColor}
+              />
             ))}
           </nav>
         </>
@@ -356,20 +403,35 @@ function AnalyticsSidebar({
           <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2">
             <SectionLabel>Analytics</SectionLabel>
             {analyticsItems.map((item) => (
-              <ExpandedNavItem key={item.label} item={item} pathname={pathname} />
+              <ExpandedNavItem
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                accentColor={accentColor}
+              />
             ))}
 
             <div className="mt-2">
               <SectionLabel>Data</SectionLabel>
               {dataItems.map((item) => (
-                <ExpandedNavItem key={item.label} item={item} pathname={pathname} />
+                <ExpandedNavItem
+                  key={item.href}
+                  item={item}
+                  pathname={pathname}
+                  accentColor={accentColor}
+                />
               ))}
             </div>
           </nav>
 
           <nav className="shrink-0 px-2 pb-4 pt-2">
             {systemItems.map((item) => (
-              <ExpandedNavItem key={item.label} item={item} pathname={pathname} />
+              <ExpandedNavItem
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                accentColor={accentColor}
+              />
             ))}
           </nav>
         </>
@@ -380,8 +442,16 @@ function AnalyticsSidebar({
 
 export function AnalyticsPortalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const { pages, globalPages, language } = usePortalSettings()
   const [isExpanded, setIsExpanded] = useState(false)
   const [isHydrated, setIsHydrated] = useState(false)
+  const accentColor = getPortalThemeColor(globalPages)
+  const extraAnalyticsItems: NavItem[] = getPortalMainTabPages(pages).map((page) => ({
+    label: getPortalPageCopy(page, language).title,
+    href: getPortalCmsHref(page.id),
+    icon: 'page',
+    isActive: (path) => path === getPortalCmsHref(page.id),
+  }))
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -403,23 +473,29 @@ export function AnalyticsPortalShell({ children }: { children: React.ReactNode }
   const sidebarExpanded = isHydrated ? isExpanded : false
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <TopBar isSidebarCollapsed={!sidebarExpanded} onToggleSidebar={toggleSidebar} />
+    <div
+      className="flex min-h-screen flex-col"
+      style={{ ['--portal-accent' as string]: accentColor }}
+    >
+      <PortalAppHeader />
       <div className="relative min-h-0 flex-1">
         <AnalyticsSidebar
           pathname={pathname}
           isExpanded={sidebarExpanded}
           onToggle={toggleSidebar}
+          extraAnalyticsItems={extraAnalyticsItems}
+          accentColor={accentColor}
         />
         <main
           className={cn(
-            'h-[calc(100vh-2.5rem)] min-w-0 overflow-auto bg-white transition-[margin-left] duration-200 ease-in-out',
+            'h-full min-w-0 overflow-auto bg-white transition-[margin-left] duration-200 ease-in-out',
             sidebarExpanded ? 'ml-[240px]' : 'ml-12',
           )}
         >
           {children}
         </main>
       </div>
+      <PortalAppFooter />
     </div>
   )
 }

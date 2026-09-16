@@ -4,7 +4,8 @@ import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { EmpowerAnalyticsPanel } from '@/components/empower/EmpowerAnalyticsPanel'
 import { EmpowerNav } from '@/components/empower/EmpowerNav'
-import { EmpowerTopBar } from '@/components/empower/EmpowerTopBar'
+import { ExAppHeader } from '@/components/studies/ExAppHeader'
+import { AppFooter } from '@/components/shared/AppFooter'
 
 const SIDEBAR_STORAGE_KEY = 'pp_empower_sidebar_expanded'
 
@@ -34,12 +35,13 @@ export function EmpowerShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <EmpowerTopBar />
+      <ExAppHeader />
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <EmpowerNav collapsed={!sidebarExpanded} onToggle={toggleSidebar} />
         <main className="min-w-0 flex-1 overflow-y-auto bg-white">{children}</main>
         {pathname === '/empower' && <EmpowerAnalyticsPanel />}
       </div>
+      <AppFooter />
     </div>
   )
 }

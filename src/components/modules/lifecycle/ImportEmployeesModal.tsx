@@ -35,9 +35,9 @@ type ImportEmployeesModalProps = {
 
 export function ImportEmployeesModal({ open, onOpenChange }: ImportEmployeesModalProps) {
   return (
-    <WuModal open={open} onOpenChange={onOpenChange} size="md">
+    <WuModal open={open} onOpenChange={onOpenChange} size="md" {...preventModalDismiss}>
       <WuModalHeader>Import Employees</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-8 text-center">
           <span className="wc-data-import text-4xl text-blue-600" aria-hidden />
           <WuText size="lg" as="div" className="mt-4 font-medium text-gray-900">

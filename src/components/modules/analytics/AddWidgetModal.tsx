@@ -1447,7 +1447,7 @@ export function AddWidgetModal({
   }
 
   return (
-    <WuModal open={open} onOpenChange={handleModalOpenChange} size="lg">
+    <WuModal open={open} onOpenChange={handleModalOpenChange} size="lg" {...preventModalDismiss}>
       <WuModalHeader>
         <span className="flex items-center gap-2">
           {selectedType ? getWidgetDisplayName(selectedType) : 'Add widget'}
@@ -1456,7 +1456,7 @@ export function AddWidgetModal({
           </button>
         </span>
       </WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>{renderStepContent()}</WuModalContent>
+      <WuModalContent>{renderStepContent()}</WuModalContent>
       <WuModalFooter>
         <div className="flex w-full items-center justify-between gap-4">
           <WidgetStepIndicator currentStep={step} steps={flowSteps} />

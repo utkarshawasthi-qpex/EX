@@ -4,8 +4,9 @@ import dynamic from 'next/dynamic'
 import { format } from 'date-fns'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
-import type { IWuTableColumnDef } from '@npm-questionpro/wick-ui-lib'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
+import { DashboardShareModal } from '@/components/modules/analytics/DashboardShareModal'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import {
   loadDashboards,
   saveCreatedDashboard,
@@ -16,11 +17,9 @@ import {
 import { seedDefaultDashboardsIfNeeded } from '@/lib/seedDashboards'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { getCurrentUser, isAdminContext } from '@/lib/userContext'
+import { canCreatePortalDashboard } from '@/lib/portalAccess'
+import { usePortalSettings } from '@/lib/portalSettingsStore'
 import { cn } from '@/lib/utils'
-import { PageCard } from '@/components/shared/PageCard'
-import { PageContent } from '@/components/shared/PageContent'
-import { PageHeader } from '@/components/shared/PageHeader'
-import { PageShell } from '@/components/shared/PageShell'
 import type { Dashboard, DashboardAccess } from '@/types'
 
 const WuButton = dynamic(
@@ -29,10 +28,6 @@ const WuButton = dynamic(
 )
 const WuCheckbox = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuCheckbox })),
-  { ssr: false },
-)
-const WuDataTable = dynamic(
-  () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuDataTable })),
   { ssr: false },
 )
 const WuHeading = dynamic(
@@ -73,6 +68,9 @@ type AccessOption = {
   label: string
 }
 
+type SortKey = 'name' | 'author' | 'access' | 'createdAt'
+type SortDirection = 'asc' | 'desc'
+
 const ACCESS_OPTIONS: AccessOption[] = [
   { value: 'private', label: 'Private' },
   { value: 'custom', label: 'Custom' },
@@ -81,6 +79,58 @@ const ACCESS_OPTIONS: AccessOption[] = [
 
 function getAccessOption(access: DashboardAccess) {
   return ACCESS_OPTIONS.find((option) => option.value === access) ?? ACCESS_OPTIONS[0]
+}
+
+function authorFirstName(email: string) {
+  const local = email.split('@')[0] ?? email
+  const first = local.split(/[._-]/)[0] ?? local
+  if (!first) return email
+  return first.charAt(0).toUpperCase() + first.slice(1)
+}
+
+function compareDashboards(a: Dashboard, b: Dashboard, sortKey: SortKey, direction: SortDirection) {
+  const modifier = direction === 'asc' ? 1 : -1
+  if (sortKey === 'name') return a.name.localeCompare(b.name) * modifier
+  if (sortKey === 'author') {
+    return authorFirstName(a.authorEmail).localeCompare(authorFirstName(b.authorEmail)) * modifier
+  }
+  if (sortKey === 'access') {
+    return getAccessOption(a.access).label.localeCompare(getAccessOption(b.access).label) * modifier
+  }
+  return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * modifier
+}
+
+function SortHeader({
+  label,
+  column,
+  sortKey,
+  sortDirection,
+  onSort,
+  className,
+}: {
+  label: string
+  column: SortKey
+  sortKey: SortKey
+  sortDirection: SortDirection
+  onSort: (column: SortKey) => void
+  className?: string
+}) {
+  const active = sortKey === column
+  return (
+    <button
+      type="button"
+      className={cn('inline-flex items-center gap-1 font-medium text-gray-600', className)}
+      onClick={() => onSort(column)}
+    >
+      {label}
+      <span className="inline-flex flex-col leading-none text-[10px] text-gray-400" aria-hidden>
+        <span className={active && sortDirection === 'asc' ? 'text-gray-700' : ''}>▲</span>
+        <span className={cn('-mt-0.5', active && sortDirection === 'desc' ? 'text-gray-700' : '')}>
+          ▼
+        </span>
+      </span>
+    </button>
+  )
 }
 
 function CreateDashboardModal({
@@ -93,12 +143,12 @@ function CreateDashboardModal({
   onCreate: (dashboard: Dashboard) => void
 }) {
   const [name, setName] = useState('')
-  const [access, setAccess] = useState<AccessOption>(ACCESS_OPTIONS[1])
+  const [access, setAccess] = useState<AccessOption>(ACCESS_OPTIONS[0])
   const [error, setError] = useState('')
 
   function resetAndClose() {
     setName('')
-    setAccess(ACCESS_OPTIONS[1])
+    setAccess(ACCESS_OPTIONS[0])
     setError('')
     onOpenChange(false)
   }
@@ -115,7 +165,7 @@ function CreateDashboardModal({
       id,
       name: trimmedName,
       access: access.value,
-      authorEmail: 'sarah.johnson@questionpro.com',
+      authorEmail: getCurrentUser().email,
       createdAt: new Date().toISOString(),
       tabs: [{ id: `${id}_tab_1`, name: 'Tab 1', order: 1, widgets: [] }],
     })
@@ -124,13 +174,13 @@ function CreateDashboardModal({
 
   function handleAccessSelect(value: unknown) {
     const selected = value as AccessOption | AccessOption[]
-    setAccess((Array.isArray(selected) ? selected[0] : selected) ?? ACCESS_OPTIONS[1])
+    setAccess((Array.isArray(selected) ? selected[0] : selected) ?? ACCESS_OPTIONS[0])
   }
 
   return (
-    <WuModal open={open} onOpenChange={onOpenChange} size="md">
+    <WuModal open={open} onOpenChange={onOpenChange} size="md" {...preventModalDismiss}>
       <WuModalHeader>Create dashboard</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         <div className="flex flex-col gap-4">
           <label className="flex flex-col gap-2">
             <WuText size="sm" as="span" className="text-gray-700">
@@ -184,17 +234,39 @@ export default function DashboardListPage() {
   const router = useRouter()
   const { showToast } = useWuShowToast()
   const isAdmin = isAdminContext()
+  const { portalAccess } = usePortalSettings()
+  const canCreate = canCreatePortalDashboard(portalAccess)
   const [allDashboards, setAllDashboards] = useState<Dashboard[]>(() => loadDashboards())
   const [selectedDashboardIds, setSelectedDashboardIds] = useState<Set<string>>(new Set())
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [sharingDashboard, setSharingDashboard] = useState<Dashboard | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [filterQuery, setFilterQuery] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('createdAt')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
-  const dashboards = useMemo(() => {
+  const visibleDashboards = useMemo(() => {
     const user = getCurrentUser()
     if (user.role === 'hr_admin' && !user.isImpersonating) {
       return allDashboards
     }
-    return allDashboards.filter((dashboard) => dashboard.access === 'global')
+    return allDashboards.filter(
+      (dashboard) => dashboard.access === 'global' || dashboard.authorEmail === user.email,
+    )
   }, [allDashboards])
+
+  const dashboards = useMemo(() => {
+    const query = filterQuery.trim().toLowerCase()
+    const filtered = query
+      ? visibleDashboards.filter((dashboard) => dashboard.name.toLowerCase().includes(query))
+      : visibleDashboards
+    return [...filtered].sort((a, b) => {
+      if (a.isHome && !b.isHome) return -1
+      if (!a.isHome && b.isHome) return 1
+      return compareDashboards(a, b, sortKey, sortDirection)
+    })
+  }, [filterQuery, sortDirection, sortKey, visibleDashboards])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -211,110 +283,42 @@ export default function DashboardListPage() {
     const next = allDashboards.filter((dashboard) => !idsToDelete.has(dashboard.id))
     persistDashboards(next)
     setSelectedDashboardIds(new Set())
+    showToast({ variant: 'success', message: 'Dashboard deleted' })
   }
 
-  const columns = useMemo<IWuTableColumnDef<Dashboard>[]>(
-    () => [
-      ...(isAdmin
-        ? [
-            {
-              id: 'select',
-              accessorKey: 'id',
-              header: '',
-              cell: ({ row }: { row: { original: Dashboard } }) => (
-                <WuCheckbox
-                  checked={selectedDashboardIds.has(row.original.id)}
-                  onChange={(checked) =>
-                    setSelectedDashboardIds((currentIds) => {
-                      const nextIds = new Set(currentIds)
-                      if (checked) nextIds.add(row.original.id)
-                      else nextIds.delete(row.original.id)
-                      return nextIds
-                    })
-                  }
-                />
-              ),
-            } as IWuTableColumnDef<Dashboard>,
-          ]
-        : []),
-      {
-        accessorKey: 'name',
-        header: 'Dashboards',
-        cell: ({ row }) => (
-          <button
-            type="button"
-            className="font-medium text-blue-700 hover:underline"
-            onClick={() => router.push(`/lifecycle/analytics/${row.original.id}`)}
-          >
-            {row.original.name}
-            {row.original.isHome && <span className="ml-2" aria-label="Home dashboard">🏠</span>}
-          </button>
-        ),
-      },
-      {
-        accessorKey: 'authorEmail',
-        header: 'Author',
-      },
-      {
-        accessorKey: 'access',
-        header: 'Access',
-        cell: ({ row }) =>
-          isAdmin ? (
-            <div className="w-[120px]">
-              <WuSelect
-                data={ACCESS_OPTIONS}
-                accessorKey={{ value: 'value', label: 'label' }}
-                value={getAccessOption(row.original.access)}
-                onSelect={(value: unknown) => {
-                  const selected = value as AccessOption | AccessOption[]
-                  const nextOption = Array.isArray(selected) ? selected[0] : selected
-                  if (!nextOption) return
-                  persistDashboards(
-                    allDashboards.map((dashboard) =>
-                      dashboard.id === row.original.id
-                        ? { ...dashboard, access: nextOption.value }
-                        : dashboard,
-                    ),
-                  )
-                  showToast({
-                    variant: 'success',
-                    message: `Access updated to ${nextOption.label}`,
-                  })
-                }}
-                variant="outlined"
-              />
-            </div>
-          ) : (
-            getAccessOption(row.original.access).label
-          ),
-      },
-      {
-        accessorKey: 'createdAt',
-        header: 'Created On',
-        cell: ({ row }) => format(new Date(row.original.createdAt), 'MMM, dd yyyy'),
-      },
-      ...(isAdmin
-        ? [
-            {
-              id: 'delete',
-              accessorKey: 'id',
-              header: '',
-              cellAlign: 'right' as const,
-              cell: ({ row }: { row: { original: Dashboard } }) => (
-                <button
-                  type="button"
-                  className="text-gray-400 hover:text-red-600"
-                  onClick={() => handleDeleteDashboards(new Set([row.original.id]))}
-                >
-                  🗑
-                </button>
-              ),
-            } as IWuTableColumnDef<Dashboard>,
-          ]
-        : []),
-    ],
-    [allDashboards, isAdmin, router, selectedDashboardIds, showToast],
-  )
+  function updateAccess(dashboardId: string, access: DashboardAccess) {
+    persistDashboards(
+      allDashboards.map((dashboard) =>
+        dashboard.id === dashboardId ? { ...dashboard, access } : dashboard,
+      ),
+    )
+    showToast({
+      variant: 'success',
+      message: `Access updated to ${getAccessOption(access).label}`,
+    })
+  }
+
+  function toggleSelected(id: string, checked: boolean) {
+    setSelectedDashboardIds((current) => {
+      const next = new Set(current)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  function toggleAll(checked: boolean) {
+    setSelectedDashboardIds(checked ? new Set(dashboards.map((dashboard) => dashboard.id)) : new Set())
+  }
+
+  function handleSort(column: SortKey) {
+    if (sortKey === column) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(column)
+    setSortDirection('asc')
+  }
 
   function handleCreateDashboard(dashboard: Dashboard) {
     saveCreatedDashboard(dashboard)
@@ -324,68 +328,224 @@ export default function DashboardListPage() {
     router.push(`/lifecycle/analytics/${dashboard.id}`)
   }
 
+  const allSelected = dashboards.length > 0 && dashboards.every((dashboard) => selectedDashboardIds.has(dashboard.id))
+  const someSelected = selectedDashboardIds.size > 0
+
   return (
-    <PageShell>
-      <PageHeader
-        title="Dashboards"
-        description="Create and manage analytics dashboards"
-        className="bg-white"
-        actions={
-          isAdmin ? (
-            <WuButton variant="primary" onClick={() => setIsCreateOpen(true)}>
-              + New dashboard
-            </WuButton>
-          ) : undefined
-        }
+    <div className="min-h-full bg-white px-8 py-6">
+      <WuHeading size="xl" className="text-gray-900">
+        Dashboards
+      </WuHeading>
+
+      {canCreate ? (
+        <div className="mt-4">
+          <WuButton variant="primary" onClick={() => setIsCreateOpen(true)}>
+            + New dashboard
+          </WuButton>
+        </div>
+      ) : null}
+
+      <CreateDashboardModal
+        open={isCreateOpen}
+        onOpenChange={setIsCreateOpen}
+        onCreate={handleCreateDashboard}
       />
 
-      <PageContent>
-        <CreateDashboardModal
-          open={isCreateOpen}
-          onOpenChange={setIsCreateOpen}
-          onCreate={handleCreateDashboard}
-        />
+      {visibleDashboards.length === 0 ? (
+        <section className="mt-10 flex min-h-80 flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 text-center">
+          <WuHeading size="md">No dashboards yet</WuHeading>
+          <WuText size="sm" as="p" className="mt-2 text-gray-500">
+            {canCreate
+              ? 'Create your first dashboard to start visualizing data'
+              : 'No dashboards have been shared with you yet'}
+          </WuText>
+          {canCreate ? (
+            <WuButton variant="primary" className="mt-5" onClick={() => setIsCreateOpen(true)}>
+              + New dashboard
+            </WuButton>
+          ) : null}
+        </section>
+      ) : (
+        <div className="relative mt-6">
+          <div className="mb-2 flex min-h-8 items-center justify-end">
+            {someSelected ? (
+              <button
+                type="button"
+                className="text-sm text-red-600 hover:underline"
+                onClick={() => setDeleteOpen(true)}
+              >
+                Delete selected
+              </button>
+            ) : null}
+          </div>
 
-        {dashboards.length === 0 ? (
-          <section className="flex min-h-96 flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-white text-center">
-            <WuHeading size="md">No dashboards yet</WuHeading>
-            <WuText size="sm" as="p" className="mt-2 text-gray-500">
-              {isAdmin
-                ? 'Create your first dashboard to start visualizing data'
-                : 'No dashboards have been shared with you yet'}
-            </WuText>
-            {isAdmin && (
-              <WuButton variant="primary" className="mt-5" onClick={() => setIsCreateOpen(true)}>
-                + New dashboard
-              </WuButton>
-            )}
-          </section>
-        ) : (
-          <PageCard>
-            {isAdmin && (
-              <div className="mb-3 flex justify-end">
-                <button
-                  type="button"
-                  className={cn(
-                    'text-sm',
-                    selectedDashboardIds.size > 0 ? 'text-red-600' : 'text-gray-300',
-                  )}
-                  disabled={selectedDashboardIds.size === 0}
-                  onClick={() => handleDeleteDashboards(selectedDashboardIds)}
-                >
-                  🗑 Delete selected
-                </button>
-              </div>
-            )}
-            <WuDataTable
-              data={dashboards as unknown[]}
-              columns={columns as unknown as IWuTableColumnDef<unknown>[]}
-              variant="striped"
-              tableLayout="auto"
-            />
-          </PageCard>
-        )}
-      </PageContent>
-    </PageShell>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-[#F3F4F6] text-left">
+                  <th className="w-12 px-4 py-3">
+                    {isAdmin ? (
+                      <WuCheckbox
+                        checked={allSelected}
+                        partial={someSelected && !allSelected}
+                        onChange={toggleAll}
+                      />
+                    ) : null}
+                  </th>
+                  <th className="px-3 py-3">
+                    <SortHeader
+                      label="Dashboards"
+                      column="name"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                  </th>
+                  <th className="w-[160px] px-3 py-3">
+                    <SortHeader
+                      label="Author"
+                      column="author"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                  </th>
+                  <th className="w-[160px] px-3 py-3">
+                    <SortHeader
+                      label="Access"
+                      column="access"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                  </th>
+                  <th className="w-[140px] px-3 py-3">
+                    <SortHeader
+                      label="Created On"
+                      column="createdAt"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                  </th>
+                  <th className="relative w-10 px-2 py-3 text-right">
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex size-8 items-center justify-center rounded text-gray-500 hover:bg-gray-200 hover:text-gray-800',
+                        filterOpen && 'bg-gray-200 text-blue-700',
+                      )}
+                      aria-label="Filter dashboards"
+                      onClick={() => setFilterOpen((open) => !open)}
+                    >
+                      <span className="wm-filter-alt text-lg" aria-hidden />
+                    </button>
+                    {filterOpen ? (
+                      <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded border border-gray-200 bg-white p-3 text-left shadow-lg">
+                        <WuInput
+                          type="search"
+                          variant="outlined"
+                          placeholder="Filter by name"
+                          value={filterQuery}
+                          onChange={(event) => setFilterQuery(event.target.value)}
+                        />
+                      </div>
+                    ) : null}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {dashboards.map((dashboard) => (
+                  <tr key={dashboard.id} className="border-b border-gray-200">
+                    <td className="px-4 py-3">
+                      {isAdmin ? (
+                        <WuCheckbox
+                          checked={selectedDashboardIds.has(dashboard.id)}
+                          onChange={(checked) => toggleSelected(dashboard.id, checked)}
+                        />
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        {dashboard.isHome ? (
+                          <span className="wm-home text-base text-[#1B87E6]" aria-label="Home dashboard" />
+                        ) : (
+                          <span className="w-4" aria-hidden />
+                        )}
+                        <button
+                          type="button"
+                          className="truncate text-left text-blue-700 hover:underline"
+                          onClick={() => router.push(`/lifecycle/analytics/${dashboard.id}`)}
+                        >
+                          {dashboard.name}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-gray-600">{authorFirstName(dashboard.authorEmail)}</td>
+                    <td className="px-3 py-3">
+                      {isAdmin ? (
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={dashboard.access}
+                            className="cursor-pointer border-0 border-b border-gray-400 bg-transparent py-0.5 pr-1 text-sm text-gray-700 outline-none"
+                            aria-label={`Access for ${dashboard.name}`}
+                            onChange={(event) =>
+                              updateAccess(dashboard.id, event.target.value as DashboardAccess)
+                            }
+                          >
+                            {ACCESS_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          {dashboard.access === 'custom' ? (
+                            <button
+                              type="button"
+                              className="text-gray-500 hover:text-blue-700"
+                              aria-label={`Edit custom access for ${dashboard.name}`}
+                              onClick={() => setSharingDashboard(dashboard)}
+                            >
+                              <span className="wm-edit text-base" aria-hidden />
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-gray-700">{getAccessOption(dashboard.access).label}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-gray-600">
+                      {format(new Date(dashboard.createdAt), 'MMM, dd yyyy')}
+                    </td>
+                    <td />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {dashboards.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-500">No dashboards match this filter.</p>
+          ) : null}
+        </div>
+      )}
+
+      <DashboardShareModal
+        open={Boolean(sharingDashboard)}
+        onClose={() => setSharingDashboard(null)}
+        dashboardId={sharingDashboard?.id ?? ''}
+        dashboardName={sharingDashboard?.name ?? ''}
+        tabs={sharingDashboard?.tabs ?? []}
+      />
+      <ConfirmModal
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete selected dashboards?"
+        description={`${selectedDashboardIds.size} dashboards will be removed.`}
+        confirmLabel="Delete"
+        variant="critical"
+        onConfirm={() => handleDeleteDashboards(selectedDashboardIds)}
+      />
+    </div>
   )
 }

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import dynamic from 'next/dynamic'
 import { preventModalDismiss } from '@/lib/modalProps'
@@ -97,9 +97,9 @@ export function TemplatePreviewModal({
   const questions = SAMPLE_QUESTIONS_BY_CATEGORY[template.category].slice(0, 3)
 
   return (
-    <WuModal open={open} onOpenChange={onOpenChange} size="md" maxHeight="85vh">
+    <WuModal open={open} onOpenChange={onOpenChange} size="md" maxHeight="85vh" {...preventModalDismiss}>
       <WuModalHeader>{template.title} — Preview</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         <div className="max-h-[60vh] overflow-y-auto pr-1">
           <div className="sticky top-0 z-10 bg-white pb-5">
             <div className="h-1 overflow-hidden rounded-full bg-blue-100">

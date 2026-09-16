@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import dynamic from 'next/dynamic'
 import { useMemo, useState } from 'react'
@@ -380,9 +380,9 @@ export function CreateSurveyModal({ open, onOpenChange, onCreateSurvey }: Create
 
   return (
     <>
-      <WuModal open={open} onOpenChange={handleOpenChange} size="lg" maxHeight="90vh">
+      <WuModal open={open} onOpenChange={handleOpenChange} size="lg" maxHeight="90vh" {...preventModalDismiss}>
         <WuModalHeader>Create Survey</WuModalHeader>
-        <WuModalContent {...preventModalDismiss}>
+        <WuModalContent>
           <div className="flex flex-col gap-6 p-1">
             {step === 1 ? (
               <div className="flex max-h-[calc(90vh-12rem)] flex-col gap-4 overflow-y-auto pr-1">

@@ -149,9 +149,9 @@ export function AddEmployeeModal({
   }
 
   return (
-    <WuModal open={open} onOpenChange={handleOpenChange} size="md">
+    <WuModal open={open} onOpenChange={handleOpenChange} size="md" {...preventModalDismiss}>
       <WuModalHeader>Add Employee</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <WuFormGroup
             Label="First Name"

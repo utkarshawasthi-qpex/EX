@@ -7,7 +7,8 @@ import { usePathname } from 'next/navigation';
 export function ProductTabs() {
   const pathname = usePathname();
 
-  const isEmployeeExperience = pathname.startsWith('/projects');
+  const isEmployeeExperience =
+    pathname === '/lifecycle' || pathname.startsWith('/lifecycle/') || pathname.startsWith('/projects')
   const is360 = pathname.startsWith('/360');
   const isEmpower = pathname.startsWith('/empower');
 
@@ -33,7 +34,7 @@ export function ProductTabs() {
         align="start"
       >
         <WuMenuItem>
-          <Link href="/projects" className={isEmployeeExperience ? 'font-semibold text-blue-700' : 'text-gray-700'}>
+          <Link href="/lifecycle" className={isEmployeeExperience ? 'font-semibold text-blue-700' : 'text-gray-700'}>
             Employee Experience
           </Link>
         </WuMenuItem>

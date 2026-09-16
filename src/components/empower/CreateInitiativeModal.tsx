@@ -335,9 +335,10 @@ export function CreateInitiativeModal({
       size="lg"
       preventClickOutside
       maxWidth="720px"
+      {...preventModalDismiss}
     >
       <WuModalHeader>New initiative</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         <StepIndicator current={step} />
 
         {step === 1 && (

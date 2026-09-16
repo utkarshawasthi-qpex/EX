@@ -302,9 +302,9 @@ export default function PptExportTemplatesPage() {
           ))}
         </div>
 
-        <WuModal open={Boolean(editingTemplate)} onOpenChange={(open) => !open && setEditingTemplate(null)} size="lg">
+        <WuModal open={Boolean(editingTemplate)} onOpenChange={(open) => !open && setEditingTemplate(null)} size="lg" {...preventModalDismiss}>
         <WuModalHeader>{editingTemplate?.isDefault ? 'Edit Template' : 'Template Details'}</WuModalHeader>
-        <WuModalContent {...preventModalDismiss}>
+        <WuModalContent>
           {editingTemplate && (
             <div className="max-h-[70vh] space-y-6 overflow-y-auto pr-2">
               <section className="space-y-3">

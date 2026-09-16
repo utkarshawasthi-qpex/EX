@@ -11,17 +11,24 @@ export const APP_HEADER_CATEGORIES: IWuAppHeaderMenuItem[] = [
     products: [
       {
         name: 'Employee Experience',
-        link: '/studies',
+        link: '/lifecycle',
         icon: 'e315',
         active: true,
         order: 1,
+      },
+      {
+        name: '360 Feedback',
+        link: '/360',
+        icon: 'e308',
+        active: true,
+        order: 2,
       },
       {
         name: 'Empower',
         link: '/empower',
         icon: 'e324',
         active: true,
-        order: 2,
+        order: 3,
       },
     ],
   },

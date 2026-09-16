@@ -35,10 +35,13 @@ import {
 } from '@/lib/mockDb'
 import { seedDefaultDashboardsIfNeeded } from '@/lib/seedDashboards'
 import { activeFiltersToLabels } from '@/lib/dashboardFilters'
+import { mergeActiveFilters } from '@/lib/publicShareLinks'
 import { getCurrentUser } from '@/lib/userContext'
 import { cn } from '@/lib/utils'
 import type { ActiveFilter, Dashboard, DashboardTab, DashboardWidget, FilterField, WidgetType } from '@/types'
 import { getDashboardCapabilities } from '@/types'
+import { canCreatePortalWidget, getActiveAccessRule, getVisibleDashboardFilterFields } from '@/lib/portalAccess'
+import { usePortalSettings } from '@/lib/portalSettingsStore'
 
 const GridLayoutWithWidth = WidthProvider(ReactGridLayout)
 
@@ -93,6 +96,8 @@ export default function DashboardCanvasPage() {
   const params = useParams()
   const dashboardId = params.id as string
   const { showToast } = useWuShowToast()
+  const { portalAccess, accessRules, filterAccessRules } = usePortalSettings()
+  const activeAccessRule = getActiveAccessRule(getCurrentUser(), accessRules)
 
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
   const [tabs, setTabs] = useState<DashboardTab[]>([])
@@ -105,10 +110,12 @@ export default function DashboardCanvasPage() {
   allTabWidgetsRef.current = allTabWidgets
   const [openTabMenuId, setOpenTabMenuId] = useState<string | null>(null)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [filterScope, setFilterScope] = useState<'dashboard' | 'tab'>('dashboard')
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false)
   const [exportModalOpen, setExportModalOpen] = useState(false)
   const [shareModalOpen, setShareModalOpen] = useState(false)
-  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([])
+  const [dashboardFilters, setDashboardFilters] = useState<ActiveFilter[]>([])
+  const [tabFiltersByTab, setTabFiltersByTab] = useState<Record<string, ActiveFilter[]>>({})
   const [widgetContentHeights, setWidgetContentHeights] = useState<Record<string, number>>({})
 
   useEffect(() => {
@@ -152,10 +159,48 @@ export default function DashboardCanvasPage() {
     [uniqueWidgets],
   )
 
-  const capabilities = useMemo(
-    () => (dashboard ? getDashboardCapabilities(dashboard, getCurrentUser()) : null),
-    [dashboard],
+  const visibleFilterFields = useMemo(
+    () => getVisibleDashboardFilterFields(getCurrentUser(), filterAccessRules),
+    [filterAccessRules],
   )
+  const canFilter = visibleFilterFields.length > 0
+  const tabFilters = tabFiltersByTab[activeTabId] ?? []
+  const activeFilters = useMemo(
+    () => mergeActiveFilters(dashboardFilters, tabFilters),
+    [dashboardFilters, tabFilters],
+  )
+
+  const capabilities = useMemo(() => {
+    if (!dashboard) return null
+    const base = getDashboardCapabilities(dashboard, getCurrentUser())
+    const allowEmployeeEdit = canCreatePortalWidget(portalAccess)
+    return {
+      ...base,
+      canFilter,
+      canAddWidgets: base.canAddWidgets && allowEmployeeEdit,
+      canEdit: base.canEdit && allowEmployeeEdit,
+      canDeleteWidgets: base.canDeleteWidgets && allowEmployeeEdit,
+    }
+  }, [canFilter, dashboard, portalAccess])
+
+  useEffect(() => {
+    const allowed = new Set(visibleFilterFields.map((field) => field.id))
+    setDashboardFilters((current) => {
+      const next = current.filter((filter) => allowed.has(filter.fieldId))
+      return next.length === current.length ? current : next
+    })
+    setTabFiltersByTab((current) => {
+      let changed = false
+      const next: Record<string, ActiveFilter[]> = {}
+      Object.entries(current).forEach(([tabId, filters]) => {
+        const pruned = filters.filter((filter) => allowed.has(filter.fieldId))
+        if (pruned.length !== filters.length) changed = true
+        next[tabId] = pruned
+      })
+      return changed ? next : current
+    })
+    if (!canFilter) setIsFilterOpen(false)
+  }, [canFilter, visibleFilterFields])
 
   const updateWidgets = useCallback(
     (tabId: string, newWidgets: DashboardWidget[]) => {
@@ -364,7 +409,8 @@ export default function DashboardCanvasPage() {
   }
 
   function toggleFilter(field: FilterField, value: string) {
-    setActiveFilters((prev) => {
+    if (!visibleFilterFields.some((item) => item.id === field.id)) return
+    const updater = (prev: ActiveFilter[]) => {
       const exists = prev.some((filter) => filter.fieldId === field.id && filter.value === value)
       if (exists) {
         return prev.filter((filter) => !(filter.fieldId === field.id && filter.value === value))
@@ -377,11 +423,36 @@ export default function DashboardCanvasPage() {
           value,
         },
       ]
-    })
+    }
+    if (filterScope === 'tab') {
+      setTabFiltersByTab((current) => ({
+        ...current,
+        [activeTabId]: updater(current[activeTabId] ?? []),
+      }))
+      return
+    }
+    setDashboardFilters(updater)
   }
 
   function clearAllFilters() {
-    setActiveFilters([])
+    if (filterScope === 'tab') {
+      setTabFiltersByTab((current) => ({ ...current, [activeTabId]: [] }))
+      return
+    }
+    setDashboardFilters([])
+  }
+
+  function removeFilterFrom(source: 'dashboard' | 'tab', field: FilterField, value: string) {
+    const updater = (prev: ActiveFilter[]) =>
+      prev.filter((filter) => !(filter.fieldId === field.id && filter.value === value))
+    if (source === 'tab') {
+      setTabFiltersByTab((current) => ({
+        ...current,
+        [activeTabId]: updater(current[activeTabId] ?? []),
+      }))
+      return
+    }
+    setDashboardFilters(updater)
   }
 
   function handleWidgetUpdate(updatedWidget: DashboardWidget) {
@@ -512,19 +583,24 @@ export default function DashboardCanvasPage() {
                   +
                 </button>
               )}
-              <button
-                type="button"
-                className="relative text-xl text-gray-400 hover:text-gray-600"
-                onClick={() => setIsFilterOpen((open) => !open)}
-                aria-label="Filters"
-              >
-                <span className="wm-filter-alt text-xl leading-none" aria-hidden />
-                {activeFilters.length > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
-                    {activeFilters.length}
-                  </span>
-                )}
-              </button>
+              {canFilter && (
+                <button
+                  type="button"
+                  className="relative text-xl text-gray-400 hover:text-gray-600"
+                  onClick={() => {
+                    setFilterScope('dashboard')
+                    setIsFilterOpen((open) => !(open && filterScope === 'dashboard'))
+                  }}
+                  aria-label="Dashboard filters"
+                >
+                  <span className="wm-filter-alt text-xl leading-none" aria-hidden />
+                  {dashboardFilters.length > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
+                      {dashboardFilters.length}
+                    </span>
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 className="wm-share text-xl leading-none text-gray-400 hover:text-gray-600"
@@ -544,7 +620,7 @@ export default function DashboardCanvasPage() {
             <span className="wm-account-tree text-sm text-blue-600" aria-hidden />
             <button type="button" className="text-blue-600 hover:underline">
               <WuText size="sm" as="span">
-                Hierarchy based rule
+                {activeAccessRule ? activeAccessRule.name : 'Hierarchy based rule'}
               </WuText>
             </button>
             <button
@@ -556,47 +632,93 @@ export default function DashboardCanvasPage() {
             </button>
           </div>
 
-          {activeFilters.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 px-0 py-2">
-              {activeFilters.map((filter) => (
-                <span
-                  key={`${filter.fieldId}-${filter.value}`}
-                  className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
-                >
-                  <span className="font-medium">{filter.fieldLabel}:</span>
-                  {filter.value}
+          {(dashboardFilters.length > 0 || tabFilters.length > 0) && (
+            <div className="flex flex-col gap-2 px-0 py-2">
+              {dashboardFilters.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Dashboard</span>
+                  {dashboardFilters.map((filter) => (
+                    <span
+                      key={`dash-${filter.fieldId}-${filter.value}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
+                    >
+                      <span className="font-medium">{filter.fieldLabel}:</span>
+                      {filter.value}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeFilterFrom(
+                            'dashboard',
+                            { id: filter.fieldId, label: filter.fieldLabel, values: [] },
+                            filter.value,
+                          )
+                        }
+                        className="ml-1 text-blue-400 hover:text-blue-700"
+                        aria-label={`Remove dashboard ${filter.fieldLabel} ${filter.value}`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setDashboardFilters([])}
+                    className="text-xs text-gray-400 underline hover:text-gray-600"
+                  >
+                    Clear dashboard filters
+                  </button>
+                </div>
+              )}
+              {tabFilters.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Tab</span>
+                  {tabFilters.map((filter) => (
+                    <span
+                      key={`tab-${filter.fieldId}-${filter.value}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700"
+                    >
+                      <span className="font-medium">{filter.fieldLabel}:</span>
+                      {filter.value}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeFilterFrom(
+                            'tab',
+                            { id: filter.fieldId, label: filter.fieldLabel, values: [] },
+                            filter.value,
+                          )
+                        }
+                        className="ml-1 text-blue-400 hover:text-blue-700"
+                        aria-label={`Remove tab ${filter.fieldLabel} ${filter.value}`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
                   <button
                     type="button"
                     onClick={() =>
-                      toggleFilter(
-                        { id: filter.fieldId, label: filter.fieldLabel, values: [] },
-                        filter.value,
-                      )
+                      setTabFiltersByTab((current) => ({ ...current, [activeTabId]: [] }))
                     }
-                    className="ml-1 text-blue-400 hover:text-blue-700"
-                    aria-label={`Remove ${filter.fieldLabel} ${filter.value}`}
+                    className="text-xs text-gray-400 underline hover:text-gray-600"
                   >
-                    ✕
+                    Clear tab filters
                   </button>
-                </span>
-              ))}
-              <button
-                type="button"
-                onClick={clearAllFilters}
-                className="text-xs text-gray-400 underline hover:text-gray-600"
-              >
-                Clear all
-              </button>
+                </div>
+              )}
             </div>
           )}
 
-          <DashboardFilterPanel
-            open={isFilterOpen}
-            activeFilters={activeFilters}
-            onToggleFilter={toggleFilter}
-            onClearAll={clearAllFilters}
-            onClose={() => setIsFilterOpen(false)}
-          />
+          {canFilter && (
+            <DashboardFilterPanel
+              open={isFilterOpen}
+              title={filterScope === 'tab' ? 'Tab filters' : 'Dashboard filters'}
+              activeFilters={filterScope === 'tab' ? tabFilters : dashboardFilters}
+              onToggleFilter={toggleFilter}
+              onClearAll={clearAllFilters}
+              onClose={() => setIsFilterOpen(false)}
+            />
+          )}
         </header>
 
         {capabilities && !capabilities.isOwner && (
@@ -694,6 +816,24 @@ export default function DashboardCanvasPage() {
                 >
                   {tab.name}
                 </button>
+                {canFilter && tab.id === activeTabId && (
+                  <button
+                    type="button"
+                    className="relative mr-1 text-gray-400 hover:text-gray-600"
+                    aria-label={`Filters for ${tab.name}`}
+                    onClick={() => {
+                      setFilterScope('tab')
+                      setIsFilterOpen((open) => !(open && filterScope === 'tab'))
+                    }}
+                  >
+                    <span className="wm-filter-alt text-base leading-none" aria-hidden />
+                    {tabFilters.length > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white">
+                        {tabFilters.length}
+                      </span>
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="px-0.5 text-gray-400 hover:text-gray-600"

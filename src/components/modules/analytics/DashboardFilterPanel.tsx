@@ -1,10 +1,14 @@
 'use client'
 
-import { DASHBOARD_FILTER_FIELDS } from '@/lib/dashboardFilters'
+import { useMemo } from 'react'
+import { getVisibleDashboardFilterFields } from '@/lib/portalAccess'
+import { usePortalSettings } from '@/lib/portalSettingsStore'
+import { getCurrentUser } from '@/lib/userContext'
 import type { ActiveFilter, FilterField } from '@/types'
 
 type DashboardFilterPanelProps = {
   open: boolean
+  title?: string
   activeFilters: ActiveFilter[]
   onToggleFilter: (field: FilterField, value: string) => void
   onClearAll: () => void
@@ -15,12 +19,19 @@ type DashboardFilterPanelProps = {
 
 export function DashboardFilterPanel({
   open,
+  title = 'Filters',
   activeFilters,
   onToggleFilter,
   onClearAll,
   onClose,
   panelClassName,
 }: DashboardFilterPanelProps) {
+  const { filterAccessRules } = usePortalSettings()
+  const visibleFields = useMemo(
+    () => getVisibleDashboardFilterFields(getCurrentUser(), filterAccessRules),
+    [filterAccessRules],
+  )
+
   if (!open) return null
 
   return (
@@ -38,7 +49,7 @@ export function DashboardFilterPanel({
         }
       >
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-          <span className="text-sm font-semibold text-gray-800">Filters</span>
+          <span className="text-sm font-semibold text-gray-800">{title}</span>
           <div className="flex items-center gap-2">
             {activeFilters.length > 0 && (
               <button
@@ -61,7 +72,10 @@ export function DashboardFilterPanel({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {DASHBOARD_FILTER_FIELDS.map((field) => (
+          {visibleFields.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-gray-500">No filters are available for your access.</p>
+          ) : (
+            visibleFields.map((field) => (
             <div key={field.id} className="border-b border-gray-50 px-4 py-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 {field.label}
@@ -88,7 +102,8 @@ export function DashboardFilterPanel({
                 })}
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
       </aside>
     </>

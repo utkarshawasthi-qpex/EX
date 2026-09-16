@@ -119,9 +119,9 @@ export function SummarySharedPreviewModal({
   const opportunities = snapshot.opportunities ?? []
 
   return (
-    <WuModal open={open} onOpenChange={(next) => !next && onClose()} variant="action" size="md">
+    <WuModal open={open} onOpenChange={(next) => !next && onClose()} variant="action" size="md" {...preventModalDismiss}>
       <WuModalHeader>Preview what others see</WuModalHeader>
-      <WuModalContent {...preventModalDismiss}>
+      <WuModalContent>
         <div className="space-y-4">
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
             Shared • Last updated {format(new Date(snapshot.sharedAt), 'MMM d, yyyy')}

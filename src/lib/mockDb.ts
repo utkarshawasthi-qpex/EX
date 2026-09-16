@@ -333,7 +333,7 @@ export function getVisibleDashboards(user: AppUser): Dashboard[] {
         return true
       case 'private':
       case 'custom':
-        return false
+        return dashboard.authorEmail === user.email
       default:
         return false
     }

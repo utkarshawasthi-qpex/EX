@@ -262,7 +262,7 @@ export default function LifecycleSurveysPage() {
     <PageShell>
       <PageHeader
         title="Surveys"
-        description="Manage your lifecycle survey instruments"
+        description="Manage your survey instruments"
         actions={
           <WuButton variant="primary" onClick={() => setIsCreateModalOpen(true)}>
             Create Survey

@@ -3,10 +3,12 @@
 import dynamic from 'next/dynamic'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { ExAppHeader } from '@/components/studies/ExAppHeader'
+import { AppFooter } from '@/components/shared/AppFooter'
 import { AnalyticsPortalShell } from '@/components/shared/AnalyticsPortalShell'
 import { LifecycleSidebar } from '@/components/shared/LifecycleSidebar'
 import { ThreeSixtyDegSidebar } from '@/components/shared/ThreeSixtyDegSidebar'
-import { TopBar } from '@/components/shared/TopBar'
+import { isEmployeeListPath, isExLandingPath } from '@/lib/app-header'
 import { isEmployeeContext } from '@/lib/userContext'
 
 const WuToast = dynamic(
@@ -14,27 +16,28 @@ const WuToast = dynamic(
   { ssr: false },
 )
 
-function CurrentSidebar({ pathname, collapsed }: { pathname: string; collapsed: boolean }) {
-  if (pathname.startsWith('/360')) return <ThreeSixtyDegSidebar collapsed={collapsed} />
-  return <LifecycleSidebar collapsed={collapsed} />
+function CurrentSidebar({ pathname }: { pathname: string }) {
+  if (pathname.startsWith('/360')) return <ThreeSixtyDegSidebar collapsed={false} />
+  return <LifecycleSidebar collapsed={false} />
 }
 
-function StandardShell({ children }: { children: React.ReactNode }) {
+function ChromeShell({
+  children,
+  showSidebar,
+}: {
+  children: React.ReactNode
+  showSidebar: boolean
+}) {
   const pathname = usePathname()
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   return (
     <div className="flex min-h-screen flex-col">
-      <TopBar
-        isSidebarCollapsed={isSidebarCollapsed}
-        onToggleSidebar={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
-      />
+      <ExAppHeader />
       <div className="flex min-h-0 flex-1">
-        <CurrentSidebar pathname={pathname} collapsed={isSidebarCollapsed} />
-        <main className="h-[calc(100vh-2.5rem)] min-w-0 flex-1 overflow-auto bg-gray-50">
-          {children}
-        </main>
+        {showSidebar ? <CurrentSidebar pathname={pathname} /> : null}
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto bg-white">{children}</main>
       </div>
+      <AppFooter />
     </div>
   )
 }
@@ -49,6 +52,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isAnalyticsPortal = pathname.startsWith('/lifecycle/analytics')
   const isEmpower = pathname.startsWith('/empower')
   const isPublicShare = pathname.startsWith('/share/')
+  const isLanding = isExLandingPath(pathname)
+  const isEmployeeList = isEmployeeListPath(pathname)
 
   useEffect(() => {
     setEmployeeMode(isEmployeeContext())
@@ -91,7 +96,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {isAnalyticsPortal ? (
         <AnalyticsPortalShell>{children}</AnalyticsPortalShell>
       ) : (
-        <StandardShell>{children}</StandardShell>
+        <ChromeShell showSidebar={!isLanding && !isEmployeeList}>{children}</ChromeShell>
       )}
     </>
   )

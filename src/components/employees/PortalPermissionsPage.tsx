@@ -370,7 +370,7 @@ function FilterAccessRulesCard({
                       <span className="text-[10px] text-gray-400">↕</span>
                     </button>
                   </th>
-                  <th className="px-2 py-3 font-medium">Filter groups</th>
+                  <th className="px-2 py-3 font-medium">Applies to</th>
                   <th className="w-16 px-2 py-3 text-right" />
                 </tr>
               </thead>
@@ -602,7 +602,7 @@ export function PortalPermissionsPage({
           onLearnMore={() =>
             showToast({
               message:
-                'Filter access rules apply to dashboard and tab filters on every dashboard a matching employee creates or that is shared with them. Everyone keeps all filters until they match a filter group.',
+                'Filter access rules apply to dashboard and tab filters on every dashboard a matching employee creates or that is shared with them. Everyone keeps all filters until they match an employee group.',
               variant: 'info',
             })
           }

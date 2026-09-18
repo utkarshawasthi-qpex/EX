@@ -154,9 +154,11 @@ function EmployeePicker({
 function FilterPicker({
   selectedIds,
   onChange,
+  error,
 }: {
   selectedIds: string[]
   onChange: (ids: string[]) => void
+  error?: string
 }) {
   const options = PORTAL_FILTER_ACCESS_FIELDS.map((field) => ({
     value: field.id,
@@ -167,6 +169,7 @@ function FilterPicker({
   return (
     <WuFormGroup
       Label="Allowed filters"
+      Error={error}
       Input={
         <WuSelect
           data={options}
@@ -212,6 +215,7 @@ export function AccessRuleModal(props: AccessRuleModalProps) {
   const [userIds, setUserIds] = useState<string[]>([])
   const [allowedEmployeeIds, setAllowedEmployeeIds] = useState<string[]>([])
   const [audiences, setAudiences] = useState<FilterAudience[]>([createFilterAudience()])
+  const [showErrors, setShowErrors] = useState(false)
 
   const activeEmployees = useMemo(
     () => employees.filter((employee) => employee.status === 'active' || employee.status === 'on_leave'),
@@ -242,6 +246,7 @@ export function AccessRuleModal(props: AccessRuleModalProps) {
           }))
         : [createFilterAudience()],
     )
+    setShowErrors(false)
   }, [mode, rule])
 
   function updateAudience(audienceId: string, patch: Partial<FilterAudience>) {
@@ -269,6 +274,10 @@ export function AccessRuleModal(props: AccessRuleModalProps) {
     if (!rule) return
     const nextName = name.trim()
     if (!nextName) {
+      if (mode === 'filter') {
+        setShowErrors(true)
+        return
+      }
       showToast({ message: 'Rule name is required', variant: 'error' })
       return
     }
@@ -297,15 +306,15 @@ export function AccessRuleModal(props: AccessRuleModalProps) {
     }
 
     if (audiences.length === 0) {
-      showToast({ message: 'Add at least one filter group', variant: 'error' })
+      setShowErrors(true)
       return
     }
     if (audiences.some((audience) => !audience.savedFilterId)) {
-      showToast({ message: 'Each filter group needs a saved filter', variant: 'error' })
+      setShowErrors(true)
       return
     }
     if (audiences.some((audience) => audience.allowedFilterIds.length === 0)) {
-      showToast({ message: 'Each filter group needs at least one allowed filter', variant: 'error' })
+      setShowErrors(true)
       return
     }
 
@@ -344,6 +353,7 @@ export function AccessRuleModal(props: AccessRuleModalProps) {
           <div className="flex flex-col gap-4">
             <WuFormGroup
               Label="Rule name"
+              Error={showErrors && mode === 'filter' && !name.trim() ? 'Rule name is required' : undefined}
               Input={<WuInput value={name} onChange={(event) => setName(event.target.value)} />}
             />
             {mode === 'data' ? (
@@ -376,54 +386,68 @@ export function AccessRuleModal(props: AccessRuleModalProps) {
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-gray-800">Filter groups</p>
+                  <p className="text-sm font-medium text-gray-800">Applies to</p>
                   <button
                     type="button"
                     className="text-sm text-blue-700 hover:underline"
                     onClick={() => setAudiences((current) => [...current, createFilterAudience()])}
                   >
-                    + Add filter group
+                    + Add people
                   </button>
                 </div>
-                {audiences.map((audience, index) => {
+                {audiences.map((audience) => {
                   const selectedSaved =
                     savedFilterOptions.find((option) => option.value === audience.savedFilterId) ?? null
                   return (
-                    <div key={audience.id} className="flex flex-col gap-3 rounded-lg border border-gray-200 p-3">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-800">Filter group {index + 1}</p>
-                        {audiences.length > 1 ? (
+                    <div
+                      key={audience.id}
+                      className="flex items-start gap-2 rounded-lg border border-gray-200 p-3"
+                    >
+                      <div className="flex min-w-0 flex-1 flex-col gap-3">
+                        <WuFormGroup
+                          Label="Employee group"
+                          Error={
+                            showErrors && !audience.savedFilterId
+                              ? 'Select an employee group'
+                              : undefined
+                          }
+                          Input={
+                            <WuSelect
+                              data={savedFilterOptions}
+                              accessorKey={{ value: 'value', label: 'label' }}
+                              value={selectedSaved}
+                              placeholder="Select an employee group"
+                              onSelect={(value: unknown) => {
+                                const next = value as SelectOption | null
+                                if (next?.value) applySavedFilter(audience.id, next.value)
+                              }}
+                              variant="outlined"
+                            />
+                          }
+                        />
+                        {audience.savedFilterId ? (
+                          <FilterPicker
+                            selectedIds={audience.allowedFilterIds}
+                            onChange={(ids) => updateAudience(audience.id, { allowedFilterIds: ids })}
+                            error={
+                              showErrors && audience.allowedFilterIds.length === 0
+                                ? 'Select at least one allowed filter'
+                                : undefined
+                            }
+                          />
+                        ) : null}
+                      </div>
+                      {audiences.length > 1 ? (
+                        <div className="mt-6 shrink-0">
                           <IconTipButton
-                            label="Remove filter group"
+                            label="Remove people"
                             icon="wm-delete"
                             danger
                             onClick={() =>
                               setAudiences((current) => current.filter((item) => item.id !== audience.id))
                             }
                           />
-                        ) : null}
-                      </div>
-                      <WuFormGroup
-                        Label="Saved filter"
-                        Input={
-                          <WuSelect
-                            data={savedFilterOptions}
-                            accessorKey={{ value: 'value', label: 'label' }}
-                            value={selectedSaved}
-                            placeholder="Select a saved filter"
-                            onSelect={(value: unknown) => {
-                              const next = value as SelectOption | null
-                              if (next?.value) applySavedFilter(audience.id, next.value)
-                            }}
-                            variant="outlined"
-                          />
-                        }
-                      />
-                      {audience.savedFilterId ? (
-                        <FilterPicker
-                          selectedIds={audience.allowedFilterIds}
-                          onChange={(ids) => updateAudience(audience.id, { allowedFilterIds: ids })}
-                        />
+                        </div>
                       ) : null}
                     </div>
                   )

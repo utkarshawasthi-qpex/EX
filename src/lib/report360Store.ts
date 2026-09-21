@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import {
   cloneReport360Template,
   createDefaultReport360Template,
+  migrateReport360Template,
   type Report360Template,
 } from '@/data/mock-360-reports'
 
@@ -32,7 +33,7 @@ function writeMap(map: TemplateMap) {
 
 export function getReport360Template(surveyId: string): Report360Template {
   const stored = readMap()[surveyId]
-  if (stored?.blocks?.length) return cloneReport360Template(stored)
+  if (stored?.blocks?.length) return cloneReport360Template(migrateReport360Template(stored))
   return createDefaultReport360Template()
 }
 

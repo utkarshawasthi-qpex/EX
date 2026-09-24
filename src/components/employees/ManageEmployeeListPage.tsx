@@ -74,10 +74,6 @@ const WuText = dynamic(
   { ssr: false },
 )
 
-function openAnalyticsPortal() {
-  window.open(getDefaultPortalHref(), '_blank', 'noopener,noreferrer')
-}
-
 const PRIMARY_TABS = ['Employees', 'Integrations', 'Portal', 'Admin'] as const
 const SECONDARY_TABS = [
   { id: 'list', label: 'List', icon: 'wm-format-list-bulleted' },
@@ -516,6 +512,10 @@ export function ManageEmployeeListPage() {
       message: `Portal invite sent to ${selectedIds.size} employees`,
       variant: 'success',
     })
+  }
+
+  function openAnalyticsPortal() {
+    router.push(getDefaultPortalHref())
   }
 
   function loginAsEmployee(employee: DirectoryEmployee) {

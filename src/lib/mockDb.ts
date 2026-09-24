@@ -93,11 +93,31 @@ export function saveCreatedDashboard(dashboard: Dashboard): void {
   const dashboards = getCreatedDashboards()
   window.sessionStorage.setItem(
     CREATED_DASHBOARDS_STORAGE_KEY,
-    JSON.stringify([dashboard, ...dashboards]),
+    JSON.stringify([dashboard, ...dashboards.filter((item) => item.id !== dashboard.id)]),
   )
 
   const all = loadDashboards()
   saveDashboards([dashboard, ...all.filter((item) => item.id !== dashboard.id)])
+}
+
+export function persistDashboard(dashboard: Dashboard): void {
+  if (typeof window === 'undefined') return
+
+  const all = loadDashboards()
+  const exists = all.some((item) => item.id === dashboard.id)
+  saveDashboards(
+    exists
+      ? all.map((item) => (item.id === dashboard.id ? dashboard : item))
+      : [dashboard, ...all],
+  )
+
+  const created = getCreatedDashboards()
+  if (created.some((item) => item.id === dashboard.id)) {
+    window.sessionStorage.setItem(
+      CREATED_DASHBOARDS_STORAGE_KEY,
+      JSON.stringify(created.map((item) => (item.id === dashboard.id ? dashboard : item))),
+    )
+  }
 }
 
 function getCreatedInitiatives(): Initiative[] {

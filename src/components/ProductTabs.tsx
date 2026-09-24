@@ -8,10 +8,10 @@ export function ProductTabs() {
   const pathname = usePathname();
 
   const isEmployeeExperience =
-    pathname === '/lifecycle' || pathname.startsWith('/lifecycle/') || pathname.startsWith('/projects')
-  const is360 = pathname.startsWith('/360');
-  const isEmpower = pathname.startsWith('/empower');
-
+    pathname === '/lifecycle' ||
+    pathname.startsWith('/lifecycle/') ||
+    pathname.startsWith('/projects') ||
+    pathname.startsWith('/360/')
   const WuMenu = dynamic(
     () => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuMenu })),
     { ssr: false }
@@ -36,16 +36,6 @@ export function ProductTabs() {
         <WuMenuItem>
           <Link href="/lifecycle" className={isEmployeeExperience ? 'font-semibold text-blue-700' : 'text-gray-700'}>
             Employee Experience
-          </Link>
-        </WuMenuItem>
-        <WuMenuItem>
-          <Link href="/360" className={is360 ? 'font-semibold text-blue-700' : 'text-gray-700'}>
-            360 Feedback
-          </Link>
-        </WuMenuItem>
-        <WuMenuItem>
-          <Link href="/empower" className={isEmpower ? 'font-semibold text-blue-700' : 'text-gray-700'}>
-            Empower
           </Link>
         </WuMenuItem>
       </WuMenu>

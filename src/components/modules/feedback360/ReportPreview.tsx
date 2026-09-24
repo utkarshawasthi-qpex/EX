@@ -2,19 +2,17 @@
 
 import { useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { useRouter } from 'next/navigation'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ReportPageStack, getReportPagePlan } from '@/components/modules/feedback360/ReportPages'
-import { getReport360Subjects } from '@/data/mock-360-reports'
+import { getReport360Subjects, type Report360Template } from '@/data/mock-360-reports'
 import type { Survey360 } from '@/data/mock/surveys360'
 import {
   computeOverallScore,
   resolvePerformanceCategory,
   type Report360Audience,
 } from '@/lib/report360Scoring'
-import { useReport360Template } from '@/lib/report360Store'
 import { cn } from '@/lib/utils'
 
 const WuButton = dynamic(
@@ -38,10 +36,20 @@ const AUDIENCE_OPTIONS: SelectOption[] = [
   { value: 'subject', label: 'Subject view' },
 ]
 
-export function ReportPreview({ survey }: { survey: Survey360 }) {
-  const router = useRouter()
+export function ReportPreview({
+  survey,
+  template,
+  onBack,
+  onGoToDistribute,
+  backLabel = 'Back to builder',
+}: {
+  survey: Survey360
+  template: Report360Template
+  onBack: () => void
+  onGoToDistribute: () => void
+  backLabel?: string
+}) {
   const { showToast } = useWuShowToast()
-  const { template } = useReport360Template(survey.id)
   const subjects = useMemo(() => getReport360Subjects(survey.id), [survey.id])
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState(subjects[0]?.id ?? '')
@@ -84,9 +92,9 @@ export function ReportPreview({ survey }: { survey: Survey360 }) {
         <button
           type="button"
           className="text-sm text-blue-700 hover:underline"
-          onClick={() => router.push(`/360/reports/${survey.id}`)}
+          onClick={onBack}
         >
-          ← Back to Builder
+          ← {backLabel}
         </button>
         <div className="flex flex-wrap items-center gap-2">
           <div className="min-w-[220px]">
@@ -128,7 +136,7 @@ export function ReportPreview({ survey }: { survey: Survey360 }) {
             action={
               <WuButton
                 variant="secondary"
-                onClick={() => router.push(`/360/surveys/${survey.id}/edit?tab=distribute`)}
+                onClick={onGoToDistribute}
               >
                 Go to Distribute
               </WuButton>

@@ -302,6 +302,15 @@ export const mockSurveyTemplates: SurveyTemplate[] = [
     questionCount: 0,
   },
   {
+    id: 'tmpl_360',
+    title: '360°',
+    provider: 'QuestionPro',
+    description: 'Supercharge the development of key leadership competencies.',
+    category: '360',
+    surveyType: 'engagement',
+    questionCount: 24,
+  },
+  {
     id: 'tmpl_workplace_culture',
     title: 'Workplace Culture',
     provider: 'QuestionPro',

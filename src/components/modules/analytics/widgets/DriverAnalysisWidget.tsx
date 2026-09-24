@@ -20,8 +20,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { useDashboardWidgetContext } from '@/components/modules/analytics/DashboardWidgetContext'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
 import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
+import { takeActionFocusFromDriver } from '@/lib/actionPlans/takeAction'
 import type { ActiveFilter, DashboardWidget } from '@/types'
 import {
   ANONYMITY_THRESHOLD,
@@ -138,12 +140,14 @@ function DriverTooltip({
   xThreshold,
   yThreshold,
   showColorCode,
+  onTakeAction,
 }: {
   active?: boolean
   payload?: Array<{ payload?: DotPoint }>
   xThreshold: number
   yThreshold: number
   showColorCode: boolean
+  onTakeAction?: (focus: ReturnType<typeof takeActionFocusFromDriver>) => void
 }) {
   if (!active || !payload?.length) return null
   const d = payload[0]?.payload
@@ -211,6 +215,30 @@ function DriverTooltip({
         >
           {q.label}
         </span>
+      ) : null}
+      {onTakeAction && q.label === 'Priority focus' ? (
+        <button
+          type="button"
+          onClick={() =>
+            onTakeAction(
+              takeActionFocusFromDriver(d.id, d.name, d.kind, perf, 'Engagement 2026'),
+            )
+          }
+          style={{
+            marginTop: 10,
+            fontSize: 12,
+            fontWeight: 500,
+            color: QP_BLUE,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+            textDecoration: 'underline',
+            textUnderlineOffset: 2,
+          }}
+        >
+          Take action
+        </button>
       ) : null}
     </div>
   )
@@ -447,6 +475,7 @@ export function DriverAnalysisWidget({
   onDuplicate,
   onDelete,
 }: DriverAnalysisWidgetProps) {
+  const { onTakeAction } = useDashboardWidgetContext()
   const { portalAccess } = usePortalSettings()
   const showColorCode = canSeeDriverAnalysisColorCode(portalAccess)
   const title = widget?.title?.trim() || 'Driver analysis'
@@ -496,6 +525,13 @@ export function DriverAnalysisWidget({
       activeFilters,
     )
   }, [activeFilters, level, outcomeQuestions, resolved])
+
+  const priorityDots = useMemo(() => {
+    return dots.filter((d) => {
+      const q = getQuadrant(d.performance, d.impact, STATIC_PERFORMANCE_THRESHOLD, STATIC_IMPACT_THRESHOLD)
+      return q.label === 'Priority focus'
+    })
+  }, [dots])
 
   const impactAxis: AxisRange = useMemo(
     () => computeAxisWithThreshold(dots.map((n) => n.impact), STATIC_IMPACT_THRESHOLD, 0.05, 'impact'),
@@ -589,6 +625,8 @@ export function DriverAnalysisWidget({
       impactThreshold,
     )
     const isPriority = q.label === 'Priority focus'
+    const showTakeAction =
+      onTakeAction && isPriority && node.level === level && !node.children.length
     const hasChildren = node.children.length > 0
     const isExpanded = expandedIds.has(node.id)
 
@@ -650,6 +688,27 @@ export function DriverAnalysisWidget({
         >
           {q.label}
         </span>
+        ) : null}
+
+        {showTakeAction ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onTakeAction(
+                takeActionFocusFromDriver(
+                  node.id,
+                  node.label,
+                  node.level,
+                  node.performance,
+                  'Engagement 2026',
+                ),
+              )
+            }}
+            style={linkButtonStyle}
+          >
+            Take action
+          </button>
         ) : null}
 
         {isExpanded &&
@@ -735,6 +794,32 @@ export function DriverAnalysisWidget({
         ) : (
           <div className="flex flex-col">
             {levelToggle}
+
+            {onTakeAction && priorityDots.length > 0 ? (
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+                <span className="font-medium text-gray-800">Act on priority focus</span>
+                {priorityDots.slice(0, 3).map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    className="font-medium text-[#1B87E6] hover:underline"
+                    onClick={() =>
+                      onTakeAction(
+                        takeActionFocusFromDriver(
+                          d.id,
+                          d.name,
+                          d.kind,
+                          d.performance,
+                          'Engagement 2026',
+                        ),
+                      )
+                    }
+                  >
+                    {d.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             {dots.length >= MIN_DRIVER_PLOT_POINTS && (
             <>
@@ -829,6 +914,7 @@ export function DriverAnalysisWidget({
                         xThreshold={performanceThreshold}
                         yThreshold={impactThreshold}
                         showColorCode={showColorCode}
+                        onTakeAction={onTakeAction}
                       />
                     }
                     cursor={{ strokeDasharray: '3 3' }}

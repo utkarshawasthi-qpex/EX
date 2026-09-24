@@ -7,7 +7,7 @@ export default function Feedback360HomePage() {
   const router = useRouter()
 
   useEffect(() => {
-    router.replace('/360/surveys')
+    router.replace('/lifecycle')
   }, [router])
 
   return null

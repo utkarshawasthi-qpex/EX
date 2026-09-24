@@ -49,6 +49,11 @@ const RATING_LABELS = ['Not at All', 'Rarely', 'Sometimes', 'Often', 'All the Ti
 
 const SAMPLE_QUESTIONS_BY_CATEGORY: Record<SurveyTemplate['category'], PreviewQuestion[]> = {
   custom: [],
+  '360': [
+    { id: '360_1', text: 'This leader creates an inclusive environment for their team.' },
+    { id: '360_2', text: 'This leader communicates a clear vision and direction.' },
+    { id: '360_3', text: 'This leader develops others through coaching and feedback.' },
+  ],
   culture: [
     { id: 'culture_1', text: 'We can maintain quality and still move quickly.' },
     { id: 'culture_2', text: 'Teams share information openly across the organization.' },

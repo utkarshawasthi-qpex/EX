@@ -25,13 +25,11 @@ export type { PortalProductId }
 export const PORTAL_PRODUCT_HREFS: Record<PortalProductId, string> = {
   employeeExperience: '/lifecycle/analytics/list',
   threeSixty: '/360/surveys',
-  empower: '/empower',
 }
 
 export const PORTAL_PRODUCT_LABELS: Record<PortalProductId, string> = {
   employeeExperience: 'Employee Experience',
   threeSixty: '360°',
-  empower: 'Empower',
 }
 
 function collectHierarchyIds(rootId: string, employees: DirectoryEmployee[]): string[] {
@@ -134,6 +132,36 @@ export function getVisibleDashboardFilterFields(
   return DASHBOARD_FILTER_FIELDS.filter((field) => allowedIds.includes(field.id))
 }
 
+export const ALL_DASHBOARD_FILTER_IDS = DASHBOARD_FILTER_FIELDS.map((field) => field.id)
+
+/** Resolved filter ids for a dashboard; missing or empty scope means all standard fields. */
+export function getDashboardAllowedFilterIds(
+  dashboard: { filterScope?: { allowedFilterIds?: string[] } } | null | undefined,
+): string[] {
+  const ids = dashboard?.filterScope?.allowedFilterIds
+  if (!ids || ids.length === 0) return ALL_DASHBOARD_FILTER_IDS
+  return ids
+}
+
+/** Filter menu for analytics dashboards (dashboard scope only; portal filter access rules deferred). */
+export function getDashboardFilterFields(
+  dashboard: { filterScope?: { allowedFilterIds?: string[] } } | null | undefined,
+): FilterField[] {
+  const allowed = new Set(getDashboardAllowedFilterIds(dashboard))
+  return DASHBOARD_FILTER_FIELDS.filter((field) => allowed.has(field.id))
+}
+
+export function normalizeDashboardFilterScope(
+  selectedIds: string[],
+): { filterScope?: { allowedFilterIds: string[] } } {
+  const unique = [...new Set(selectedIds)]
+  const isFullScope =
+    unique.length === ALL_DASHBOARD_FILTER_IDS.length &&
+    ALL_DASHBOARD_FILTER_IDS.every((id) => unique.includes(id))
+  if (unique.length === 0 || isFullScope) return {}
+  return { filterScope: { allowedFilterIds: unique } }
+}
+
 export function applyRespondentAccessScope<T extends { id: string; department: string }>(
   respondents: T[],
 ): T[] {
@@ -156,12 +184,11 @@ export function applyRespondentAccessScope<T extends { id: string; department: s
 
 export function isPortalProductEnabled(id: PortalProductId, access: PortalAccessSettings) {
   if (id === 'employeeExperience') return access.employeeExperience
-  if (id === 'threeSixty') return access.threeSixty
-  return access.empower
+  return access.threeSixty
 }
 
 export function getEnabledPortalProducts(access: PortalAccessSettings = getPortalSettings().portalAccess) {
-  return (['employeeExperience', 'threeSixty', 'empower'] as PortalProductId[]).filter((id) =>
+  return (['employeeExperience', 'threeSixty'] as PortalProductId[]).filter((id) =>
     isPortalProductEnabled(id, access),
   )
 }

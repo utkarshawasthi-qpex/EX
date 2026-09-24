@@ -124,7 +124,7 @@ export type PortalFilterAccessRule = {
   audiences: FilterAudience[]
 }
 
-export type PortalProductId = 'employeeExperience' | 'threeSixty' | 'empower'
+export type PortalProductId = 'employeeExperience' | 'threeSixty'
 
 export type PortalSettingsState = {
   pages: PortalContentPage[]
@@ -202,13 +202,13 @@ export const DEFAULT_PORTAL_PAGES: PortalContentPage[] = [
     'about',
     'About',
     'This portal is where employees view experience dashboards and follow through on action plans. Content and navigation are configured by your administrator in Employee Experience.',
-    { mainTab: true, footer: true },
+    { footer: false },
   ),
   page(
     'faq',
     'FAQ',
     'How do I see my team’s results? Open Dashboards and use the filters your administrator enabled.\n\nWhy can’t I open Employee Experience from here? The portal is for dashboards and action planning. Administration stays in the Employee Experience app.',
-    { mainTab: true, footer: true },
+    { footer: false },
   ),
   page(
     'landing-page',

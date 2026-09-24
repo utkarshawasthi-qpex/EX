@@ -2,20 +2,23 @@
 
 import { useId, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { useRouter } from 'next/navigation'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
+import { ReportPreview } from '@/components/modules/feedback360/ReportPreview'
 import {
+  REPORT360_BLOCK_DEFAULT_TITLES,
   REPORT360_BLOCK_DESCRIPTIONS,
   REPORT360_COMPETENCIES,
+  REPORT360_CONSTANT_BLOCK_TYPES,
   REPORT360_MERGE_VARIABLES,
   REPORT360_OPEN_QUESTIONS,
-  REPORT360_PRESETS,
   REPORT360_RELATIONSHIPS,
   REPORT360_RELATIONSHIP_LABELS,
   REPORT360_SCORED_BLOCK_TYPES,
-  applyReport360Preset,
+  cloneReport360Template,
   createDefaultReport360Template,
+  createReport360Block,
   type Report360Block,
+  type Report360BlockType,
   type Report360CoverTemplate,
   type Report360LogoAsset,
   type Report360MasterDesign,
@@ -26,7 +29,11 @@ import {
 } from '@/data/mock-360-reports'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { weightTotal } from '@/lib/report360Scoring'
-import { useReport360Template } from '@/lib/report360Store'
+import {
+  saveReport360TemplateToLibrary,
+  useReport360Template,
+  useSavedReport360Templates,
+} from '@/lib/report360Store'
 import { cn } from '@/lib/utils'
 import type { Survey360 } from '@/data/mock/surveys360'
 
@@ -1615,74 +1622,107 @@ function BlockSettings({
   )
 }
 
-export function ReportBuilder({ survey }: { survey: Survey360 }) {
-  const router = useRouter()
+export function ReportBuilder({
+  survey,
+  onGoToDistribute,
+  startInPreview = false,
+}: {
+  survey: Survey360
+  onGoToDistribute: () => void
+  startInPreview?: boolean
+}) {
   const { showToast } = useWuShowToast()
+  const [previewing, setPreviewing] = useState(startInPreview)
   const { template, setTemplate, save, reset } = useReport360Template(survey.id)
+  const savedTemplates = useSavedReport360Templates()
   const [expandedId, setExpandedId] = useState('block_competencyDetail')
   const [dragId, setDragId] = useState<string | null>(null)
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [templateNameError, setTemplateNameError] = useState('')
+  const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null)
+  const [reportBeforeTemplate, setReportBeforeTemplate] = useState<Report360Template | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingDraft, setEditingDraft] = useState<Report360Template | null>(null)
+  const isEditing = editingId !== null && editingDraft !== null
+  const activeTemplate = isEditing ? editingDraft : template
+  const editingTemplate = savedTemplates.find((item) => item.id === editingId) ?? null
+
+  function commit(next: Report360Template) {
+    if (isEditing) setEditingDraft(next)
+    else setTemplate(next)
+  }
 
   const sectionOptions = useMemo<SelectOption[]>(
     () => survey.sections.map((section) => ({ value: section.title, label: section.title })),
     [survey.sections],
   )
 
-  const presetOptions: SelectOption[] = REPORT360_PRESETS.map((preset) => ({
-    value: preset.id,
-    label: preset.name,
+  const templateOptions: SelectOption[] = savedTemplates.map((item) => ({
+    value: item.id,
+    label: item.name,
   }))
+  const addableBlocks: SelectOption[] = (
+    Object.keys(REPORT360_BLOCK_DEFAULT_TITLES) as Report360BlockType[]
+  )
+    .filter(
+      (type) =>
+        !REPORT360_CONSTANT_BLOCK_TYPES.includes(type) &&
+        !activeTemplate.blocks.some((block) => block.type === type),
+    )
+    .map((type) => ({ value: type, label: REPORT360_BLOCK_DEFAULT_TITLES[type] }))
 
   const errors = useMemo(() => {
     const list: string[] = []
     if (
-      template.masterDesign.globalWeightsEnabled &&
-      weightTotal(template.masterDesign.relationshipWeights) !== 100
+      activeTemplate.masterDesign.globalWeightsEnabled &&
+      weightTotal(activeTemplate.masterDesign.relationshipWeights) !== 100
     ) {
       list.push('Global relationship weights must equal 100%.')
     }
-    template.blocks.forEach((block) => {
+    activeTemplate.blocks.forEach((block) => {
       if (block.enabled && block.useBlockWeights && weightTotal(block.relationshipWeights) !== 100) {
         list.push(`${block.title} weights must equal 100%.`)
       }
     })
-    const spider = template.blocks.find((block) => block.type === 'spiderChart')
+    const spider = activeTemplate.blocks.find((block) => block.type === 'spiderChart')
     if (spider?.enabled && spider.spiderCompetencyIds.length < 3) {
       list.push('Spider / Radar Chart needs at least 3 competencies.')
     }
-    const comments = template.blocks.find((block) => block.type === 'priorityComments')
+    const comments = activeTemplate.blocks.find((block) => block.type === 'priorityComments')
     if (comments?.enabled && comments.commentQuestionIds.length === 0) {
       list.push('Priority Comments & Evidence needs at least one question.')
     }
     return list
-  }, [template])
+  }, [activeTemplate])
 
   function updateBlock(blockId: string, patch: Partial<Report360Block>) {
-    setTemplate({
-      ...template,
-      blocks: template.blocks.map((block) => (block.id === blockId ? { ...block, ...patch } : block)),
+    commit({
+      ...activeTemplate,
+      blocks: activeTemplate.blocks.map((block) => (block.id === blockId ? { ...block, ...patch } : block)),
     })
   }
 
   function moveBlock(blockId: string, direction: -1 | 1) {
-    const index = template.blocks.findIndex((block) => block.id === blockId)
+    const index = activeTemplate.blocks.findIndex((block) => block.id === blockId)
     const target = index + direction
-    if (index < 1 || target < 1 || target >= template.blocks.length) return
-    const next = [...template.blocks]
+    if (index < 1 || target < 1 || target >= activeTemplate.blocks.length) return
+    const next = [...activeTemplate.blocks]
     ;[next[index], next[target]] = [next[target], next[index]]
-    setTemplate({ ...template, blocks: next })
+    commit({ ...activeTemplate, blocks: next })
   }
 
   function reorder(sourceId: string, targetId: string) {
     if (sourceId === targetId) return
-    const source = template.blocks.find((block) => block.id === sourceId)
-    const target = template.blocks.find((block) => block.id === targetId)
+    const source = activeTemplate.blocks.find((block) => block.id === sourceId)
+    const target = activeTemplate.blocks.find((block) => block.id === targetId)
     if (!source || !target || source.locked || target.locked) return
-    const without = template.blocks.filter((block) => block.id !== sourceId)
+    const without = activeTemplate.blocks.filter((block) => block.id !== sourceId)
     const targetIndex = without.findIndex((block) => block.id === targetId)
     const next = [...without]
     next.splice(targetIndex, 0, source)
     if (next[0]?.type !== 'masterDesign') return
-    setTemplate({ ...template, blocks: next })
+    commit({ ...activeTemplate, blocks: next })
   }
 
   function handleSave() {
@@ -1690,71 +1730,194 @@ export function ReportBuilder({ survey }: { survey: Survey360 }) {
       showToast({ message: errors[0], variant: 'error' })
       return
     }
-    save(template)
-    showToast({ message: 'Report template saved', variant: 'success' })
+    if (isEditing && editingTemplate) {
+      saveReport360TemplateToLibrary(editingTemplate.name, activeTemplate)
+      showToast({ message: `${editingTemplate.name} updated`, variant: 'success' })
+      return
+    }
+    save(activeTemplate)
+    showToast({ message: 'Report saved', variant: 'success' })
   }
 
   function handleReset() {
     const next = reset()
     setTemplate(next)
+    setAppliedTemplateId(null)
+    setReportBeforeTemplate(null)
+    setEditingId(null)
+    setEditingDraft(null)
     setExpandedId('block_competencyDetail')
-    showToast({ message: 'Report template reset', variant: 'success' })
+    showToast({ message: 'Report reset', variant: 'success' })
   }
 
-  function handlePreset(presetId: string) {
-    const preset = REPORT360_PRESETS.find((item) => item.id === presetId)
-    if (!preset) return
-    setTemplate(applyReport360Preset(template, presetId))
-    showToast({ message: `${preset.name} preset applied. Save to keep it.`, variant: 'success' })
+  function leaveTemplateEditor() {
+    setEditingId(null)
+    setEditingDraft(null)
+    setExpandedId('')
   }
 
-  const enabledCount = template.blocks.filter((block) => block.enabled && !block.locked).length
+  function handleUseTemplate(templateId: string) {
+    const saved = savedTemplates.find((item) => item.id === templateId)
+    if (!saved || saved.id === appliedTemplateId) return
+    setReportBeforeTemplate(cloneReport360Template(template))
+    leaveTemplateEditor()
+    setAppliedTemplateId(saved.id)
+    setTemplate(cloneReport360Template(saved.template))
+    showToast({
+      message: `${saved.name} applied to this report. Changes here stay on the report.`,
+      variant: 'success',
+    })
+  }
+
+  function restorePreviousReport() {
+    if (!reportBeforeTemplate) return
+    setTemplate(cloneReport360Template(reportBeforeTemplate))
+    setReportBeforeTemplate(null)
+    setAppliedTemplateId(null)
+    leaveTemplateEditor()
+    setPreviewing(false)
+  }
+
+  function handleEditTemplate(templateId: string) {
+    const saved = savedTemplates.find((item) => item.id === templateId)
+    if (!saved) return
+    setEditingId(saved.id)
+    setEditingDraft(cloneReport360Template(saved.template))
+    setExpandedId('block_masterDesign')
+  }
+
+  function handleSaveAsTemplate() {
+    const name = templateName.trim()
+    if (!name) {
+      setTemplateNameError('Template name is required.')
+      return
+    }
+    if (errors.length > 0) {
+      showToast({ message: errors[0], variant: 'error' })
+      return
+    }
+    const existing = savedTemplates.some((item) => item.name.toLowerCase() === name.toLowerCase())
+    const saved = saveReport360TemplateToLibrary(name, activeTemplate)
+    setAppliedTemplateId(saved.id)
+    setSaveTemplateOpen(false)
+    setTemplateName('')
+    setTemplateNameError('')
+    showToast({
+      message: existing ? `${name} updated` : `${name} saved as a template`,
+      variant: 'success',
+    })
+  }
+
+  function addBlock(type: Report360BlockType) {
+    if (activeTemplate.blocks.some((block) => block.type === type)) return
+    const block = createReport360Block(type)
+    commit({ ...activeTemplate, blocks: [...activeTemplate.blocks, block] })
+    setExpandedId(block.id)
+  }
+
+  function removeBlock(blockId: string) {
+    const block = activeTemplate.blocks.find((item) => item.id === blockId)
+    if (!block || REPORT360_CONSTANT_BLOCK_TYPES.includes(block.type)) return
+    commit({ ...activeTemplate, blocks: activeTemplate.blocks.filter((item) => item.id !== blockId) })
+    if (expandedId === blockId) setExpandedId('')
+  }
+
+  const enabledCount = activeTemplate.blocks.filter((block) => block.enabled && !block.locked).length
+  const appliedTemplate = savedTemplates.find((item) => item.id === appliedTemplateId) ?? null
+
+  if (previewing) {
+    return (
+      <ReportPreview
+        survey={survey}
+        template={activeTemplate}
+        backLabel={isEditing ? 'Back to template' : 'Back to builder'}
+        onBack={() => setPreviewing(false)}
+        onGoToDistribute={onGoToDistribute}
+      />
+    )
+  }
 
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 bg-gray-50 px-6 pt-6 pb-4">
         <div>
           <p className="text-xs text-gray-500">{survey.title}</p>
-          <h1 className="text-2xl font-semibold text-gray-900">Report Builder</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">
+            {isEditing && editingTemplate ? editingTemplate.name : 'Report Builder'}
+          </h1>
           <p className="mt-1 text-sm text-gray-500">
-            {enabledCount} blocks enabled · drag to reorder
+            {isEditing
+              ? 'Editing this template. The report setup is unchanged until you use the template.'
+              : appliedTemplate
+                ? `Using ${appliedTemplate.name} on this report · ${enabledCount} blocks enabled`
+                : `${enabledCount} blocks enabled · drag to reorder`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-[180px]">
-            <WuSelect
-              data={presetOptions}
-              accessorKey={{ value: 'value', label: 'label' }}
-              value={null}
-              onSelect={(option) => {
-                const presetId = (option as SelectOption | null)?.value
-                if (presetId) handlePreset(presetId)
+          {isEditing ? (
+            <WuButton variant="secondary" onClick={leaveTemplateEditor}>
+              Back to report
+            </WuButton>
+          ) : reportBeforeTemplate ? (
+            <WuButton variant="secondary" onClick={restorePreviousReport}>
+              Back
+            </WuButton>
+          ) : null}
+          {isEditing ? null : (
+            <div className="min-w-[180px]">
+              <WuSelect
+                data={templateOptions}
+                accessorKey={{ value: 'value', label: 'label' }}
+                value={appliedTemplate ? { value: appliedTemplate.id, label: appliedTemplate.name } : null}
+                onSelect={(option) => {
+                  const templateId = (option as SelectOption | null)?.value
+                  if (templateId) handleUseTemplate(templateId)
+                }}
+                variant="outlined"
+                placeholder={templateOptions.length > 0 ? 'Use a template' : 'No saved templates'}
+              />
+            </div>
+          )}
+          {templateOptions.length > 0 ? (
+            <div className="min-w-[180px]">
+              <WuSelect
+                data={templateOptions}
+                accessorKey={{ value: 'value', label: 'label' }}
+                value={editingTemplate ? { value: editingTemplate.id, label: editingTemplate.name } : null}
+                onSelect={(option) => {
+                  const templateId = (option as SelectOption | null)?.value
+                  if (templateId) handleEditTemplate(templateId)
+                }}
+                variant="outlined"
+                placeholder="Edit template"
+              />
+            </div>
+          ) : null}
+          {!isEditing && !appliedTemplateId ? (
+            <WuButton
+              variant="secondary"
+              onClick={() => {
+                setTemplateName('')
+                setTemplateNameError('')
+                setSaveTemplateOpen(true)
               }}
-              variant="outlined"
-              placeholder="Start from preset"
-            />
-          </div>
-          <WuButton variant="secondary" onClick={() => setExpandedId('block_masterDesign')}>
-            Configure Template
-          </WuButton>
-          <WuButton variant="secondary" onClick={() => router.push(`/360/reports/${survey.id}/preview`)}>
+            >
+              Save as template
+            </WuButton>
+          ) : null}
+          {isEditing ? (
+            <WuButton variant="secondary" onClick={() => setExpandedId('block_masterDesign')}>
+              Configure template
+            </WuButton>
+          ) : null}
+          <WuButton variant="primary" onClick={() => setPreviewing(true)}>
             Preview
-          </WuButton>
-          <WuButton
-            onClick={() =>
-              showToast({
-                message: 'PDF download is a prototype action. Use Preview to review pages.',
-                variant: 'success',
-              })
-            }
-          >
-            Download PDFs
           </WuButton>
         </div>
       </header>
 
       <div className="flex flex-1 flex-col gap-3 px-6 py-6">
-        {template.blocks.map((block, blockIndex) => {
+        {activeTemplate.blocks.map((block, blockIndex) => {
           const expanded = expandedId === block.id
           return (
             <section
@@ -1792,7 +1955,7 @@ export function ReportBuilder({ survey }: { survey: Survey360 }) {
                       type="button"
                       className="text-[10px] text-gray-400 hover:text-gray-700 disabled:opacity-30"
                       aria-label={`Move ${block.title} down`}
-                      disabled={blockIndex >= template.blocks.length - 1}
+                      disabled={blockIndex >= activeTemplate.blocks.length - 1}
                       onClick={() => moveBlock(block.id, 1)}
                     >
                       ▼
@@ -1819,23 +1982,34 @@ export function ReportBuilder({ survey }: { survey: Survey360 }) {
                     Always on
                   </WuText>
                 ) : (
-                  <WuToggle
-                    checked={block.enabled}
-                    onChange={(enabled) => updateBlock(block.id, { enabled })}
-                  />
+                  <div className="flex items-center gap-3">
+                    {REPORT360_CONSTANT_BLOCK_TYPES.includes(block.type) ? null : (
+                      <button
+                        type="button"
+                        className="text-sm text-gray-500 hover:text-gray-800"
+                        onClick={() => removeBlock(block.id)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                    <WuToggle
+                      checked={block.enabled}
+                      onChange={(enabled) => updateBlock(block.id, { enabled })}
+                    />
+                  </div>
                 )}
               </div>
               {expanded ? (
                 <div className="border-t border-gray-100 px-4 py-4">
                   <BlockSettings
                     block={block}
-                    masterDesign={template.masterDesign}
+                    masterDesign={activeTemplate.masterDesign}
                     sectionOptions={
                       sectionOptions.length > 0
                         ? sectionOptions
                         : [{ value: 'Inclusive Leadership', label: 'Inclusive Leadership' }]
                     }
-                    onMasterChange={(masterDesign) => setTemplate({ ...template, masterDesign })}
+                    onMasterChange={(masterDesign) => commit({ ...activeTemplate, masterDesign })}
                     onChange={(patch) => updateBlock(block.id, patch)}
                   />
                 </div>
@@ -1843,6 +2017,21 @@ export function ReportBuilder({ survey }: { survey: Survey360 }) {
             </section>
           )
         })}
+        {addableBlocks.length > 0 ? (
+          <div className="w-72">
+            <WuSelect
+              data={addableBlocks}
+              accessorKey={{ value: 'value', label: 'label' }}
+              value={null}
+              placeholder="Add a block"
+              onSelect={(option) => {
+                const type = (option as SelectOption | null)?.value
+                if (type) addBlock(type as Report360BlockType)
+              }}
+              variant="outlined"
+            />
+          </div>
+        ) : null}
       </div>
 
       <footer className="sticky bottom-0 flex flex-wrap items-center justify-end gap-3 border-t border-gray-200 bg-white px-6 py-4">
@@ -1852,13 +2041,52 @@ export function ReportBuilder({ survey }: { survey: Survey360 }) {
             {errors.length > 1 ? ` (+${errors.length - 1} more)` : ''}
           </p>
         ) : null}
-        <WuButton variant="secondary" onClick={handleReset}>
-          Reset
-        </WuButton>
+        {isEditing ? (
+          <WuButton variant="secondary" onClick={leaveTemplateEditor}>
+            Back to report
+          </WuButton>
+        ) : (
+          <WuButton variant="secondary" onClick={handleReset}>
+            Reset
+          </WuButton>
+        )}
         <WuButton onClick={handleSave} disabled={errors.length > 0}>
-          Save Changes
+          {isEditing ? 'Save template' : 'Save changes'}
         </WuButton>
       </footer>
+
+      <WuModal open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen} size="md" {...preventModalDismiss}>
+        <WuModalHeader>Save as template</WuModalHeader>
+        <WuModalContent>
+          <WuFormGroup
+            Label="Template name"
+            Error={templateNameError || undefined}
+            Input={
+              <WuInput
+                variant="outlined"
+                value={templateName}
+                invalid={Boolean(templateNameError)}
+                placeholder="e.g. Leadership debrief"
+                onChange={(event) => {
+                  setTemplateName(event.target.value)
+                  if (templateNameError) setTemplateNameError('')
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') handleSaveAsTemplate()
+                }}
+              />
+            }
+          />
+        </WuModalContent>
+        <WuModalFooter>
+          <WuButton variant="secondary" onClick={() => setSaveTemplateOpen(false)}>
+            Cancel
+          </WuButton>
+          <WuButton variant="primary" onClick={handleSaveAsTemplate}>
+            Save
+          </WuButton>
+        </WuModalFooter>
+      </WuModal>
     </div>
   )
 }

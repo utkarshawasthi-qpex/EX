@@ -10,24 +10,12 @@ const moduleOptions = [
     href: '/lifecycle',
     iconClassName: 'wc-employees-list',
   },
-  {
-    label: '360 Feedback',
-    href: '/360/surveys',
-    iconClassName: 'wm-360',
-  },
-  {
-    label: 'Empower',
-    href: '/empower/initiatives',
-    iconClassName: 'wm-lightbulb',
-  },
-]
+] as const
 
 function isOptionActive(href: string, pathname: string) {
   if (href.startsWith('/lifecycle')) {
-    return pathname === '/lifecycle' || pathname.startsWith('/lifecycle/')
+    return pathname === '/lifecycle' || pathname.startsWith('/lifecycle/') || pathname.startsWith('/360/')
   }
-  if (href.startsWith('/360')) return pathname.startsWith('/360')
-  if (href.startsWith('/empower')) return pathname.startsWith('/empower')
   return false
 }
 
@@ -73,22 +61,29 @@ export function ProductSwitcher({
     router.push(href)
   }
 
+  const hasMultipleModules = moduleOptions.length > 1
+
   return (
     <div ref={containerRef} className="relative">
       <button
         type="button"
         className={triggerClassName}
-        onClick={() => setIsOpen((open) => !open)}
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
+        onClick={() => {
+          if (hasMultipleModules) setIsOpen((open) => !open)
+          else navigateTo(moduleOptions[0].href)
+        }}
+        aria-haspopup={hasMultipleModules ? 'menu' : undefined}
+        aria-expanded={hasMultipleModules ? isOpen : undefined}
       >
         {label ?? activeLabel}
-        <span className={chevronClassName} aria-hidden>
-          {chevron}
-        </span>
+        {hasMultipleModules ? (
+          <span className={chevronClassName} aria-hidden>
+            {chevron}
+          </span>
+        ) : null}
       </button>
 
-      {isOpen && (
+      {hasMultipleModules && isOpen && (
         <div
           role="menu"
           className="absolute left-0 top-9 z-50 w-72 rounded-xl border border-gray-200 bg-white py-2 text-gray-900 shadow-xl"

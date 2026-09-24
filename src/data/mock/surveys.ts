@@ -1,6 +1,48 @@
 ﻿import type { LifecycleSurvey } from '@/types'
 
+const MATRIX_SCALE = ['Not at All', 'Rarely', 'Sometimes', 'Often', 'All the Time'] as const
+
 export const mockSurveys: LifecycleSurvey[] = [
+  {
+    id: 'surv_workplace_culture',
+    title: 'Workplace Culture',
+    type: 'engagement',
+    status: 'active',
+    markers: [
+      {
+        id: 'mark_wc_block_1',
+        name: 'Block 1',
+        order: 1,
+        questionIds: ['q_wc_matrix_001'],
+      },
+    ],
+    questions: [
+      {
+        id: 'q_wc_matrix_001',
+        text: 'How much do you experience the following behavior in your workplace',
+        type: 'rating_scale',
+        required: true,
+        markerId: 'mark_wc_block_1',
+        ratingScale: {
+          min: 1,
+          max: 5,
+          labels: Object.fromEntries(MATRIX_SCALE.map((label, index) => [index + 1, label])),
+        },
+        matrixRows: [
+          'We evaluate the quality of the work we deliver',
+          'People speak up when something is not working',
+          'Teams collaborate across departments',
+        ],
+      },
+    ],
+    anonymityThreshold: 5,
+    languages: ['en'],
+    responseCount: 3,
+    responseRate: 12,
+    createdAt: '2026-09-07',
+    updatedAt: '2026-09-07',
+    createdBy: 'emp_017',
+  },
   {
     id: 'surv_onboarding_d30',
     title: 'Onboarding D30',

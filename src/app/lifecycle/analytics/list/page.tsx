@@ -17,7 +17,12 @@ import {
 import { seedDefaultDashboardsIfNeeded } from '@/lib/seedDashboards'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { getCurrentUser, isAdminContext } from '@/lib/userContext'
-import { canCreatePortalDashboard } from '@/lib/portalAccess'
+import {
+  DashboardFilterScopeOptionalSection,
+  defaultDashboardFilterScopeIds,
+  isFullDashboardFilterScope,
+} from '@/components/modules/analytics/DashboardFilterScopeCheckboxes'
+import { canCreatePortalDashboard, normalizeDashboardFilterScope } from '@/lib/portalAccess'
 import { usePortalSettings } from '@/lib/portalSettingsStore'
 import { cn } from '@/lib/utils'
 import type { Dashboard, DashboardAccess } from '@/types'
@@ -54,8 +59,8 @@ const WuModalHeader = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuModalHeader })),
   { ssr: false },
 )
-const WuSelect = dynamic(
-  () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuSelect })),
+const WuToggle = dynamic(
+  () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuToggle })),
   { ssr: false },
 )
 const WuText = dynamic(
@@ -143,13 +148,21 @@ function CreateDashboardModal({
   onCreate: (dashboard: Dashboard) => void
 }) {
   const [name, setName] = useState('')
-  const [access, setAccess] = useState<AccessOption>(ACCESS_OPTIONS[0])
+  const [isGlobal, setIsGlobal] = useState(false)
+  const [filterScopeIds, setFilterScopeIds] = useState<string[]>(() =>
+    defaultDashboardFilterScopeIds(),
+  )
+  const [filterScopeExpanded, setFilterScopeExpanded] = useState(false)
   const [error, setError] = useState('')
+  const [filterScopeError, setFilterScopeError] = useState('')
 
   function resetAndClose() {
     setName('')
-    setAccess(ACCESS_OPTIONS[0])
+    setIsGlobal(false)
+    setFilterScopeIds(defaultDashboardFilterScopeIds())
+    setFilterScopeExpanded(false)
     setError('')
+    setFilterScopeError('')
     onOpenChange(false)
   }
 
@@ -159,22 +172,28 @@ function CreateDashboardModal({
       setError('Dashboard name is required.')
       return
     }
+    if (filterScopeExpanded) {
+      if (filterScopeIds.length === 0) {
+        setFilterScopeError('Select at least one filter dimension.')
+        return
+      }
+    }
 
     const id = `dash_${Date.now()}`
+    const scope =
+      filterScopeExpanded && !isFullDashboardFilterScope(filterScopeIds)
+        ? normalizeDashboardFilterScope(filterScopeIds)
+        : {}
     onCreate({
       id,
       name: trimmedName,
-      access: access.value,
+      access: isGlobal ? 'global' : 'private',
       authorEmail: getCurrentUser().email,
       createdAt: new Date().toISOString(),
       tabs: [{ id: `${id}_tab_1`, name: 'Tab 1', order: 1, widgets: [] }],
+      ...scope,
     })
     resetAndClose()
-  }
-
-  function handleAccessSelect(value: unknown) {
-    const selected = value as AccessOption | AccessOption[]
-    setAccess((Array.isArray(selected) ? selected[0] : selected) ?? ACCESS_OPTIONS[0])
   }
 
   return (
@@ -202,18 +221,22 @@ function CreateDashboardModal({
             )}
           </label>
 
-          <label className="flex flex-col gap-2">
-            <WuText size="sm" as="span" className="text-gray-700">
-              Access level
-            </WuText>
-            <WuSelect
-              data={ACCESS_OPTIONS}
-              accessorKey={{ value: 'value', label: 'label' }}
-              value={access}
-              onSelect={handleAccessSelect}
-              variant="outlined"
-            />
-          </label>
+          <WuToggle
+            checked={isGlobal}
+            onChange={setIsGlobal}
+            Label="Global dashboard"
+          />
+
+          <DashboardFilterScopeOptionalSection
+            selectedIds={filterScopeIds}
+            expanded={filterScopeExpanded}
+            onExpandedChange={setFilterScopeExpanded}
+            onChange={(ids) => {
+              setFilterScopeIds(ids)
+              if (filterScopeError) setFilterScopeError('')
+            }}
+            error={filterScopeError}
+          />
         </div>
       </WuModalContent>
       <WuModalFooter>

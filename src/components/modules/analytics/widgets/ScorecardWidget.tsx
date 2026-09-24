@@ -128,7 +128,7 @@ export function ScorecardWidget({
     activeFilters.length > 0
       ? buildFilteredScorecardMarkers(activeFilters, baseMarkers)
       : baseMarkers
-  const { capabilities, onExportPpt, reportWidgetHeight } = useDashboardWidgetContext()
+  const { capabilities, onExportPpt, reportWidgetHeight, onTakeAction } = useDashboardWidgetContext()
   const rootRef = useRef<HTMLElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -194,11 +194,17 @@ export function ScorecardWidget({
                   Comparison
                   <SortIcon />
                 </th>
+                {onTakeAction ? (
+                  <th className="w-[88px] px-2 py-2 text-right text-xs font-medium uppercase text-gray-500">
+                    Action
+                  </th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
               {markers.map((marker) => {
                 const isOverall = marker.name === 'Company Overall'
+                const canPlan = !isOverall && marker.favorable < 75 && onTakeAction
                 return (
                   <tr key={marker.name} className="border-b border-gray-100">
                     <td className={cn('py-3 pl-4 pr-3 text-sm', isOverall ? 'font-normal text-gray-900' : 'text-gray-700')}>
@@ -225,6 +231,28 @@ export function ScorecardWidget({
                         trend={marker.trend}
                       />
                     </td>
+                    {onTakeAction ? (
+                      <td className="px-2 py-3 text-right">
+                        {canPlan ? (
+                          <button
+                            type="button"
+                            className="text-xs font-medium text-blue-600 hover:underline"
+                            onClick={() =>
+                              onTakeAction({
+                                label: marker.name,
+                                favorability: marker.favorable,
+                                surveyName,
+                                focus: { kind: 'marker', id: marker.name, label: marker.name },
+                              })
+                            }
+                          >
+                            Take action
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
+                    ) : null}
                   </tr>
                 )
               })}

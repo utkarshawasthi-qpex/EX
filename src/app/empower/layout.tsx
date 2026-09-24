@@ -1,27 +1,17 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { EmpowerShell } from '@/components/empower/EmpowerShell'
-import { AuthChecking } from '@/components/shared/AuthChecking'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect } from 'react'
+import { redirectPathFromEmpower } from '@/lib/actionPlans/paths'
 
-export default function EmpowerLayout({ children }: { children: React.ReactNode }) {
+/** Legacy Empower URLs redirect into the EX portal action planning module. */
+export default function EmpowerRedirectLayout() {
+  const pathname = usePathname()
   const router = useRouter()
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (window.localStorage.getItem('pp_authed') !== 'true') {
-      router.replace('/login')
-      return
-    }
+    router.replace(redirectPathFromEmpower(pathname))
+  }, [pathname, router])
 
-    setIsCheckingAuth(false)
-  }, [router])
-
-  if (isCheckingAuth) {
-    return <AuthChecking />
-  }
-
-  return <EmpowerShell>{children}</EmpowerShell>
+  return null
 }

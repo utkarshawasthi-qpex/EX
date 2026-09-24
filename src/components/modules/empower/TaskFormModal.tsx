@@ -70,13 +70,16 @@ export function TaskFormModal({
 
   function handleSubmit() {
     if (!text.trim()) return
+    if (!dueDate) return
+
+    const contributorIds = contributors.slice(0, 1).map((option) => option.value)
 
     const base: InitiativeTask = {
       id: task?.id ?? `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       text: text.trim(),
       description: description.trim() || undefined,
       ownerId: owner?.value,
-      contributorIds: contributors.map((option) => option.value),
+      contributorIds,
       dueDate: dueDate || undefined,
       status: task?.status ?? 'pending',
       completedAt: task?.completedAt,
@@ -119,21 +122,20 @@ export function TaskFormModal({
             }
           />
           <WuFormGroup
-            Label="Contributors"
+            Label="Assignee"
             Input={
               <WuSelect
                 data={employeeOptions}
                 accessorKey={{ value: 'value', label: 'label' }}
-                value={contributors}
-                onSelect={(v) => setContributors(v as SelectOption[])}
-                multiple
+                value={contributors[0] ?? null}
+                onSelect={(v) => setContributors(v ? [v as SelectOption] : [])}
                 variant="outlined"
-                placeholder="No contributors"
+                placeholder="Select assignee"
               />
             }
           />
           <WuFormGroup
-            Label="Due date"
+            Label="Due date (required)"
             Input={
               <WuDatePicker
                 value={dueDate ? new Date(`${dueDate}T00:00:00`) : undefined}
@@ -164,7 +166,7 @@ export function TaskFormModal({
           <WuButton variant="secondary" onClick={() => onOpenChange(false)}>
             Cancel
           </WuButton>
-          <WuButton variant="primary" onClick={handleSubmit} disabled={!text.trim()}>
+          <WuButton variant="primary" onClick={handleSubmit} disabled={!text.trim() || !dueDate}>
             {task ? 'Save task' : 'Create task'}
           </WuButton>
         </div>

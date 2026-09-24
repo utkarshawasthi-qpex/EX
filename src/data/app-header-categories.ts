@@ -16,20 +16,6 @@ export const APP_HEADER_CATEGORIES: IWuAppHeaderMenuItem[] = [
         active: true,
         order: 1,
       },
-      {
-        name: '360 Feedback',
-        link: '/360',
-        icon: 'e308',
-        active: true,
-        order: 2,
-      },
-      {
-        name: 'Empower',
-        link: '/empower',
-        icon: 'e324',
-        active: true,
-        order: 3,
-      },
     ],
   },
 ];

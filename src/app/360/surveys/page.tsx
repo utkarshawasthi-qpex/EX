@@ -158,7 +158,9 @@ export default function ThreeSixtySurveysPage() {
           <button
             type="button"
             className="text-blue-600 hover:underline"
-            onClick={() => router.push(`/360/reports/${row.original.id}`)}
+            onClick={() =>
+              router.push(`/360/surveys/${row.original.id}/edit?tab=analytics&section=individualReports`)
+            }
           >
             Reports
           </button>

@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { ExHeaderSearch } from '@/components/studies/ExHeaderSearch'
 import { MOCK_HEADER_USER } from '@/data/mock-header-user'
@@ -15,6 +15,10 @@ import {
 import { cn } from '@/lib/utils'
 import { useRosterStore } from '@/lib/rosterStore'
 import { getCurrentUser, type AppUser } from '@/lib/userContext'
+import {
+  getSurveyBuilderCrumb,
+  subscribeSurveyBuilderCrumb,
+} from '@/lib/surveyBuilderCrumb'
 
 const WuAppHeaderMenu = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuAppHeaderMenu })),
@@ -40,7 +44,20 @@ export function ExAppHeader() {
   const [user, setUser] = useState<AppUser | null>(null)
   const { setup } = useRosterStore()
 
-  const breadcrumbs = getHeaderBreadcrumbs(pathname, setup.folderName)
+  const surveyCrumb = useSyncExternalStore(
+    subscribeSurveyBuilderCrumb,
+    getSurveyBuilderCrumb,
+    () => '',
+  )
+  const isSurveyEditor =
+    /^\/lifecycle\/surveys\/[^/]+\/edit/.test(pathname) ||
+    /^\/360\/surveys\/[^/]+\/edit/.test(pathname)
+  const breadcrumbs = isSurveyEditor
+    ? [
+        { label: setup.folderName || 'New folks', href: '/lifecycle' },
+        { label: surveyCrumb || 'Survey', href: pathname },
+      ]
+    : getHeaderBreadcrumbs(pathname, setup.folderName)
 
   useEffect(() => {
     setUser(getCurrentUser())

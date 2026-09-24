@@ -14,7 +14,6 @@ type TopBarProps = {
 }
 
 function getModuleName(pathname: string) {
-  if (pathname.startsWith('/360')) return '360 Feedback'
   if (pathname.startsWith('/empower')) return 'Empower'
   return 'Employee Experience'
 }
@@ -60,12 +59,6 @@ function getBreadcrumbs(pathname: string) {
     return [
       { label: 'New folks', href: '/lifecycle' },
       { label: 'Analytics', href: '/lifecycle/analytics' },
-    ]
-  }
-  if (pathname.startsWith('/360')) {
-    return [
-      { label: '360 Feedback', href: '/360/surveys' },
-      { label: pathname.includes('/participants') ? 'Participants' : 'Surveys', href: pathname },
     ]
   }
   if (pathname.startsWith('/empower')) {

@@ -1,12 +1,14 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { TemplatePreviewModal } from '@/components/modules/lifecycle/TemplatePreviewModal'
 import { mockSurveyTemplates } from '@/data/mock/surveyTemplates'
+import type { Survey360Source } from '@/data/mock/surveys360'
 import { saveCreatedSurvey } from '@/lib/mockDb'
+import { createAndSaveSurvey360 } from '@/lib/surveys360Storage'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { cn } from '@/lib/utils'
 import type { LifecycleSurvey, Question, SurveyTemplate, SurveyType } from '@/types'
@@ -234,7 +236,6 @@ export function CreateSurveyModal({ open, onOpenChange, onCreateSurvey }: Create
   const router = useRouter()
   const { showToast } = useWuShowToast()
   const [step, setStep] = useState(1)
-  const [templateSearch, setTemplateSearch] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState<SurveyTemplate | null>(null)
   const [previewTemplate, setPreviewTemplate] = useState<SurveyTemplate | null>(null)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
@@ -246,23 +247,18 @@ export function CreateSurveyModal({ open, onOpenChange, onCreateSurvey }: Create
   const [expandedBlockIds, setExpandedBlockIds] = useState<Set<string>>(new Set())
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<string>>(new Set())
 
-  const isTemplatePath = Boolean(selectedTemplate && selectedTemplate.category !== 'custom')
+  const isTemplatePath = Boolean(
+    selectedTemplate &&
+      selectedTemplate.category !== 'custom' &&
+      selectedTemplate.category !== '360',
+  )
   const totalSteps: 2 | 3 = isTemplatePath ? 3 : 2
   const selectedMarker = selectedTemplate?.markers?.find((marker) => marker.id === activeMarkerId)
-
-  const filteredTemplates = useMemo(() => {
-    const normalizedSearch = templateSearch.trim().toLowerCase()
-
-    if (!normalizedSearch) return mockSurveyTemplates
-
-    return mockSurveyTemplates.filter((template) =>
-      template.title.toLowerCase().includes(normalizedSearch),
-    )
-  }, [templateSearch])
+  const customStudyTemplate =
+    mockSurveyTemplates.find((template) => template.category === 'custom') ?? null
 
   function resetForm() {
     setStep(1)
-    setTemplateSearch('')
     setSelectedTemplate(null)
     setPreviewTemplate(null)
     setIsPreviewOpen(false)
@@ -305,15 +301,54 @@ export function CreateSurveyModal({ open, onOpenChange, onCreateSurvey }: Create
     }
   }
 
+  function handleStart360(source: Survey360Source) {
+    const created = createAndSaveSurvey360(source)
+    showToast({
+      message:
+        source === 'template' ? '360° template survey created' : 'Custom 360° survey created',
+      variant: 'success',
+    })
+    handleOpenChange(false)
+    router.push(`/360/surveys/${created.id}/edit`)
+  }
+
   function handleUseTemplate(template: SurveyTemplate) {
+    if (template.category === '360') {
+      setIsPreviewOpen(false)
+      handleStart360('template')
+      return
+    }
+
     selectTemplate(template)
     prefillFromTemplate(template)
     setIsPreviewOpen(false)
     setStep(2)
   }
 
+  function handleCustomStudyStart(kind: 'survey' | 'exit' | '360') {
+    if (kind === '360') {
+      handleStart360('custom')
+      return
+    }
+
+    if (!customStudyTemplate) return
+
+    selectTemplate(customStudyTemplate)
+    prefillFromTemplate(customStudyTemplate)
+    if (kind === 'exit') {
+      setSurveyType(SURVEY_TYPE_OPTIONS.find((option) => option.value === 'exit') ?? SURVEY_TYPE_OPTIONS[0])
+    }
+    setStep(2)
+  }
+
   function handleNext() {
     if (!selectedTemplate) return
+
+    if (selectedTemplate.category === '360') {
+      handleStart360('template')
+      return
+    }
+
     prefillFromTemplate(selectedTemplate)
     setStep(2)
   }
@@ -381,7 +416,7 @@ export function CreateSurveyModal({ open, onOpenChange, onCreateSurvey }: Create
   return (
     <>
       <WuModal open={open} onOpenChange={handleOpenChange} size="lg" maxHeight="90vh" {...preventModalDismiss}>
-        <WuModalHeader>Create Survey</WuModalHeader>
+        <WuModalHeader>Create New Employee Experience Study</WuModalHeader>
         <WuModalContent>
           <div className="flex flex-col gap-6 p-1">
             {step === 1 ? (
@@ -391,40 +426,28 @@ export function CreateSurveyModal({ open, onOpenChange, onCreateSurvey }: Create
                   <WuText size="sm" as="p" className="mt-1 text-gray-500">
                     Select one of our templates or start from scratch to create your study
                   </WuText>
-                  <div className="mt-6">
-                    <WuInput
-                      type="search"
-                      variant="outlined"
-                      placeholder="Search templates..."
-                      value={templateSearch}
-                      onChange={(event) => setTemplateSearch(event.target.value)}
-                    />
-                  </div>
                 </div>
 
-                {filteredTemplates.length === 0 ? (
-                  <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-gray-200 text-center">
-                    <WuText size="md" as="p" className="text-gray-500">
-                      No templates found. Try a different search.
-                    </WuText>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    {filteredTemplates.map((template) => {
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {mockSurveyTemplates.map((template) => {
                       const isSelected = selectedTemplate?.id === template.id
                       const isCustomStudy = template.category === 'custom'
 
                       return (
                         <div
                           key={template.id}
-                          role="button"
-                          tabIndex={0}
+                          role={isCustomStudy ? undefined : 'button'}
+                          tabIndex={isCustomStudy ? undefined : 0}
                           className={cn(
                             'group relative flex min-h-48 flex-col overflow-hidden rounded-xl border bg-white p-4 text-left transition hover:border-blue-500',
                             isSelected ? 'border-blue-600 ring-2 ring-blue-100' : 'border-gray-200',
                           )}
-                          onClick={() => selectTemplate(template)}
+                          onClick={() => {
+                            if (isCustomStudy) return
+                            selectTemplate(template)
+                          }}
                           onKeyDown={(event) => {
+                            if (isCustomStudy) return
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault()
                               selectTemplate(template)
@@ -459,7 +482,43 @@ export function CreateSurveyModal({ open, onOpenChange, onCreateSurvey }: Create
                             {template.description}
                           </WuText>
 
-                          {!isCustomStudy && (
+                          {isCustomStudy ? (
+                            <div className="absolute inset-0 hidden flex-col items-center justify-center gap-2 bg-gray-950/55 p-4 group-hover:flex">
+                              <WuButton
+                                size="sm"
+                                variant="primary"
+                                className="min-w-[140px]"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleCustomStudyStart('survey')
+                                }}
+                              >
+                                Survey
+                              </WuButton>
+                              <WuButton
+                                size="sm"
+                                variant="primary"
+                                className="min-w-[140px]"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleCustomStudyStart('exit')
+                                }}
+                              >
+                                Exit Survey
+                              </WuButton>
+                              <WuButton
+                                size="sm"
+                                variant="primary"
+                                className="min-w-[140px]"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleCustomStudyStart('360')
+                                }}
+                              >
+                                360°
+                              </WuButton>
+                            </div>
+                          ) : (
                             <div className="absolute inset-0 hidden items-center justify-center bg-gray-950/55 group-hover:flex">
                               <div className="flex items-center gap-3">
                                 <WuButton
@@ -489,8 +548,7 @@ export function CreateSurveyModal({ open, onOpenChange, onCreateSurvey }: Create
                         </div>
                       )
                     })}
-                  </div>
-                )}
+                </div>
               </div>
             ) : step === 2 ? (
               <div className="flex flex-col gap-4">

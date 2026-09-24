@@ -68,7 +68,7 @@ export default function Feedback360ReportsPage() {
   }, [search, surveys])
 
   function openBuilder(surveyId: string) {
-    router.push(`/360/reports/${surveyId}`)
+    router.push(`/360/surveys/${surveyId}/edit?tab=analytics&section=individualReports`)
   }
 
   const columns: IWuTableColumnDef<Survey360>[] = [

@@ -71,7 +71,30 @@ export const INITIATIVE_STATUS_OPTIONS: {
   { value: 'active', label: 'Active', color: '#16A34A' },
   { value: 'completed', label: 'Completed', color: '#1B87E6' },
   { value: 'closed', label: 'Closed', color: '#9CA3AF' },
+  { value: 'cancelled', label: 'Cancelled', color: '#DC2626' },
 ]
+
+export type ActionPlanProgressSummary = {
+  completed: number
+  total: number
+  rate: number
+  overdueCount: number
+}
+
+export function computeActionPlanProgress(initiative: EmpowerInitiativeRecord): ActionPlanProgressSummary {
+  const total = initiative.tasks.length
+  const completed = initiative.tasks.filter((t) => t.status === 'completed').length
+  const today = new Date().toISOString().slice(0, 10)
+  const overdueCount = initiative.tasks.filter(
+    (t) => t.status !== 'completed' && t.dueDate && t.dueDate < today,
+  ).length
+  return {
+    completed,
+    total,
+    rate: total === 0 ? 0 : Math.round((completed / total) * 100),
+    overdueCount,
+  }
+}
 
 export function initiativeStatusLabel(status: InitiativeLifecycleStatus | undefined): string {
   return INITIATIVE_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'New'

@@ -100,6 +100,7 @@ export const mockDashboards: Dashboard[] = [
     access: 'private',
     authorEmail: 'sarah.johnson@questionpro.com',
     createdAt: '2026-06-10T10:15:00Z',
+    filterScope: { allowedFilterIds: ['location'] },
     tabs: [
       {
         id: 'tab_new_test_1',

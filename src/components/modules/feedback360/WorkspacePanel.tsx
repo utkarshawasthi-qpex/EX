@@ -91,16 +91,6 @@ export function WorkspacePanel({ survey, onChange }: WorkspacePanelProps) {
 
   return (
     <div className="mx-auto max-w-4xl p-6">
-      <div className="mb-4 flex items-center justify-end gap-2">
-        <WuButton variant="secondary" onClick={() => showToast({ variant: 'info', message: 'Preview opened' })}>
-          <span className="wm-visibility mr-1 text-sm" aria-hidden />
-          Preview
-        </WuButton>
-        <WuButton variant="primary" onClick={addSection}>
-          + Add Section
-        </WuButton>
-      </div>
-
       {survey.sections.map((sec) => (
         <div
           key={sec.id}

@@ -1,7 +1,7 @@
 import type { ID } from '@/types'
 
 export type InitiativeProgress = 'on_track' | 'stuck' | 'done'
-export type InitiativeLifecycleStatus = 'new' | 'active' | 'completed' | 'closed'
+export type InitiativeLifecycleStatus = 'new' | 'active' | 'completed' | 'closed' | 'cancelled'
 export type InitiativeType = 'none' | 'upstream' | 'downstream'
 export type TaskStatus = 'pending' | 'in_progress' | 'completed'
 
@@ -13,6 +13,53 @@ export type SurveyLinkScope =
 export type SurveyLinkFocus =
   | { kind: 'category'; id: string; label: string }
   | { kind: 'question'; id: string; label: string }
+  | { kind: 'marker'; id: string; label: string }
+  | { kind: 'block'; id: string; label: string }
+
+export type ActionPlanCollaboratorTier = 'view' | 'view_assign' | 'co_manage'
+
+export type ActionPlanCollaborator = {
+  userId: ID
+  tier: ActionPlanCollaboratorTier
+  invitedAt: string
+  invitedBy: ID
+  acceptedAt?: string
+}
+
+export type ActionFeedbackResponse = {
+  employeeId: ID
+  happened: 'yes' | 'no' | 'unsure'
+  helped: 'yes' | 'no' | 'unsure'
+  wouldRecommend: 'yes' | 'no' | 'unsure'
+}
+
+export type ActionFeedbackRequest = {
+  sentAt: string
+  responses: ActionFeedbackResponse[]
+}
+
+export type ManagerNudgePreferences = {
+  lastSentAt: string | null
+  ignoredStreak: number
+  unsubscribed: boolean
+}
+
+/** Initiative-level automatic reminder schedule (in-app nudges). */
+export type InitiativeReminderFrequency =
+  | 'off'
+  | 'every_week'
+  | 'one_week_before_due'
+  | 'two_days_before_due'
+  | 'overdue_only'
+  | 'before_due_and_overdue'
+
+export type InitiativeReminderSettings = {
+  frequency: InitiativeReminderFrequency
+  /** Remind only for tasks in these statuses (default: pending + in progress). */
+  taskStatuses: TaskStatus[]
+  /** Last in-app reminder sent for this initiative (weekly cadence). */
+  lastReminderSentAt?: string | null
+}
 
 export type SurveyBaseline = {
   favorability?: number
@@ -36,6 +83,18 @@ export type SurveyLink = {
   focus: SurveyLinkFocus
   baseline: SurveyBaseline
   latest: SurveyLatest | null
+}
+
+/** Immutable snapshot of survey/dashboard data at action plan creation (not a live survey link). */
+export type ActionPlanDataFocus = {
+  label: string
+  surveyName?: string
+  cycleLabel?: string
+  favorability?: number
+  capturedAt: string
+  source: 'dashboard' | 'survey' | 'summary'
+  dashboardId?: string
+  dashboardName?: string
 }
 
 export type InitiativeTask = {
@@ -88,9 +147,17 @@ export type EmpowerInitiativeRecord = {
   createdAt: string
   tasks: InitiativeTask[]
   provenance: InitiativeProvenance | null
+  /** @deprecated Prototype legacy — new plans use `dataFocus` only. */
   surveyLink: SurveyLink | null
+  dataFocus?: ActionPlanDataFocus | null
   history: InitiativeHistoryEvent[]
+  collaborators?: ActionPlanCollaborator[]
+  actionFeedback?: ActionFeedbackRequest | null
+  reminderSettings?: InitiativeReminderSettings
 }
+
+/** Portal action planning record (alias for initiatives). */
+export type ActionPlanRecord = EmpowerInitiativeRecord
 
 export type OrgSettings = {
   engagement2027Closed?: boolean

@@ -1,14 +1,13 @@
 'use client'
 
-import { useMemo } from 'react'
-import { getVisibleDashboardFilterFields } from '@/lib/portalAccess'
-import { usePortalSettings } from '@/lib/portalSettingsStore'
-import { getCurrentUser } from '@/lib/userContext'
+import { useEffect, useState } from 'react'
+import { ExpandableSection } from '@/components/ui/ExpandableSection'
 import type { ActiveFilter, FilterField } from '@/types'
 
 type DashboardFilterPanelProps = {
   open: boolean
   title?: string
+  visibleFields: FilterField[]
   activeFilters: ActiveFilter[]
   onToggleFilter: (field: FilterField, value: string) => void
   onClearAll: () => void
@@ -20,17 +19,33 @@ type DashboardFilterPanelProps = {
 export function DashboardFilterPanel({
   open,
   title = 'Filters',
+  visibleFields,
   activeFilters,
   onToggleFilter,
   onClearAll,
   onClose,
   panelClassName,
 }: DashboardFilterPanelProps) {
-  const { filterAccessRules } = usePortalSettings()
-  const visibleFields = useMemo(
-    () => getVisibleDashboardFilterFields(getCurrentUser(), filterAccessRules),
-    [filterAccessRules],
-  )
+  const [expandedFieldIds, setExpandedFieldIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!open) return
+    const withActive = new Set(
+      visibleFields
+        .filter((field) => activeFilters.some((filter) => filter.fieldId === field.id))
+        .map((field) => field.id),
+    )
+    setExpandedFieldIds(withActive)
+  }, [open, visibleFields, activeFilters])
+
+  function setFieldExpanded(fieldId: string, expanded: boolean) {
+    setExpandedFieldIds((current) => {
+      const next = new Set(current)
+      if (expanded) next.add(fieldId)
+      else next.delete(fieldId)
+      return next
+    })
+  }
 
   if (!open) return null
 
@@ -71,38 +86,55 @@ export function DashboardFilterPanel({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
           {visibleFields.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-gray-500">No filters are available for your access.</p>
+            <p className="px-1 py-4 text-sm text-gray-500">
+              This dashboard does not expose any filters.
+            </p>
           ) : (
-            visibleFields.map((field) => (
-            <div key={field.id} className="border-b border-gray-50 px-4 py-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                {field.label}
-              </p>
-              <div className="flex flex-col gap-1">
-                {field.values.map((value) => {
-                  const isActive = activeFilters.some(
-                    (filter) => filter.fieldId === field.id && filter.value === value,
-                  )
-                  return (
-                    <label
-                      key={value}
-                      className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 hover:text-gray-900"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isActive}
-                        onChange={() => onToggleFilter(field, value)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      {value}
-                    </label>
-                  )
-                })}
-              </div>
-            </div>
-            ))
+            visibleFields.map((field) => {
+              const activeCount = activeFilters.filter((filter) => filter.fieldId === field.id).length
+              const isExpanded = expandedFieldIds.has(field.id)
+              return (
+                <ExpandableSection
+                  key={field.id}
+                  title={field.label}
+                  description={
+                    activeCount > 0
+                      ? `${activeCount} selected`
+                      : isExpanded
+                        ? 'Select values to filter results'
+                        : undefined
+                  }
+                  badge={activeCount > 0 && !isExpanded ? String(activeCount) : undefined}
+                  expanded={isExpanded}
+                  onExpandedChange={(next) => setFieldExpanded(field.id, next)}
+                  className="border-gray-100 shadow-sm"
+                >
+                  <div className="flex flex-col gap-1">
+                    {field.values.map((value) => {
+                      const isActive = activeFilters.some(
+                        (filter) => filter.fieldId === field.id && filter.value === value,
+                      )
+                      return (
+                        <label
+                          key={value}
+                          className="flex cursor-pointer items-center gap-2 text-sm text-gray-700 hover:text-gray-900"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isActive}
+                            onChange={() => onToggleFilter(field, value)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          {value}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </ExpandableSection>
+              )
+            })
           )}
         </div>
       </aside>

@@ -69,6 +69,8 @@ export type Question = {
     labels?: Record<number, string>  // e.g. { 1: 'Never', 5: 'Always' }
   }
   options?: string[]         // For multiple_choice
+  /** Matrix-style rating rows (lifecycle builder prototype). */
+  matrixRows?: string[]
   branchingRules?: BranchingRule[]
 }
 
@@ -123,6 +125,7 @@ export type SurveyTemplate = {
   description: string
   category:
     | 'custom'
+    | '360'
     | 'culture'
     | 'recruiting'
     | 'onboarding'
@@ -645,6 +648,12 @@ export type DashboardTab = {
   customGroups?: string[]
 }
 
+/** Filter dimensions enabled on a dashboard (subset of standard roster filters). */
+export type DashboardFilterScope = {
+  allowedFilterIds: string[]
+  description?: string
+}
+
 export type Dashboard = {
   id: ID
   name: string
@@ -653,6 +662,7 @@ export type Dashboard = {
   authorEmail: string
   createdAt: string
   tabs: DashboardTab[]
+  filterScope?: DashboardFilterScope
 }
 
 export type ShareTitleAlign = 'left' | 'center' | 'right'

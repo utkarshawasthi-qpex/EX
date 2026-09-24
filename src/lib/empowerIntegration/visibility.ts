@@ -9,6 +9,11 @@ export function canSeeInitiative(user: AppUser, initiative: EmpowerInitiativeRec
   if (initiative.ownerId === user.id) return true
   if (initiative.createdBy === user.id) return true
   if (initiative.contributors.includes(user.id)) return true
+  if (
+    initiative.collaborators?.some((c) => c.userId === user.id && c.acceptedAt)
+  ) {
+    return true
+  }
   if (isAdminContext() && !user.isImpersonating) return true
 
   if (initiative.surveyLink?.scope.kind === 'org') return true

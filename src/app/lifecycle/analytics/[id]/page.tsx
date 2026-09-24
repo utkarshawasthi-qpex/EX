@@ -10,8 +10,11 @@ import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { AddWidgetModal } from '@/components/modules/analytics/AddWidgetModal'
 import type { AddWidgetConfig } from '@/components/modules/analytics/AddWidgetModal'
 import { DashboardFilterPanel } from '@/components/modules/analytics/DashboardFilterPanel'
+import { EditDashboardFilterScopeModal } from '@/components/modules/analytics/EditDashboardFilterScopeModal'
 import { DashboardShareModal } from '@/components/modules/analytics/DashboardShareModal'
 import { DashboardWidgetProvider } from '@/components/modules/analytics/DashboardWidgetContext'
+import { TakeActionFromFocusModal } from '@/components/modules/actionPlans/TakeActionFromFocusModal'
+import type { TakeActionFocus } from '@/lib/actionPlans/takeAction'
 import { ExportPptModal } from '@/components/modules/analytics/ExportPptModal'
 import { DashboardWidgetRenderer } from '@/components/modules/analytics/widgetRegistry'
 import { AuthChecking } from '@/components/shared/AuthChecking'
@@ -30,6 +33,7 @@ import {
   getDashboardById,
   getDashboardTabs,
   getDashboardWidgets,
+  persistDashboard,
   saveDashboardTabs,
   saveDashboardWidgets,
 } from '@/lib/mockDb'
@@ -40,7 +44,11 @@ import { getCurrentUser } from '@/lib/userContext'
 import { cn } from '@/lib/utils'
 import type { ActiveFilter, Dashboard, DashboardTab, DashboardWidget, FilterField, WidgetType } from '@/types'
 import { getDashboardCapabilities } from '@/types'
-import { canCreatePortalWidget, getActiveAccessRule, getVisibleDashboardFilterFields } from '@/lib/portalAccess'
+import {
+  canCreatePortalWidget,
+  getActiveAccessRule,
+  getDashboardFilterFields,
+} from '@/lib/portalAccess'
 import { usePortalSettings } from '@/lib/portalSettingsStore'
 
 const GridLayoutWithWidth = WidthProvider(ReactGridLayout)
@@ -96,7 +104,7 @@ export default function DashboardCanvasPage() {
   const params = useParams()
   const dashboardId = params.id as string
   const { showToast } = useWuShowToast()
-  const { portalAccess, accessRules, filterAccessRules } = usePortalSettings()
+  const { portalAccess, accessRules } = usePortalSettings()
   const activeAccessRule = getActiveAccessRule(getCurrentUser(), accessRules)
 
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
@@ -114,9 +122,12 @@ export default function DashboardCanvasPage() {
   const [isAddWidgetOpen, setIsAddWidgetOpen] = useState(false)
   const [exportModalOpen, setExportModalOpen] = useState(false)
   const [shareModalOpen, setShareModalOpen] = useState(false)
+  const [filterScopeModalOpen, setFilterScopeModalOpen] = useState(false)
   const [dashboardFilters, setDashboardFilters] = useState<ActiveFilter[]>([])
   const [tabFiltersByTab, setTabFiltersByTab] = useState<Record<string, ActiveFilter[]>>({})
   const [widgetContentHeights, setWidgetContentHeights] = useState<Record<string, number>>({})
+  const [takeActionFocus, setTakeActionFocus] = useState<TakeActionFocus | null>(null)
+  const [takeActionOpen, setTakeActionOpen] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -160,8 +171,8 @@ export default function DashboardCanvasPage() {
   )
 
   const visibleFilterFields = useMemo(
-    () => getVisibleDashboardFilterFields(getCurrentUser(), filterAccessRules),
-    [filterAccessRules],
+    () => getDashboardFilterFields(dashboard),
+    [dashboard],
   )
   const canFilter = visibleFilterFields.length > 0
   const tabFilters = tabFiltersByTab[activeTabId] ?? []
@@ -713,6 +724,7 @@ export default function DashboardCanvasPage() {
             <DashboardFilterPanel
               open={isFilterOpen}
               title={filterScope === 'tab' ? 'Tab filters' : 'Dashboard filters'}
+              visibleFields={visibleFilterFields}
               activeFilters={filterScope === 'tab' ? tabFilters : dashboardFilters}
               onToggleFilter={toggleFilter}
               onClearAll={clearAllFilters}
@@ -751,6 +763,14 @@ export default function DashboardCanvasPage() {
             <DashboardWidgetProvider
               capabilities={capabilities ?? getDashboardCapabilities(dashboard, getCurrentUser())}
               onExportPpt={() => setExportModalOpen(true)}
+              onTakeAction={(focus) => {
+                setTakeActionFocus({
+                  ...focus,
+                  dashboardId: dashboard.id,
+                  dashboardName: dashboard.name,
+                })
+                setTakeActionOpen(true)
+              }}
             >
               <GridLayoutWithWidth
                 className="layout"
@@ -889,12 +909,35 @@ export default function DashboardCanvasPage() {
             activeFilters={activeFiltersToLabels(activeFilters)}
           />
         )}
+        <EditDashboardFilterScopeModal
+          open={filterScopeModalOpen}
+          dashboard={dashboard}
+          onOpenChange={setFilterScopeModalOpen}
+          onSave={(next) => {
+            persistDashboard(next)
+            setDashboard(next)
+            showToast({ variant: 'success', message: 'Allowed filters updated' })
+          }}
+        />
         <DashboardShareModal
           open={shareModalOpen}
           onClose={() => setShareModalOpen(false)}
           dashboardId={dashboard.id}
           dashboardName={dashboard.name}
           tabs={tabs}
+          onManageFilterScope={
+            capabilities?.isOwner
+              ? () => setFilterScopeModalOpen(true)
+              : undefined
+          }
+        />
+        <TakeActionFromFocusModal
+          open={takeActionOpen}
+          focus={takeActionFocus}
+          onClose={() => {
+            setTakeActionOpen(false)
+            setTakeActionFocus(null)
+          }}
         />
       </main>
     </div>

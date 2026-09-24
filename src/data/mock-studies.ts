@@ -42,6 +42,7 @@ export const MOCK_STUDIES: Study[] = [
     responses: 3,
     deployments: 1,
     folderId: 'new-folks',
+    surveyId: 'surv_workplace_culture',
   },
   {
     id: '3',
@@ -180,21 +181,30 @@ export const MOCK_STUDIES: Study[] = [
 ];
 
 export function getStudyHref(study: Study): string {
+  // Lazy import avoided — duplicate routing in studySurveyLinks for client; keep sync re-export pattern.
   if (study.type === '360 Review') {
-    return study.surveyId ? `/360/surveys/${study.surveyId}/edit` : '/360/surveys';
+    return study.surveyId ? `/360/surveys/${study.surveyId}/edit` : '/lifecycle';
   }
-  return '/lifecycle/surveys';
+  if (study.surveyId) {
+    return `/lifecycle/surveys/${study.surveyId}/edit?folder=${encodeURIComponent(study.folderId)}`;
+  }
+  return `/lifecycle/surveys/study_survey_${study.id}/edit?title=${encodeURIComponent(study.name)}&folder=${encodeURIComponent(study.folderId)}`;
 }
 
 export function getStudyDistributeHref(study: Study): string {
   if (study.type === '360 Review') {
     return study.surveyId
       ? `/360/surveys/${study.surveyId}/edit?tab=distribute`
-      : '/360/surveys';
+      : '/lifecycle';
   }
   return `/lifecycle/distribution?study=${encodeURIComponent(study.name)}`;
 }
 
 export function getStudyAnalyzeHref(study: Study): string {
-  return study.type === '360 Review' ? '/360/surveys' : '/lifecycle/analytics';
+  if (study.type === '360 Review') {
+    return study.surveyId
+      ? `/360/surveys/${study.surveyId}/edit`
+      : '/lifecycle/analytics';
+  }
+  return '/lifecycle/analytics';
 }

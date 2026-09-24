@@ -7,6 +7,7 @@ import { empowerTable } from '@/components/empower/primitives/tableStyles'
 import { formatDueDate, taskStatusLabel } from '@/lib/empowerIntegration/helpers'
 import { getEmployeeName } from '@/lib/empowerIntegration/storage'
 import { cn } from '@/lib/utils'
+import { actionPlanDetailPath } from '@/lib/actionPlans/paths'
 import type { EmpowerInitiativeRecord, InitiativeTask } from '@/types/empowerIntegration'
 
 type SortKey = 'name' | 'owner' | 'contributor' | 'due' | 'status'
@@ -23,6 +24,7 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'due', label: 'Due' },
   { key: 'status', label: 'Status' },
 ]
+
 
 function contributorNames(task: InitiativeTask): string {
   const ids = task.contributorIds ?? []
@@ -75,12 +77,17 @@ export function UpcomingTasksGroup({ initiative, tasks }: UpcomingTasksGroupProp
             aria-hidden
           />
         </button>
-        <Link
-          href={`/empower/initiatives/${initiative.id}`}
-          className="text-sm font-medium text-[#1B87E6] hover:underline"
-        >
-          {initiative.title}
-        </Link>
+        <div className="min-w-0 flex-1">
+          <Link
+            href={actionPlanDetailPath(initiative.id)}
+            className="text-sm font-medium text-[#1B87E6] hover:underline"
+          >
+            {initiative.title}
+          </Link>
+          <p className="text-xs text-gray-500">
+            {tasks.length} open task{tasks.length === 1 ? '' : 's'} assigned to you on this initiative
+          </p>
+        </div>
       </div>
 
       {isExpanded &&
@@ -114,7 +121,7 @@ export function UpcomingTasksGroup({ initiative, tasks }: UpcomingTasksGroupProp
               {sortedTasks.map((task) => (
                 <tr key={task.id} className={empowerTable.row}>
                   <td className={cn(empowerTable.cell, 'max-w-[320px]')}>
-                    <span className="block truncate" title={task.text}>
+                    <span className="block truncate font-medium text-gray-900" title={task.text}>
                       {task.text}
                     </span>
                   </td>

@@ -24,8 +24,9 @@ const SURVEY_COMPARISON_PATH = '/lifecycle/analytics/survey-comparison'
 const BENCHMARKING_PATH = '/lifecycle/analytics/benchmarking'
 const PPT_TEMPLATES_PATH = '/lifecycle/analytics/settings'
 const ADMIN_PATH = '/lifecycle/analytics/admin'
-const SETTINGS_PATH = '/lifecycle/analytics/settings'
+const SETTINGS_PATH = '/lifecycle/analytics/portal-settings'
 const ORG_CONTEXT_PATH = '/lifecycle/analytics/org-context'
+const ACTION_PLANS_PATH = '/lifecycle/analytics/action-plans'
 
 /** Figma MCP asset URLs — replace if refreshed from Figma export. */
 const imgBalance =
@@ -42,7 +43,16 @@ const imgSettings =
 type NavItem = {
   label: string
   href: string
-  icon: 'dashboard' | 'balance' | 'lineGraph' | 'ppt' | 'orgContext' | 'admin' | 'settings' | 'page'
+  icon:
+    | 'dashboard'
+    | 'balance'
+    | 'lineGraph'
+    | 'ppt'
+    | 'orgContext'
+    | 'admin'
+    | 'settings'
+    | 'page'
+    | 'actionPlans'
   adminOnly?: boolean
   isActive: (pathname: string) => boolean
 }
@@ -52,9 +62,11 @@ const RESERVED_ANALYTICS_SEGMENTS = new Set([
   'survey-comparison',
   'benchmarking',
   'settings',
+  'portal-settings',
   'admin',
   'org-context',
   'pages',
+  'action-plans',
 ])
 
 function isDashboardsActive(pathname: string): boolean {
@@ -84,6 +96,30 @@ function HamburgerIcon({ className }: { className?: string }) {
     </svg>
   )
 }
+
+function CloseIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      width={20}
+      height={20}
+      viewBox="0 0 20 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden
+    >
+      <path
+        d="M5 5L15 15M15 5L5 15"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+const ACTIVE_NAV_TILE =
+  'bg-white shadow-[0px_1px_3px_rgba(27,51,128,0.12)]'
 
 function DashboardIcon({ className }: { className?: string }) {
   return (
@@ -176,6 +212,22 @@ function NavIcon({
     case 'settings':
       inner = <IconWithFallback src={imgSettings} fallbackIcon="settings" active={active} />
       break
+    case 'actionPlans':
+      inner = (
+        <svg
+          width={20}
+          height={20}
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden
+        >
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
+          <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="1.5" />
+          <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+        </svg>
+      )
+      break
   }
   return <span style={{ color }}>{inner}</span>
 }
@@ -221,7 +273,7 @@ function CollapsedNavItem({
         aria-label={item.label}
         className={cn(
           'flex size-8 items-center justify-center rounded-[2px]',
-          active && 'bg-[rgba(27,135,230,0.08)]',
+          active && ACTIVE_NAV_TILE,
         )}
       >
         <NavIcon icon={item.icon} active={active} accentColor={accentColor} />
@@ -251,7 +303,7 @@ function ExpandedNavItem({
       href={item.href}
       className={cn(
         'flex h-8 w-[224px] items-center rounded-[2px] px-1.5',
-        active ? 'bg-[rgba(27,135,230,0.08)] font-medium' : 'font-normal text-[#545E6B]',
+        active ? cn(ACTIVE_NAV_TILE, 'font-medium') : 'font-normal text-[#545E6B]',
       )}
       style={active ? { color: accentColor } : undefined}
     >
@@ -296,6 +348,12 @@ function AnalyticsSidebar({
       icon: 'dashboard',
       isActive: isDashboardsActive,
     },
+    {
+      label: 'Action planning',
+      href: ACTION_PLANS_PATH,
+      icon: 'actionPlans',
+      isActive: (path) => path.startsWith(ACTION_PLANS_PATH),
+    },
     ...extraAnalyticsItems,
   ]
 
@@ -312,11 +370,15 @@ function AnalyticsSidebar({
       icon: 'lineGraph',
       isActive: (path) => path.startsWith(BENCHMARKING_PATH),
     },
+  ]
+
+  const exportItems: NavItem[] = [
     {
-      label: 'PPT templates',
+      label: 'PPT Templates',
       href: PPT_TEMPLATES_PATH,
       icon: 'ppt',
-      isActive: (path) => path.startsWith(PPT_TEMPLATES_PATH),
+      isActive: (path) =>
+        path === PPT_TEMPLATES_PATH || path.startsWith(`${PPT_TEMPLATES_PATH}/`),
     },
     ...(showOrgContext
       ? [
@@ -351,7 +413,7 @@ function AnalyticsSidebar({
     },
   ]
 
-  const collapsedNavItems = [...analyticsItems, ...dataItems]
+  const collapsedNavItems = [...analyticsItems, ...dataItems, ...exportItems]
   const collapsedSystemItems = systemItems
 
   return (
@@ -371,7 +433,7 @@ function AnalyticsSidebar({
           onClick={onToggle}
           aria-label={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
         >
-          <HamburgerIcon />
+          {isExpanded ? <CloseIcon /> : <HamburgerIcon />}
         </button>
       </div>
 
@@ -414,6 +476,18 @@ function AnalyticsSidebar({
             <div className="mt-2">
               <SectionLabel>Data</SectionLabel>
               {dataItems.map((item) => (
+                <ExpandedNavItem
+                  key={item.href}
+                  item={item}
+                  pathname={pathname}
+                  accentColor={accentColor}
+                />
+              ))}
+            </div>
+
+            <div className="mt-2">
+              <SectionLabel>Export</SectionLabel>
+              {exportItems.map((item) => (
                 <ExpandedNavItem
                   key={item.href}
                   item={item}
@@ -488,7 +562,7 @@ export function AnalyticsPortalShell({ children }: { children: React.ReactNode }
         />
         <main
           className={cn(
-            'h-full min-w-0 overflow-auto bg-white transition-[margin-left] duration-200 ease-in-out',
+            'h-[calc(100vh-3rem)] min-w-0 overflow-auto bg-white transition-[margin-left] duration-200 ease-in-out',
             sidebarExpanded ? 'ml-[240px]' : 'ml-12',
           )}
         >

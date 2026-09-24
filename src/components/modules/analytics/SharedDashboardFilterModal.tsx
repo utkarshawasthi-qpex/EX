@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { DASHBOARD_FILTER_FIELDS } from '@/lib/dashboardFilters'
 import { preventModalDismiss } from '@/lib/modalProps'
-import type { ActiveFilter } from '@/types'
+import type { ActiveFilter, FilterField } from '@/types'
 
 const WuButton = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuButton })),
@@ -40,6 +40,7 @@ type SelectOption = { value: string; label: string }
 type SharedDashboardFilterModalProps = {
   open: boolean
   activeFilters: ActiveFilter[]
+  filterFields?: FilterField[]
   onApply: (filters: ActiveFilter[]) => void
   onClose: () => void
 }
@@ -51,6 +52,7 @@ type SharedDashboardFilterModalProps = {
 export function SharedDashboardFilterModal({
   open,
   activeFilters,
+  filterFields = DASHBOARD_FILTER_FIELDS,
   onApply,
   onClose,
 }: SharedDashboardFilterModalProps) {
@@ -59,17 +61,17 @@ export function SharedDashboardFilterModal({
   useEffect(() => {
     if (!open) return
     const next: Record<string, SelectOption[]> = {}
-    for (const field of DASHBOARD_FILTER_FIELDS) {
+    for (const field of filterFields) {
       next[field.id] = activeFilters
         .filter((filter) => filter.fieldId === field.id)
         .map((filter) => ({ value: filter.value, label: filter.value }))
     }
     setDraftByField(next)
-  }, [open, activeFilters])
+  }, [open, activeFilters, filterFields])
 
   function clearAll() {
     const next: Record<string, SelectOption[]> = {}
-    for (const field of DASHBOARD_FILTER_FIELDS) {
+    for (const field of filterFields) {
       next[field.id] = []
     }
     setDraftByField(next)
@@ -77,7 +79,7 @@ export function SharedDashboardFilterModal({
 
   function handleApply() {
     const next: ActiveFilter[] = []
-    for (const field of DASHBOARD_FILTER_FIELDS) {
+    for (const field of filterFields) {
       for (const option of draftByField[field.id] ?? []) {
         next.push({ fieldId: field.id, fieldLabel: field.label, value: option.value })
       }
@@ -126,7 +128,7 @@ export function SharedDashboardFilterModal({
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {DASHBOARD_FILTER_FIELDS.map((field) => {
+            {filterFields.map((field) => {
               const options = field.values.map((value) => ({ value, label: value }))
               const selected = draftByField[field.id] ?? []
               return (

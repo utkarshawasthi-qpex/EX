@@ -108,6 +108,8 @@ type DashboardShareModalProps = {
   dashboardId: ID
   dashboardName: string
   tabs: DashboardTab[]
+  /** Secondary: limit which filter dimensions appear on this dashboard. */
+  onManageFilterScope?: () => void
 }
 
 function truncateUrl(url: string, max = 42): string {
@@ -175,6 +177,7 @@ export function DashboardShareModal({
   dashboardId,
   dashboardName,
   tabs,
+  onManageFilterScope,
 }: DashboardShareModalProps) {
   const { showToast } = useWuShowToast()
   const [view, setView] = useState<ModalView>('list')
@@ -541,6 +544,21 @@ export function DashboardShareModal({
                   variant="unstyled"
                 />
               )}
+
+              {onManageFilterScope ? (
+                <div className="border-t border-gray-100 pt-3">
+                  <button
+                    type="button"
+                    className="text-sm text-gray-500 hover:text-gray-800 hover:underline"
+                    onClick={() => {
+                      onClose()
+                      onManageFilterScope()
+                    }}
+                  >
+                    Allowed filters…
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="max-h-[65vh] space-y-5 overflow-y-auto pr-1">

@@ -28,6 +28,7 @@ import {
   resolveShareLinkBySlug,
   unlockShareLink,
 } from '@/lib/publicShareLinks'
+import { getDashboardFilterFields } from '@/lib/portalAccess'
 import { seedDefaultDashboardsIfNeeded } from '@/lib/seedDashboards'
 import { cn } from '@/lib/utils'
 import type {
@@ -151,6 +152,8 @@ export default function SharedDashboardPage() {
   )
 
   const dynamicTabFilters = dynamicTabFiltersByTab[activeTabId] ?? []
+
+  const shareFilterFields = useMemo(() => getDashboardFilterFields(dashboard), [dashboard])
 
   const effectiveFilters = useMemo(() => {
     if (!link || !activeTabId) return [] as ActiveFilter[]
@@ -343,7 +346,7 @@ export default function SharedDashboardPage() {
             )}
           </div>
 
-          {link.allowDynamicDashboardFilters && (
+          {link.allowDynamicDashboardFilters && shareFilterFields.length > 0 && (
             <button
               type="button"
               className="relative shrink-0 text-xl text-gray-400 hover:text-gray-600"
@@ -389,10 +392,11 @@ export default function SharedDashboardPage() {
           </div>
         )}
 
-        {link.allowDynamicDashboardFilters && (
+        {link.allowDynamicDashboardFilters && shareFilterFields.length > 0 && (
           <SharedDashboardFilterModal
             open={isFilterOpen}
             activeFilters={dynamicDashboardFilters}
+            filterFields={shareFilterFields}
             onApply={applyDynamicDashboardFilters}
             onClose={() => setIsFilterOpen(false)}
           />

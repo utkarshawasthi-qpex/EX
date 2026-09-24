@@ -457,7 +457,7 @@ export function SummaryWidgetSections({
             )}
             {action.linkedInitiativeId ? (
               <Link
-                href={`/empower/initiatives/${action.linkedInitiativeId}`}
+                href={`/lifecycle/analytics/action-plans/${action.linkedInitiativeId}`}
                 className="whitespace-nowrap text-xs font-medium text-green-700 hover:underline"
               >
                 ✓ Action plan created — View in Empower →

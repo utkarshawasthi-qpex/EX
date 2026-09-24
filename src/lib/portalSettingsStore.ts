@@ -67,7 +67,10 @@ function mergePages(raw: unknown): PortalContentPage[] {
     return {
       ...page,
       title: typeof stored.title === 'string' && stored.title.trim() ? stored.title : page.title,
-      mainTab: stored.mainTab === true || stored.showInMainTab === true,
+      mainTab:
+        page.id === 'about' || page.id === 'faq'
+          ? false
+          : stored.mainTab === true || stored.showInMainTab === true,
       footer: stored.footer === true || stored.showInFooter === true,
       order: typeof stored.order === 'number' && Number.isFinite(stored.order) ? stored.order : page.order,
       body: typeof stored.body === 'string' ? stored.body : page.body,

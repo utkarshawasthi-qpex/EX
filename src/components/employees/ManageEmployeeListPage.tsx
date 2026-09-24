@@ -13,6 +13,7 @@ import { EmployeeFilterModal } from '@/components/employees/EmployeeFilterModal'
 import { CustomFieldsPage } from '@/components/employees/CustomFieldsPage'
 import { EmployeeFiltersPage } from '@/components/employees/EmployeeFiltersPage'
 import { EmployeeImportPage } from '@/components/employees/EmployeeImportPage'
+import { EmployeeIntegrationsPage } from '@/components/employees/EmployeeIntegrationsPage'
 import { EmployeeSetupPage } from '@/components/employees/EmployeeSetupPage'
 import { PortalContentPage } from '@/components/employees/PortalContentPage'
 import { PortalPermissionsPage } from '@/components/employees/PortalPermissionsPage'
@@ -752,7 +753,7 @@ export function ManageEmployeeListPage() {
       cell: ({ row }) =>
         row.original.survey360Count > 0 ? (
           <Link
-            href="/360/surveys"
+            href="/lifecycle"
             className="tabular-nums text-blue-700 hover:underline"
           >
             {row.original.survey360Count}
@@ -801,10 +802,10 @@ export function ManageEmployeeListPage() {
         </div>
       </div>
 
-      {primaryTab === 'Integrations' || primaryTab === 'Admin' ? (
+      {primaryTab === 'Admin' ? (
         <EmptyState
           icon="wm-construction"
-          title={`${primaryTab} is coming soon`}
+          title="Admin is coming soon"
           description="This section is part of the Employee Experience prototype."
           action={
             <WuButton variant="secondary" onClick={() => setPrimaryTab('Employees')}>
@@ -812,6 +813,8 @@ export function ManageEmployeeListPage() {
             </WuButton>
           }
         />
+      ) : primaryTab === 'Integrations' ? (
+        <EmployeeIntegrationsPage />
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-6 py-2">

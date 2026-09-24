@@ -563,11 +563,6 @@ export function PortalPermissionsPage({
             checked={portalAccess.threeSixty}
             onChange={(checked) => toggleAccess('threeSixty', checked)}
           />
-          <AccessRow
-            label="Empower"
-            checked={portalAccess.empower}
-            onChange={(checked) => toggleAccess('empower', checked)}
-          />
         </div>
       </section>
 

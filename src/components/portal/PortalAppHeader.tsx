@@ -13,6 +13,7 @@ import {
 } from '@/lib/portalAccess'
 import { usePortalSettings } from '@/lib/portalSettingsStore'
 import { getCurrentUser, type AppUser } from '@/lib/userContext'
+import { PortalNudgeCenter } from '@/components/modules/actionPlans/PortalNudgeCenter'
 import { cn } from '@/lib/utils'
 
 const WuMenu = dynamic(
@@ -27,13 +28,11 @@ const WuMenuItem = dynamic(
 const PRODUCT_ICONS: Record<PortalProductId, string> = {
   employeeExperience: 'wc-employees-list',
   threeSixty: 'wm-360',
-  empower: 'wm-lightbulb',
 }
 
 function isProductActive(id: PortalProductId, pathname: string) {
   if (id === 'employeeExperience') return pathname.startsWith('/lifecycle/analytics')
-  if (id === 'threeSixty') return pathname.startsWith('/360')
-  return pathname.startsWith('/empower')
+  return pathname.startsWith('/360')
 }
 
 function userInitial(user: AppUser | null) {
@@ -57,7 +56,7 @@ export function PortalAppHeader() {
   )
 
   const currentProduct =
-    (['employeeExperience', 'threeSixty', 'empower'] as PortalProductId[]).find((id) =>
+    (['employeeExperience', 'threeSixty'] as PortalProductId[]).find((id) =>
       isProductActive(id, pathname),
     ) ?? 'employeeExperience'
 
@@ -113,6 +112,7 @@ export function PortalAppHeader() {
         </button>
 
         <div className="flex items-center gap-3">
+          <PortalNudgeCenter />
           {switcherProducts.length > 0 ? (
             <div ref={switcherRef} className="relative">
               <button

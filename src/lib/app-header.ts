@@ -21,19 +21,25 @@ export function isEmployeeExperiencePath(pathname: string): boolean {
     isStudiesPath(pathname) ||
     pathname === '/lifecycle' ||
     pathname.startsWith('/lifecycle/') ||
-    pathname.startsWith('/projects')
+    pathname.startsWith('/projects') ||
+    is360SurveyFlowPath(pathname)
   )
+}
+
+/** 360 is authored inside a survey; these routes are not a separate product module. */
+export function is360SurveyFlowPath(pathname: string): boolean {
+  if (/^\/360\/surveys\/[^/]+\/edit/.test(pathname)) return true
+  if (/^\/360\/reports\/[^/]+(\/preview)?\/?$/.test(pathname)) return true
+  return false
 }
 
 export function getHeaderProductName(pathname: string): string {
   if (isEmpowerPath(pathname)) return 'Empower'
-  if (pathname === '/360' || pathname.startsWith('/360/')) return '360 Feedback'
   return 'Employee Experience'
 }
 
 export function getHeaderHomeLink(pathname: string): string {
   if (isEmpowerPath(pathname)) return '/empower'
-  if (pathname === '/360' || pathname.startsWith('/360/')) return '/360'
   return '/lifecycle'
 }
 
@@ -110,19 +116,11 @@ export function getHeaderBreadcrumbs(
     return crumbs
   }
 
-  if (pathname.startsWith('/360')) {
-    const crumbs: HeaderBreadcrumb[] = [{ label: '360 Feedback', href: '/360/surveys' }]
-    if (pathname.startsWith('/360/participants')) {
-      crumbs.push({ label: 'Participants', href: '/360/participants' })
-    } else if (pathname.startsWith('/360/deployment')) {
-      crumbs.push({ label: 'Deployment', href: '/360/deployment' })
-    } else if (pathname.startsWith('/360/reports')) {
-      crumbs.push({ label: 'Reports', href: '/360/reports' })
-    } else if (pathname.startsWith('/360/settings')) {
-      crumbs.push({ label: 'Settings', href: '/360/settings' })
-    } else {
-      crumbs.push({ label: 'Surveys', href: '/360/surveys' })
-    }
+  if (is360SurveyFlowPath(pathname)) {
+    const crumbs: HeaderBreadcrumb[] = [
+      { label: folderName, href: '/lifecycle' },
+      { label: '360 survey', href: pathname },
+    ]
     return crumbs
   }
 

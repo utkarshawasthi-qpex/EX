@@ -406,6 +406,35 @@ function createBlock(
   }
 }
 
+export const REPORT360_CONSTANT_BLOCK_TYPES: Report360BlockType[] = [
+  'masterDesign',
+  'cover',
+  'introduction',
+]
+
+export function createReport360Block(type: Report360BlockType): Report360Block {
+  if (type === 'cover') return createBlock(type, { introduction: '360° Development Report' })
+  if (type === 'introduction') {
+    return createBlock(type, {
+      introduction:
+        'This report summarizes multi-rater feedback for development planning. Scores are shown by relationship and should be read as patterns, not as a performance rating.',
+    })
+  }
+  if (type === 'spiderChart') {
+    return createBlock(type, {
+      introduction:
+        'Competency scores by relationship. Higher spikes are strengths; dips are opportunities.',
+    })
+  }
+  if (type === 'customContent') {
+    return createBlock(type, {
+      customBody:
+        'Use this page for a message from leadership, a description of the competency model, or next steps in the development program.',
+    })
+  }
+  return createBlock(type)
+}
+
 export function createDefaultReport360Template(): Report360Template {
   return {
     masterDesign: {
@@ -434,115 +463,7 @@ export function createDefaultReport360Template(): Report360Template {
       minRatersPerGroup: 3,
       skipEmptyBlocks: true,
     },
-    blocks: [
-      createBlock('masterDesign', { enabled: true, locked: true }),
-      createBlock('cover', { introduction: '360° Development Report' }),
-      createBlock('introduction', {
-        introduction:
-          'This report summarizes multi-rater feedback for development planning. Scores are shown by relationship and should be read as patterns, not as a performance rating.',
-      }),
-      createBlock('executiveSummary'),
-      createBlock('competencyDetail', {
-        dataSource: 'Inclusive Leadership',
-        chartType: 'bar',
-        meanColumn: true,
-        relationshipIcons: true,
-        tabularData: true,
-        qxBotInsights: true,
-      }),
-      createBlock('overallData', { enabled: false }),
-      createBlock('spiderChart', {
-        introduction:
-          'Competency scores by relationship. Higher spikes are strengths; dips are opportunities.',
-      }),
-      createBlock('gapAnalysis'),
-      createBlock('performanceTrend'),
-      createBlock('keyDevelopmentAreas'),
-      createBlock('strengthGrowthIndicators', { enabled: false }),
-      createBlock('competencyPriorityIndex', { enabled: false }),
-      createBlock('rankingByRelationship', { enabled: false, rankingCount: 5 }),
-      createBlock('priorityComments'),
-      createBlock('surveyRespondents', { enabled: false }),
-      createBlock('nominatedRaters', { enabled: false }),
-      createBlock('aiRecommendations', { qxBotInsights: true }),
-      createBlock('actionPlan', { enabled: false, actionPlanPriorities: ['#1', '#2', '#3'] }),
-      createBlock('customContent', {
-        enabled: false,
-        customBody:
-          'Use this page for a message from leadership, a description of the competency model, or next steps in the development program.',
-      }),
-    ],
-  }
-}
-
-/**
- * Preset block sets so admins are not locked into a single methodology.
- * Each preset enables a different slice of the same block library.
- */
-export const REPORT360_PRESETS: {
-  id: string
-  name: string
-  description: string
-  enabledTypes: Report360BlockType[]
-}[] = [
-  {
-    id: 'preset_traditional',
-    name: 'Traditional 360',
-    description: 'Scores by relationship, gap analysis, and verbatim comments.',
-    enabledTypes: [
-      'cover',
-      'introduction',
-      'competencyDetail',
-      'gapAnalysis',
-      'rankingByRelationship',
-      'priorityComments',
-      'surveyRespondents',
-    ],
-  },
-  {
-    id: 'preset_competency',
-    name: 'Competency 360',
-    description: 'Competency-model depth with executive summary and development planning.',
-    enabledTypes: [
-      'cover',
-      'introduction',
-      'executiveSummary',
-      'competencyDetail',
-      'spiderChart',
-      'gapAnalysis',
-      'keyDevelopmentAreas',
-      'competencyPriorityIndex',
-      'priorityComments',
-      'aiRecommendations',
-      'actionPlan',
-    ],
-  },
-  {
-    id: 'preset_agile',
-    name: 'Agile Lightweight',
-    description: 'A short, fast-turnaround report focused on what to do next.',
-    enabledTypes: [
-      'cover',
-      'executiveSummary',
-      'strengthGrowthIndicators',
-      'priorityComments',
-      'aiRecommendations',
-    ],
-  },
-]
-
-export function applyReport360Preset(
-  template: Report360Template,
-  presetId: string,
-): Report360Template {
-  const preset = REPORT360_PRESETS.find((item) => item.id === presetId)
-  if (!preset) return template
-  return {
-    ...template,
-    blocks: template.blocks.map((block) => ({
-      ...block,
-      enabled: block.locked ? block.enabled : preset.enabledTypes.includes(block.type),
-    })),
+    blocks: REPORT360_CONSTANT_BLOCK_TYPES.map((type) => createReport360Block(type)),
   }
 }
 
@@ -578,45 +499,41 @@ export function cloneReport360Template(template: Report360Template): Report360Te
  * Brings a stored template up to the current shape: new blocks are appended,
  * new fields get defaults, and admin-set custom titles are preserved.
  */
+function mergeStoredBlock(freshBlock: Report360Block, previous?: Report360Block): Report360Block {
+  if (!previous) return freshBlock
+  const hadCustomTitle = Boolean(
+    previous.title && previous.defaultTitle && previous.title !== previous.defaultTitle,
+  )
+  return {
+    ...freshBlock,
+    ...previous,
+    defaultTitle: freshBlock.defaultTitle,
+    title: hadCustomTitle ? previous.title : freshBlock.defaultTitle,
+    locked: freshBlock.locked,
+    relationshipWeights: { ...freshBlock.relationshipWeights, ...previous.relationshipWeights },
+    lineStyles: { ...freshBlock.lineStyles, ...previous.lineStyles },
+    spiderCompetencyIds: previous.spiderCompetencyIds ?? freshBlock.spiderCompetencyIds,
+    spiderRelationships: previous.spiderRelationships ?? freshBlock.spiderRelationships,
+    actionPlanPriorities: previous.actionPlanPriorities ?? freshBlock.actionPlanPriorities,
+    commentQuestionIds: previous.commentQuestionIds ?? freshBlock.commentQuestionIds,
+  }
+}
+
 export function migrateReport360Template(stored: Report360Template): Report360Template {
   const fresh = createDefaultReport360Template()
   const storedBlocks = stored.blocks ?? []
 
-  const merged = fresh.blocks.map((freshBlock) => {
-    const previous = storedBlocks.find((block) => block.type === freshBlock.type)
-    if (!previous) return freshBlock
-    const hadCustomTitle = Boolean(
-      previous.title && previous.defaultTitle && previous.title !== previous.defaultTitle,
+  const starters = REPORT360_CONSTANT_BLOCK_TYPES.map((type) => {
+    const freshBlock = fresh.blocks.find((block) => block.type === type) ?? createReport360Block(type)
+    return mergeStoredBlock(
+      freshBlock,
+      storedBlocks.find((block) => block.type === type),
     )
-    return {
-      ...freshBlock,
-      ...previous,
-      defaultTitle: freshBlock.defaultTitle,
-      title: hadCustomTitle ? previous.title : freshBlock.defaultTitle,
-      locked: freshBlock.locked,
-      relationshipWeights: { ...freshBlock.relationshipWeights, ...previous.relationshipWeights },
-      lineStyles: { ...freshBlock.lineStyles, ...previous.lineStyles },
-      spiderCompetencyIds: previous.spiderCompetencyIds ?? freshBlock.spiderCompetencyIds,
-      spiderRelationships: previous.spiderRelationships ?? freshBlock.spiderRelationships,
-      actionPlanPriorities: previous.actionPlanPriorities ?? freshBlock.actionPlanPriorities,
-      commentQuestionIds: previous.commentQuestionIds ?? freshBlock.commentQuestionIds,
-    }
   })
-
-  const order = storedBlocks.map((block) => block.type)
-  merged.sort((a, b) => {
-    const indexA = order.indexOf(a.type)
-    const indexB = order.indexOf(b.type)
-    if (indexA === -1 && indexB === -1) return 0
-    if (indexA === -1) return 1
-    if (indexB === -1) return -1
-    return indexA - indexB
-  })
-  const masterIndex = merged.findIndex((block) => block.type === 'masterDesign')
-  if (masterIndex > 0) {
-    const [master] = merged.splice(masterIndex, 1)
-    merged.unshift(master)
-  }
+  const extras = storedBlocks
+    .filter((block) => !REPORT360_CONSTANT_BLOCK_TYPES.includes(block.type))
+    .map((previous) => mergeStoredBlock(createReport360Block(previous.type), previous))
+  const merged = [...starters, ...extras]
 
   return {
     masterDesign: {

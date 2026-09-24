@@ -21,7 +21,7 @@ const ORG_SETTINGS_KEY = 'pp_org_settings'
 const SURVEY_DATA_KEY = 'pp_survey_data'
 const NOTIFICATIONS_KEY = 'pp_notifications'
 const FUNNEL_KEY = 'pp_funnel_seed'
-const SEEDED_KEY = 'pp_empower_ex_seeded_v3'
+const SEEDED_KEY = 'pp_empower_ex_seeded_v4'
 
 function readJson<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
@@ -68,6 +68,10 @@ export function getAllInitiativesRaw(): EmpowerInitiativeRecord[] {
 
 export function saveAllInitiatives(initiatives: EmpowerInitiativeRecord[]): void {
   writeJson(INITIATIVES_KEY, initiatives)
+}
+
+export function deleteInitiative(initiativeId: string): void {
+  saveAllInitiatives(getAllInitiativesRaw().filter((item) => item.id !== initiativeId))
 }
 
 export function getInitiativeById(id: string): EmpowerInitiativeRecord | undefined {

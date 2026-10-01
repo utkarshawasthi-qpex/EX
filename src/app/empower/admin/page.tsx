@@ -24,7 +24,7 @@ export default function EmpowerAdminPage() {
 
   return (
     <PageShell>
-      <PageHeader title="Empower Adoption Funnel" description="Manager adoption from EX analytics to Empower action" />
+      <PageHeader title="Empower adoption funnel" description="Manager adoption from EX analytics to Empower action" />
       <PageContent>
         <div className="mb-8 space-y-4">
           {bars.map((bar) => (

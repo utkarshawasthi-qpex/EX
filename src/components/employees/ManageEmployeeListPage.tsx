@@ -25,7 +25,7 @@ import {
   employeeMatchesFilterGroups,
   type EmployeeFilterGroup,
 } from '@/data/mock-employee-filters'
-import { getDefaultPortalHref } from '@/lib/portalAccess'
+import { getDefaultPortalHref, PORTAL_PRODUCT_HREFS } from '@/lib/portalAccess'
 import { cn } from '@/lib/utils'
 import {
   DEFAULT_PORTAL_SUBDOMAIN,
@@ -79,8 +79,8 @@ const SECONDARY_TABS = [
   { id: 'list', label: 'List', icon: 'wm-format-list-bulleted' },
   { id: 'import', label: 'Import', icon: 'wm-file-upload' },
   { id: 'setup', label: 'Setup', icon: 'wm-settings' },
-  { id: 'custom-fields', label: 'Custom Fields', icon: 'wm-view-column' },
-  { id: 'filters', label: 'Employee Filters', icon: 'wm-filter-list' },
+  { id: 'custom-fields', label: 'Custom fields', icon: 'wm-view-column' },
+  { id: 'filters', label: 'Employee filters', icon: 'wm-filter-list' },
 ] as const
 
 const PORTAL_SECONDARY_TABS = [
@@ -515,7 +515,7 @@ export function ManageEmployeeListPage() {
   }
 
   function openAnalyticsPortal() {
-    router.push(getDefaultPortalHref())
+    router.push(PORTAL_PRODUCT_HREFS.employeeExperience)
   }
 
   function loginAsEmployee(employee: DirectoryEmployee) {
@@ -1012,7 +1012,7 @@ export function ManageEmployeeListPage() {
                       <WuInput
                         type="search"
                         variant="outlined"
-                        placeholder="Search Employee"
+                        placeholder="Search employee"
                         value={searchInput}
                         onChange={(event) => setSearchInput(event.target.value)}
                         onKeyDown={(event) => {
@@ -1121,7 +1121,7 @@ export function ManageEmployeeListPage() {
       <ConfirmModal
         open={deleteAllOpen}
         onOpenChange={setDeleteAllOpen}
-        title="Delete All Employees?"
+        title="Delete all employees?"
         description="All employees in this list will be removed. This cannot be undone in the prototype."
         confirmLabel="Delete all"
         variant="critical"

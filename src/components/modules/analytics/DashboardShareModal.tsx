@@ -568,7 +568,7 @@ export function DashboardShareModal({
                 </WuText>
                 <WuInput
                   variant="outlined"
-                  placeholder="e.g. Executive Overview"
+                  placeholder="e.g. executive overview"
                   value={form.name}
                   onChange={(event) =>
                     setForm((current) => ({ ...current, name: event.target.value }))

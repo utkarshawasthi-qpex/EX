@@ -54,7 +54,7 @@ export default function EmpowerHomePage() {
         {groups.length === 0 ? (
           <EmpowerEmptyState
             message="You don't currently have any pending tasks assigned to you"
-            link={{ label: 'Go to Initiatives', href: '/empower/initiatives' }}
+            link={{ label: 'Go to initiatives', href: '/empower/initiatives' }}
           />
         ) : (
           groups.map(({ initiative, tasks }) => (

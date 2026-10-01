@@ -8,8 +8,6 @@ export type Report360BlockType =
   | 'executiveSummary'
   | 'overallData'
   | 'spiderChart'
-  | 'gapAnalysis'
-  | 'performanceTrend'
   | 'rankingByRelationship'
   | 'priorityComments'
   | 'keyDevelopmentAreas'
@@ -32,7 +30,7 @@ export const REPORT360_RELATIONSHIPS: Report360Relationship[] = [
 export const REPORT360_RELATIONSHIP_LABELS: Record<Report360Relationship, string> = {
   self: 'Self',
   manager: 'Manager',
-  direct_report: 'Direct Report',
+  direct_report: 'Direct report',
   peer: 'Peer',
   external: 'External',
 }
@@ -49,34 +47,33 @@ export const REPORT360_COMPETENCIES = [
   { id: 'comp_leadership', name: 'Leadership' },
   { id: 'comp_communication', name: 'Communication' },
   { id: 'comp_collaboration', name: 'Collaboration' },
-  { id: 'comp_inclusion', name: 'Inclusive Leadership' },
+  { id: 'comp_inclusion', name: 'Inclusive leadership' },
   { id: 'comp_influence', name: 'Influence' },
 ] as const
 
 /**
- * REQ-02 — methodology-agnostic default block names. Admin overrides always win;
- * these are only used for new templates and for "Reset to Default Name".
+ * Default block names. Renamed blocks use their original labels; blocks that
+ * were never renamed keep their current names. Admin overrides always win.
+ * Used for new templates and for "Reset to Default Name".
  */
 export const REPORT360_BLOCK_DEFAULT_TITLES: Record<Report360BlockType, string> = {
-  masterDesign: 'Master Design Settings',
-  cover: 'Cover Page',
+  masterDesign: 'Master design settings',
+  cover: 'Cover page',
   introduction: 'Introduction',
-  competencyDetail: 'Competency Detail View',
-  executiveSummary: 'Executive Summary',
-  overallData: 'Top Behaviors Summary',
-  spiderChart: 'Spider / Radar Chart',
-  gapAnalysis: 'Gap Analysis',
-  performanceTrend: 'Performance Trend',
-  rankingByRelationship: 'Relationship Breakdown',
-  priorityComments: 'Priority Comments & Evidence',
-  keyDevelopmentAreas: 'Key Development Areas',
-  competencyPriorityIndex: 'Competency Priority Index',
-  strengthGrowthIndicators: 'Strength & Growth Indicators',
-  surveyRespondents: 'Response Summary',
-  nominatedRaters: 'Evaluator Roster',
-  aiRecommendations: 'AI Action Recommendations',
-  actionPlan: 'Development Action Plan',
-  customContent: 'Custom Content Block',
+  competencyDetail: 'All items',
+  executiveSummary: 'Executive summary',
+  overallData: 'Overall data',
+  spiderChart: 'Spider chart',
+  rankingByRelationship: 'Ranking relationship',
+  priorityComments: 'Details of development results',
+  keyDevelopmentAreas: 'Priority areas of development',
+  competencyPriorityIndex: 'Priority areas of development - survey',
+  strengthGrowthIndicators: 'Ranking by behavior',
+  surveyRespondents: 'Survey respondents',
+  nominatedRaters: 'Nominated raters',
+  aiRecommendations: 'AI insights and recommendations',
+  actionPlan: 'Action plan',
+  customContent: 'Presentation text',
 }
 
 /** Blocks where a mean is calculated, so relationship weighting applies. */
@@ -85,8 +82,6 @@ export const REPORT360_SCORED_BLOCK_TYPES: Report360BlockType[] = [
   'executiveSummary',
   'overallData',
   'spiderChart',
-  'gapAnalysis',
-  'performanceTrend',
   'rankingByRelationship',
   'keyDevelopmentAreas',
   'competencyPriorityIndex',
@@ -105,15 +100,13 @@ export const REPORT360_OPEN_QUESTIONS: Report360OpenQuestion[] = [
 ]
 
 export const REPORT360_BLOCK_DESCRIPTIONS: Record<Report360BlockType, string> = {
-  masterDesign: 'This setup will be consistent in all pages of your report',
+  masterDesign: 'Shared settings for every page. This is not a report block.',
   cover: 'First page of the report, with subject name and program details',
   introduction: 'How to read this report',
   competencyDetail: 'Every behavior scored by each relationship',
   executiveSummary: 'One-page overview for a debrief conversation',
   overallData: 'Highest-rated behaviors across all relationships',
   spiderChart: 'Competency shape by relationship',
-  gapAnalysis: 'Self compared with everyone else',
-  performanceTrend: 'Scores across previous cycles',
   rankingByRelationship: 'Top behaviors ranked within each relationship',
   priorityComments: 'Open-ended responses grouped by question',
   keyDevelopmentAreas: 'Lowest-rated behaviors, ordered by priority',
@@ -121,7 +114,7 @@ export const REPORT360_BLOCK_DESCRIPTIONS: Record<Report360BlockType, string> = 
   strengthGrowthIndicators: 'Strengths and growth areas side by side',
   surveyRespondents: 'Response counts by relationship',
   nominatedRaters: 'Who was nominated and whether they responded',
-  aiRecommendations: 'QxBot recommendations from open-ended feedback',
+  aiRecommendations: 'Strengths, improvements, and recommendations from open-ended comments',
   actionPlan: 'Development commitments with success measures',
   customContent: 'A free-form page you write yourself',
 }
@@ -150,8 +143,6 @@ export const REPORT360_MERGE_VARIABLES = [
   { token: '${FIRST_NAME_SUBJECT}', description: 'Subject first name' },
   { token: '${LAST_NAME_SUBJECT}', description: 'Subject last name' },
   { token: '${DEPLOYMENT_DATE_MMM_DD_YYYY}', description: 'Deployment date' },
-  { token: '${OVERALL_SCORE_PCT}', description: 'Overall score as a percentage' },
-  { token: '${PERFORMANCE_CATEGORY}', description: 'Performance category label' },
   { token: '${EVALUATOR_COUNT}', description: 'Number of evaluators' },
   { token: '${PROGRAM_NAME}', description: '360 program name' },
 ] as const
@@ -177,6 +168,7 @@ export type Report360MasterDesign = {
   relationshipIcons: Record<Report360Relationship, Report360RelationshipIcon>
   globalWeightsEnabled: boolean
   relationshipWeights: Record<Report360Relationship, number>
+  performanceCategoriesEnabled: boolean
   // Category headers
   showCategoryHeaders: boolean
   categoryHeaderTitle: string
@@ -200,30 +192,43 @@ export type Report360Block = {
   introduction: string
   closingText: string
   dataSource: string
-  chartType: 'bar' | 'radar'
+  chartType: 'bar' | 'horizontalBar'
   meanColumn: boolean
   relationshipIcons: boolean
   tabularData: boolean
   priorityColumn: boolean
   qxBotInsights: boolean
+  priorityText: string
+  tabularDataHeading: string
+  conditionalTexts: Report360ConditionalText[]
+  conditionalElse: string
   behavioursPerPage: number
   includeInOverallScore: boolean
   useBlockWeights: boolean
   relationshipWeights: Record<Report360Relationship, number>
-  visibleToSubject: boolean
-  visibleToManager: boolean
-  visibleToAdmin: boolean
   spiderCompetencyIds: string[]
+  spiderQuestionIds: string[]
   spiderRelationships: Report360Relationship[]
   lineStyles: Record<Report360Relationship, 'solid' | 'dashed' | 'dotted'>
   rankingCount: number
   itemCount: number
+  behaviorDisplay: 'top' | 'bottom'
+  rankingRelationships: Report360Relationship[]
+  showManagerComments: boolean
+  generateRecommendations: boolean
   actionPlanPriorities: string[]
   // REQ-04 cover page
   coverTemplate: Report360CoverTemplate
   coverBackgroundColor: string
   showOverallScoreOnCover: boolean
   showPerformanceCategoryOnCover: boolean
+  coverImage: Report360LogoAsset | null
+  coverLabel: string
+  coverBody: string
+  showSurveyRespondents: boolean
+  excludeZeroResponses: boolean
+  showTotalSent: boolean
+  showNominatedRatersOnCover: boolean
   includeBackCover: boolean
   backCoverLogo: boolean
   contactName: string
@@ -246,6 +251,8 @@ export type Report360Block = {
 export type Report360Template = {
   masterDesign: Report360MasterDesign
   blocks: Report360Block[]
+  /** Bumped when the starter block list changes. Older saved reports open on Master Design and Cover. */
+  layoutVersion?: number
 }
 
 export type Report360BehaviorScore = {
@@ -268,9 +275,19 @@ export type Report360Gap = {
   gap: number
 }
 
+export type Report360ConditionalText = {
+  id: string
+  metric: 'scoringCategory'
+  operator: 'equal' | 'notEqual' | 'greaterThan' | 'lessThan'
+  value: number
+  body: string
+}
+
 export type Report360Comment = {
   relationship: Report360Relationship
   text: string
+  /** Competency or survey section this comment belongs to. */
+  source?: string
 }
 
 export type Report360QxBotCard = {
@@ -342,11 +359,11 @@ export const DEFAULT_RELATIONSHIP_ICONS: Record<Report360Relationship, Report360
 }
 
 export const DEFAULT_PERFORMANCE_CATEGORIES: Report360PerformanceCategory[] = [
-  { id: 'cat_outstanding', label: 'Outstanding', min: 85, max: 100, color: '#16A34A' },
-  { id: 'cat_excellent', label: 'Excellent', min: 75, max: 84, color: '#1B87E6' },
-  { id: 'cat_strong', label: 'Strong', min: 65, max: 74, color: '#7C3AED' },
-  { id: 'cat_developing', label: 'Developing', min: 55, max: 64, color: '#EA580C' },
-  { id: 'cat_attention', label: 'Needs attention', min: 0, max: 54, color: '#DC2626' },
+  { id: 'cat_outstanding', label: 'Outstanding', min: 4.5, max: 5, color: '#16A34A' },
+  { id: 'cat_excellent', label: 'Excellent', min: 4, max: 4.4, color: '#1B87E6' },
+  { id: 'cat_strong', label: 'Strong', min: 3, max: 3.9, color: '#7C3AED' },
+  { id: 'cat_developing', label: 'Developing', min: 2, max: 2.9, color: '#EA580C' },
+  { id: 'cat_attention', label: 'Needs attention', min: 1, max: 1.9, color: '#DC2626' },
 ]
 
 function createBlock(
@@ -363,30 +380,43 @@ function createBlock(
     locked: type === 'masterDesign',
     introduction: '',
     closingText: '',
-    dataSource: 'Inclusive Leadership',
+    dataSource: 'Inclusive leadership',
     chartType: 'bar',
     meanColumn: true,
     relationshipIcons: true,
     tabularData: true,
     priorityColumn: false,
     qxBotInsights: type === 'competencyDetail' || type === 'aiRecommendations',
+    priorityText: 'Priority',
+    tabularDataHeading: '',
+    conditionalTexts: [],
+    conditionalElse: '',
     behavioursPerPage: 5,
     includeInOverallScore: REPORT360_SCORED_BLOCK_TYPES.includes(type),
     useBlockWeights: false,
     relationshipWeights: { ...DEFAULT_WEIGHTS },
-    visibleToSubject: true,
-    visibleToManager: true,
-    visibleToAdmin: true,
     spiderCompetencyIds: REPORT360_COMPETENCIES.map((item) => item.id),
+    spiderQuestionIds: [],
     spiderRelationships: ['self', 'manager', 'direct_report', 'peer'],
     lineStyles: { ...DEFAULT_LINE_STYLES },
     rankingCount: 5,
     itemCount: 5,
+    behaviorDisplay: 'top',
+    rankingRelationships: [],
+    showManagerComments: false,
+    generateRecommendations: false,
     actionPlanPriorities: ['#1', '#2', '#3'],
     coverTemplate: 'classic',
     coverBackgroundColor: '#0B1F4B',
     showOverallScoreOnCover: true,
     showPerformanceCategoryOnCover: true,
+    coverImage: null,
+    coverLabel: '360° development report',
+    coverBody: '',
+    showSurveyRespondents: false,
+    excludeZeroResponses: false,
+    showTotalSent: false,
+    showNominatedRatersOnCover: false,
     includeBackCover: false,
     backCoverLogo: true,
     contactName: 'People Development Team',
@@ -412,148 +442,17 @@ export const REPORT360_CONSTANT_BLOCK_TYPES: Report360BlockType[] = [
   'introduction',
 ]
 
-export function createReport360Block(type: Report360BlockType): Report360Block {
-  if (type === 'cover') return createBlock(type, { introduction: '360° Development Report' })
-  if (type === 'introduction') {
-    return createBlock(type, {
-      introduction:
-        'This report summarizes multi-rater feedback for development planning. Scores are shown by relationship and should be read as patterns, not as a performance rating.',
-    })
-  }
-  if (type === 'spiderChart') {
-    return createBlock(type, {
-      introduction:
-        'Competency scores by relationship. Higher spikes are strengths; dips are opportunities.',
-    })
-  }
-  if (type === 'customContent') {
-    return createBlock(type, {
-      customBody:
-        'Use this page for a message from leadership, a description of the competency model, or next steps in the development program.',
-    })
-  }
-  return createBlock(type)
-}
+export const REPORT360_STARTER_BLOCK_TYPES: Report360BlockType[] = [
+  'masterDesign',
+  'cover',
+  'introduction',
+]
 
-export function createDefaultReport360Template(): Report360Template {
-  return {
-    masterDesign: {
-      showLogo: true,
-      pageNumbering: true,
-      leftHeaderLogo: { name: 'qp.png', dataUrl: '' },
-      rightHeaderLogo: null,
-      headerText: 'QuestionPro Employee Experience',
-      footerText: 'Confidential — for development use only',
-      themeColor: '#1B87E6',
-      fontFamily: 'Fira Sans',
-      fontColor: '#111827',
-      tableHeadingTextColor: '#374151',
-      tableBackground1: '#FFFFFF',
-      tableBackground2: '#F9FAFB',
-      tableBorderColor: '#E5E7EB',
-      relationshipIcons: { ...DEFAULT_RELATIONSHIP_ICONS },
-      globalWeightsEnabled: true,
-      relationshipWeights: { ...DEFAULT_WEIGHTS },
-      showCategoryHeaders: true,
-      categoryHeaderTitle: 'Competency',
-      excludeSelfInAverageScore: false,
-      excludeSelfInPriorityScore: false,
-      performanceCategories: DEFAULT_PERFORMANCE_CATEGORIES.map((category) => ({ ...category })),
-      pageSize: 'Letter',
-      minRatersPerGroup: 3,
-      skipEmptyBlocks: true,
-    },
-    blocks: REPORT360_CONSTANT_BLOCK_TYPES.map((type) => createReport360Block(type)),
-  }
-}
-
-export function cloneReport360Template(template: Report360Template): Report360Template {
-  return {
-    masterDesign: {
-      ...template.masterDesign,
-      relationshipWeights: { ...template.masterDesign.relationshipWeights },
-      relationshipIcons: { ...template.masterDesign.relationshipIcons },
-      leftHeaderLogo: template.masterDesign.leftHeaderLogo
-        ? { ...template.masterDesign.leftHeaderLogo }
-        : null,
-      rightHeaderLogo: template.masterDesign.rightHeaderLogo
-        ? { ...template.masterDesign.rightHeaderLogo }
-        : null,
-      performanceCategories: template.masterDesign.performanceCategories.map((category) => ({
-        ...category,
-      })),
-    },
-    blocks: template.blocks.map((block) => ({
-      ...block,
-      relationshipWeights: { ...block.relationshipWeights },
-      spiderCompetencyIds: [...block.spiderCompetencyIds],
-      spiderRelationships: [...block.spiderRelationships],
-      lineStyles: { ...block.lineStyles },
-      actionPlanPriorities: [...block.actionPlanPriorities],
-      commentQuestionIds: [...block.commentQuestionIds],
-    })),
-  }
-}
-
-/**
- * Brings a stored template up to the current shape: new blocks are appended,
- * new fields get defaults, and admin-set custom titles are preserved.
- */
-function mergeStoredBlock(freshBlock: Report360Block, previous?: Report360Block): Report360Block {
-  if (!previous) return freshBlock
-  const hadCustomTitle = Boolean(
-    previous.title && previous.defaultTitle && previous.title !== previous.defaultTitle,
-  )
-  return {
-    ...freshBlock,
-    ...previous,
-    defaultTitle: freshBlock.defaultTitle,
-    title: hadCustomTitle ? previous.title : freshBlock.defaultTitle,
-    locked: freshBlock.locked,
-    relationshipWeights: { ...freshBlock.relationshipWeights, ...previous.relationshipWeights },
-    lineStyles: { ...freshBlock.lineStyles, ...previous.lineStyles },
-    spiderCompetencyIds: previous.spiderCompetencyIds ?? freshBlock.spiderCompetencyIds,
-    spiderRelationships: previous.spiderRelationships ?? freshBlock.spiderRelationships,
-    actionPlanPriorities: previous.actionPlanPriorities ?? freshBlock.actionPlanPriorities,
-    commentQuestionIds: previous.commentQuestionIds ?? freshBlock.commentQuestionIds,
-  }
-}
-
-export function migrateReport360Template(stored: Report360Template): Report360Template {
-  const fresh = createDefaultReport360Template()
-  const storedBlocks = stored.blocks ?? []
-
-  const starters = REPORT360_CONSTANT_BLOCK_TYPES.map((type) => {
-    const freshBlock = fresh.blocks.find((block) => block.type === type) ?? createReport360Block(type)
-    return mergeStoredBlock(
-      freshBlock,
-      storedBlocks.find((block) => block.type === type),
-    )
-  })
-  const extras = storedBlocks
-    .filter((block) => !REPORT360_CONSTANT_BLOCK_TYPES.includes(block.type))
-    .map((previous) => mergeStoredBlock(createReport360Block(previous.type), previous))
-  const merged = [...starters, ...extras]
-
-  return {
-    masterDesign: {
-      ...fresh.masterDesign,
-      ...stored.masterDesign,
-      relationshipWeights: {
-        ...fresh.masterDesign.relationshipWeights,
-        ...stored.masterDesign?.relationshipWeights,
-      },
-      relationshipIcons: {
-        ...fresh.masterDesign.relationshipIcons,
-        ...stored.masterDesign?.relationshipIcons,
-      },
-      performanceCategories:
-        stored.masterDesign?.performanceCategories?.length
-          ? stored.masterDesign.performanceCategories
-          : fresh.masterDesign.performanceCategories,
-    },
-    blocks: merged,
-  }
+export type Report360SpiderQuestion = {
+  id: string
+  competencyId: string
+  competency: string
+  text: string
 }
 
 const BEHAVIOR_BANK: { competencyId: string; competency: string; text: string; importance: number }[] = [
@@ -595,13 +494,13 @@ const BEHAVIOR_BANK: { competencyId: string; competency: string; text: string; i
   },
   {
     competencyId: 'comp_inclusion',
-    competency: 'Inclusive Leadership',
+    competency: 'Inclusive leadership',
     text: 'Listens to and understands diverse viewpoints.',
     importance: 71,
   },
   {
     competencyId: 'comp_inclusion',
-    competency: 'Inclusive Leadership',
+    competency: 'Inclusive leadership',
     text: 'Fosters a team where each member feels included.',
     importance: 66,
   },
@@ -612,6 +511,377 @@ const BEHAVIOR_BANK: { competencyId: string; competency: string; text: string; i
     importance: 58,
   },
 ]
+
+export function report360SpiderQuestions(): Report360SpiderQuestion[] {
+  return BEHAVIOR_BANK.map((item, index) => ({
+    id: `beh_${index + 1}`,
+    competencyId: item.competencyId,
+    competency: item.competency,
+    text: item.text,
+  }))
+}
+
+export function createReport360Block(type: Report360BlockType, id?: string): Report360Block {
+  const block = createTypedReport360Block(type)
+  return id ? { ...block, id } : block
+}
+
+/** One All Items block per survey section, with that section as the data source. */
+export function createSurveyMeasureBlocks(
+  sections: { title: string }[],
+  stamp = Date.now().toString(36),
+): Report360Block[] {
+  return sections
+    .map((section) => section.title.trim())
+    .filter((title) => title.length > 0)
+    .map((title, index) => {
+      const block = createReport360Block('competencyDetail', `block_competencyDetail_${stamp}_${index}`)
+      return { ...block, title, dataSource: title }
+    })
+}
+
+/** Report pages added by Create default report. Presentation Text is left out. */
+export const REPORT360_DEFAULT_REPORT_BLOCK_TYPES: Report360BlockType[] = [
+  'surveyRespondents',
+  'nominatedRaters',
+  'executiveSummary',
+  'spiderChart',
+  'overallData',
+  'rankingByRelationship',
+  'strengthGrowthIndicators',
+  'keyDevelopmentAreas',
+  'competencyPriorityIndex',
+  'priorityComments',
+  'aiRecommendations',
+  'actionPlan',
+]
+
+export function createDefaultReportBlocks(
+  sections: { title: string }[],
+  stamp = Date.now().toString(36),
+): Report360Block[] {
+  const measures = createSurveyMeasureBlocks(sections, stamp)
+  const measureBlocks =
+    measures.length > 0
+      ? measures
+      : [createReport360Block('competencyDetail', `block_competencyDetail_${stamp}_0`)]
+  const others = REPORT360_DEFAULT_REPORT_BLOCK_TYPES.map((type, index) =>
+    createReport360Block(type, `block_${type}_${stamp}_${index}`),
+  )
+  const afterSummary = others.findIndex((block) => block.type === 'executiveSummary') + 1
+  return [...others.slice(0, afterSummary), ...measureBlocks, ...others.slice(afterSummary)]
+}
+
+function createTypedReport360Block(type: Report360BlockType): Report360Block {
+  if (type === 'cover') {
+    return createBlock(type, {
+      introduction: '',
+      relationshipIcons: false,
+      coverBody: '${FIRST_NAME_SUBJECT} ${LAST_NAME_SUBJECT}\n${DEPLOYMENT_DATE_MMM_DD_YYYY}',
+    })
+  }
+  if (type === 'introduction') {
+    return createBlock(type, {
+      relationshipIcons: false,
+      introduction:
+        'This report summarizes multi-rater feedback for development planning. Scores are shown by relationship and should be read as patterns, not as a performance rating.',
+    })
+  }
+  if (type === 'spiderChart') {
+    const questions = report360SpiderQuestions()
+    return createBlock(type, {
+      spiderRelationships: [],
+      spiderQuestionIds: questions.map((question) => question.id),
+      introduction:
+        'Competency scores by relationship. Higher spikes are strengths; dips are opportunities.',
+    })
+  }
+  if (type === 'priorityComments') {
+    return createBlock(type, { actionPlanPriorities: [] })
+  }
+  if (type === 'actionPlan') {
+    return createBlock(type, { actionPlanPriorities: [] })
+  }
+  if (type === 'aiRecommendations') {
+    return createBlock(type, {
+      dataSource: 'All',
+      commentDisplayMode: 'grouped',
+      generateRecommendations: true,
+      showSentimentBar: true,
+    })
+  }
+  if (type === 'customContent') {
+    return createBlock(type, {
+      introduction:
+        'Use this page for a message from leadership, a description of the competency model, or next steps in the development program.',
+    })
+  }
+  return createBlock(type)
+}
+
+export function createDefaultReport360Template(): Report360Template {
+  return {
+    masterDesign: {
+      showLogo: true,
+      pageNumbering: true,
+      leftHeaderLogo: { name: 'qp.png', dataUrl: '' },
+      rightHeaderLogo: null,
+      headerText: 'QuestionPro Employee Experience',
+      footerText: 'Confidential — for development use only',
+      themeColor: '#1B87E6',
+      fontFamily: 'Fira Sans',
+      fontColor: '#111827',
+      tableHeadingTextColor: '#374151',
+      tableBackground1: '#FFFFFF',
+      tableBackground2: '#F9FAFB',
+      tableBorderColor: '#E5E7EB',
+      relationshipIcons: { ...DEFAULT_RELATIONSHIP_ICONS },
+      globalWeightsEnabled: true,
+      relationshipWeights: { ...DEFAULT_WEIGHTS },
+      performanceCategoriesEnabled: true,
+      showCategoryHeaders: true,
+      categoryHeaderTitle: 'Competency',
+      excludeSelfInAverageScore: false,
+      excludeSelfInPriorityScore: false,
+      performanceCategories: DEFAULT_PERFORMANCE_CATEGORIES.map((category) => ({ ...category })),
+      pageSize: 'A4',
+      minRatersPerGroup: 3,
+      skipEmptyBlocks: true,
+    },
+    blocks: REPORT360_STARTER_BLOCK_TYPES.map((type) => createReport360Block(type)),
+    layoutVersion: 3,
+  }
+}
+
+export type Report360TemplateOption = {
+  id: string
+  name: string
+  description: string
+  template: Report360Template
+}
+
+function templateWithBlocks(types: Report360BlockType[]): Report360Template {
+  const base = createDefaultReport360Template()
+  return {
+    ...base,
+    blocks: [...base.blocks, ...types.map((type) => createReport360Block(type))],
+  }
+}
+
+export const REPORT360_TEMPLATE_OPTIONS: Report360TemplateOption[] = [
+  {
+    id: 'tpl_leadership_debrief',
+    name: 'Leadership debrief',
+    description:
+      'Competency scores, a radar chart, comments, and a development plan for a manager conversation.',
+    template: templateWithBlocks([
+      'competencyDetail',
+      'spiderChart',
+      'priorityComments',
+      'keyDevelopmentAreas',
+      'actionPlan',
+    ]),
+  },
+  {
+    id: 'tpl_executive_summary',
+    name: 'Executive summary',
+    description: 'A short report: overview, top behaviors, and strengths next to growth areas.',
+    template: templateWithBlocks(['executiveSummary', 'overallData', 'strengthGrowthIndicators']),
+  },
+  {
+    id: 'tpl_full_individual',
+    name: 'Full individual report',
+    description:
+      'Response counts, scores, comments, recommendations, and an action plan.',
+    template: templateWithBlocks([
+      'surveyRespondents',
+      'executiveSummary',
+      'competencyDetail',
+      'spiderChart',
+      'rankingByRelationship',
+      'priorityComments',
+      'strengthGrowthIndicators',
+      'keyDevelopmentAreas',
+      'aiRecommendations',
+      'actionPlan',
+    ]),
+  },
+]
+
+export function cloneReport360Template(template: Report360Template): Report360Template {
+  return {
+    layoutVersion: template.layoutVersion ?? 3,
+    masterDesign: {
+      ...template.masterDesign,
+      relationshipWeights: { ...template.masterDesign.relationshipWeights },
+      relationshipIcons: { ...template.masterDesign.relationshipIcons },
+      leftHeaderLogo: template.masterDesign.leftHeaderLogo
+        ? { ...template.masterDesign.leftHeaderLogo }
+        : null,
+      rightHeaderLogo: template.masterDesign.rightHeaderLogo
+        ? { ...template.masterDesign.rightHeaderLogo }
+        : null,
+      performanceCategories: template.masterDesign.performanceCategories.map((category) => ({
+        ...category,
+      })),
+    },
+    blocks: template.blocks.map((block) => ({
+      ...block,
+      relationshipWeights: { ...block.relationshipWeights },
+      coverImage: block.coverImage ? { ...block.coverImage } : null,
+      spiderCompetencyIds: [...block.spiderCompetencyIds],
+      spiderQuestionIds: [...block.spiderQuestionIds],
+      spiderRelationships: [...block.spiderRelationships],
+      lineStyles: { ...block.lineStyles },
+      actionPlanPriorities: [...block.actionPlanPriorities],
+      commentQuestionIds: [...block.commentQuestionIds],
+      conditionalTexts: block.conditionalTexts.map((item) => ({ ...item })),
+    })),
+  }
+}
+
+function mergeStoredBlock(freshBlock: Report360Block, previous?: Report360Block): Report360Block {
+  if (!previous) return freshBlock
+  const hadCustomTitle = Boolean(
+    previous.title && previous.defaultTitle && previous.title !== previous.defaultTitle,
+  )
+  return {
+    ...freshBlock,
+    ...previous,
+    defaultTitle: freshBlock.defaultTitle,
+    title: hadCustomTitle ? previous.title : freshBlock.defaultTitle,
+    locked: freshBlock.locked,
+    relationshipWeights: { ...freshBlock.relationshipWeights, ...previous.relationshipWeights },
+    lineStyles: { ...freshBlock.lineStyles, ...previous.lineStyles },
+    spiderCompetencyIds: previous.spiderCompetencyIds ?? freshBlock.spiderCompetencyIds,
+    spiderQuestionIds: previous.spiderQuestionIds ?? freshBlock.spiderQuestionIds,
+    spiderRelationships: previous.spiderRelationships ?? freshBlock.spiderRelationships,
+    actionPlanPriorities: previous.actionPlanPriorities ?? freshBlock.actionPlanPriorities,
+    commentQuestionIds: previous.commentQuestionIds ?? freshBlock.commentQuestionIds,
+    conditionalTexts: (previous.conditionalTexts ?? freshBlock.conditionalTexts).map((item) => ({
+      id: item.id,
+      metric: 'scoringCategory' as const,
+      operator:
+        item.operator === 'notEqual' || item.operator === 'greaterThan' || item.operator === 'lessThan'
+          ? item.operator
+          : ('equal' as const),
+      value: typeof item.value === 'number' ? item.value : 0,
+      body: item.body ?? '',
+    })),
+    conditionalElse: previous.conditionalElse ?? freshBlock.conditionalElse,
+    priorityText: previous.priorityText || freshBlock.priorityText,
+    tabularDataHeading: previous.tabularDataHeading ?? freshBlock.tabularDataHeading,
+    chartType: previous.chartType === 'horizontalBar' ? 'horizontalBar' : 'bar',
+    behaviorDisplay: previous.behaviorDisplay === 'bottom' ? 'bottom' : 'top',
+    rankingRelationships: (previous.rankingRelationships ?? []).filter((item) =>
+      REPORT360_RELATIONSHIPS.includes(item),
+    ),
+    coverLabel:
+      !previous.coverLabel || previous.coverLabel === '360° Development Report'
+        ? freshBlock.coverLabel
+        : previous.coverLabel,
+    dataSource:
+      previous.dataSource === 'Inclusive Leadership'
+        ? 'Inclusive leadership'
+        : (previous.dataSource ?? freshBlock.dataSource),
+    showManagerComments: Boolean(previous.showManagerComments),
+    generateRecommendations: previous.generateRecommendations ?? freshBlock.generateRecommendations,
+    showSentimentBar: previous.showSentimentBar ?? freshBlock.showSentimentBar,
+  }
+}
+
+function percentBandToScore(percent: number): number {
+  const score = 1 + (percent / 100) * 4
+  return Math.round(Math.min(5, Math.max(1, score)) * 10) / 10
+}
+
+function normalizePerformanceCategories(
+  categories: Report360PerformanceCategory[],
+): Report360PerformanceCategory[] {
+  const usesPercent = categories.some((category) => category.max > 5 || category.min > 5)
+  if (!usesPercent) return categories.map((category) => ({ ...category }))
+  return categories.map((category) => {
+    const min = percentBandToScore(category.min)
+    const max = percentBandToScore(category.max)
+    return { ...category, min: Math.min(min, max), max: Math.max(min, max) }
+  })
+}
+
+function isKnownBlockType(type: string): type is Report360BlockType {
+  return Object.prototype.hasOwnProperty.call(REPORT360_BLOCK_DEFAULT_TITLES, type)
+}
+
+export function migrateReport360Template(stored: Report360Template): Report360Template {
+  const fresh = createDefaultReport360Template()
+  const storedBlocks = (stored.blocks ?? []).filter((block) => isKnownBlockType(block.type))
+  const masterDesign: Report360Template['masterDesign'] = {
+    ...fresh.masterDesign,
+    ...stored.masterDesign,
+    relationshipWeights: {
+      ...fresh.masterDesign.relationshipWeights,
+      ...stored.masterDesign?.relationshipWeights,
+    },
+    relationshipIcons: {
+      ...fresh.masterDesign.relationshipIcons,
+      ...stored.masterDesign?.relationshipIcons,
+    },
+    pageSize: 'A4',
+    performanceCategoriesEnabled: stored.masterDesign?.performanceCategoriesEnabled ?? true,
+    performanceCategories: normalizePerformanceCategories(
+      stored.masterDesign?.performanceCategories?.length
+        ? stored.masterDesign.performanceCategories
+        : fresh.masterDesign.performanceCategories,
+    ),
+  }
+
+  if ((stored.layoutVersion ?? 1) < 2) {
+    return {
+      layoutVersion: 3,
+      masterDesign,
+      blocks: REPORT360_STARTER_BLOCK_TYPES.map((type) => {
+        const freshBlock = fresh.blocks.find((block) => block.type === type) ?? createReport360Block(type)
+        return mergeStoredBlock(
+          freshBlock,
+          storedBlocks.find((block) => block.type === type),
+        )
+      }),
+    }
+  }
+
+  const kept = storedBlocks.map((previous) =>
+    mergeStoredBlock(createReport360Block(previous.type), previous),
+  )
+  return {
+    layoutVersion: 3,
+    masterDesign,
+    blocks: withRequiredBlocks(kept),
+  }
+}
+
+function withRequiredBlocks(blocks: Report360Block[]): Report360Block[] {
+  const seen = new Set<Report360BlockType>()
+  const unique = blocks.filter((block) => {
+    if (!REPORT360_CONSTANT_BLOCK_TYPES.includes(block.type)) return true
+    if (seen.has(block.type)) return false
+    seen.add(block.type)
+    return true
+  })
+  const master =
+    unique.find((block) => block.type === 'masterDesign') ?? createReport360Block('masterDesign')
+  let rest = unique.filter((block) => block.type !== 'masterDesign')
+  if (!rest.some((block) => block.type === 'cover')) {
+    rest = [createReport360Block('cover'), ...rest]
+  }
+  if (!rest.some((block) => block.type === 'introduction')) {
+    const coverIndex = rest.findIndex((block) => block.type === 'cover')
+    rest = [
+      ...rest.slice(0, coverIndex + 1),
+      createReport360Block('introduction'),
+      ...rest.slice(coverIndex + 1),
+    ]
+  }
+  return [master, ...rest]
+}
 
 function round1(value: number) {
   return Math.round(value * 10) / 10
@@ -721,38 +991,46 @@ const DEFAULT_COMMENTS: Record<string, Report360Comment[]> = {
   q_open_continue: [
     {
       relationship: 'manager',
+      source: 'Leadership',
       text: 'Keep running the cross-functional forum — it is the one meeting where decisions actually get made.',
     },
     {
       relationship: 'peer',
+      source: 'Communication',
       text: 'Continue bringing people in early. Partner teams feel consulted rather than informed.',
     },
     {
       relationship: 'direct_report',
+      source: 'Inclusive leadership',
       text: 'Please keep the weekly written update. It is the only place I see the full picture.',
     },
   ],
   q_open_stop: [
     {
       relationship: 'peer',
+      source: 'Collaboration',
       text: 'Stop reopening decisions after the group has committed. It resets the work.',
     },
     {
       relationship: 'direct_report',
+      source: 'Leadership',
       text: 'Stop taking the escalation yourself — hand it to the person who owns the area.',
     },
   ],
   q_open_start: [
     {
       relationship: 'manager',
+      source: 'Influence',
       text: 'Start naming one development focus per quarter so we can track progress together.',
     },
     {
       relationship: 'external',
+      source: 'Communication',
       text: 'Start sharing the reasoning earlier. Trusted advisor already, but the "why" arrives late.',
     },
     {
       relationship: 'peer',
+      source: 'Collaboration',
       text: 'Start closing meetings with who owns what by when.',
     },
   ],
@@ -876,8 +1154,8 @@ function createSubject(params: {
     comments,
     nominatedRaters: [
       { name: 'Rajesh Kumar', relationship: 'Manager', status: 'Completed' },
-      { name: 'Nina Patel', relationship: 'Direct Report', status: 'Completed' },
-      { name: 'Omar Haddad', relationship: 'Direct Report', status: 'Completed' },
+      { name: 'Nina Patel', relationship: 'Direct report', status: 'Completed' },
+      { name: 'Omar Haddad', relationship: 'Direct report', status: 'Completed' },
       { name: 'Grace Liu', relationship: 'Peer', status: 'Completed' },
       { name: 'Chris Vogel', relationship: 'Peer', status: 'Opened' },
       { name: 'Dana Ruiz', relationship: 'External', status: 'Invited' },
@@ -951,7 +1229,7 @@ export const MOCK_360_REPORT_SUBJECTS: Report360Subject[] = [
     strengths: ['Reliability', 'Peer support'],
     developmentAreas: ['Influence without authority', 'Executive presence'],
     alignmentStatement:
-      'No Direct Report or External evaluators — those columns are omitted from this report.',
+      'No direct report or external evaluators — those columns are omitted from this report.',
   }),
   createSubject({
     id: 'sub_alexandria',
@@ -1037,13 +1315,13 @@ export const MOCK_360_REPORT_SUBJECTS: Report360Subject[] = [
     strengths: ['Customer empathy'],
     developmentAreas: ['Team coaching', 'Prioritization'],
     alignmentStatement:
-      'Direct Report and Peer groups are below the confidentiality threshold, so they are reported as Combined others.',
+      'Direct report and peer groups are below the confidentiality threshold, so they are reported as combined others.',
     comments: {
       q_open_continue: [
-        { relationship: 'manager', text: 'Keep protecting renewal accounts during the transition.' },
+        { relationship: 'manager', source: 'Leadership', text: 'Keep protecting renewal accounts during the transition.' },
       ],
       q_open_start: [
-        { relationship: 'manager', text: 'Start delegating the weekly account review.' },
+        { relationship: 'manager', source: 'Inclusive leadership', text: 'Start delegating the weekly account review.' },
       ],
     },
   }),

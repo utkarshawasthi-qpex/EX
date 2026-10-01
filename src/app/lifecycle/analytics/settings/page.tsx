@@ -222,7 +222,7 @@ export default function PptExportTemplatesPage() {
   return (
     <PageShell>
       <PageHeader
-        title="PPT Export Templates"
+        title="PPT export templates"
         description="Manage templates for PowerPoint exports"
         className="bg-white"
         actions={
@@ -308,7 +308,7 @@ export default function PptExportTemplatesPage() {
           {editingTemplate && (
             <div className="max-h-[70vh] space-y-6 overflow-y-auto pr-2">
               <section className="space-y-3">
-                <WuHeading size="sm">General Settings</WuHeading>
+                <WuHeading size="sm">General settings</WuHeading>
                 <WuInput value={editingTemplate.name} onChange={(event) => updateTemplate((template) => ({ ...template, name: event.target.value }))} />
                 <div className="flex items-center gap-3">
                   <WuInput type="color" value={`#${editingTemplate.themeColor}`} onChange={(event) => updateTemplate((template) => ({ ...template, themeColor: event.target.value.replace('#', '').toUpperCase() }))} />
@@ -319,7 +319,7 @@ export default function PptExportTemplatesPage() {
               </section>
 
               <section className="space-y-3 border-t border-gray-200 pt-4">
-                <WuHeading size="sm">First Slide</WuHeading>
+                <WuHeading size="sm">First slide</WuHeading>
                 <AlignmentButtons value={editingTemplate.firstSlide.logoAlignment} onChange={(logoAlignment) => updateTemplate((template) => ({ ...template, firstSlide: { ...template.firstSlide, logoAlignment } }))} />
                 <WuTextarea rows={2} value={editingTemplate.firstSlide.title} onChange={(event) => updateTemplate((template) => ({ ...template, firstSlide: { ...template.firstSlide, title: event.target.value } }))} />
                 <FontControls label="Title font" font={editingTemplate.firstSlide.titleFont} onChange={(titleFont) => updateTemplate((template) => ({ ...template, firstSlide: { ...template.firstSlide, titleFont } }))} />
@@ -335,13 +335,13 @@ export default function PptExportTemplatesPage() {
               </section>
 
               <section className="space-y-3 border-t border-gray-200 pt-4">
-                <WuHeading size="sm">Widget Slide</WuHeading>
+                <WuHeading size="sm">Widget slide</WuHeading>
                 <AlignmentButtons value={editingTemplate.widgetSlide.logoAlignment} onChange={(logoAlignment) => updateTemplate((template) => ({ ...template, widgetSlide: { ...template.widgetSlide, logoAlignment } }))} />
                 <FontControls label="Heading font" font={editingTemplate.widgetSlide.headingFont} onChange={(headingFont) => updateTemplate((template) => ({ ...template, widgetSlide: { ...template.widgetSlide, headingFont } }))} />
               </section>
 
               <section className="space-y-3 border-t border-gray-200 pt-4">
-                <WuHeading size="sm">Last Slide</WuHeading>
+                <WuHeading size="sm">Last slide</WuHeading>
                 <AlignmentButtons value={editingTemplate.lastSlide.closingImageAlignment} onChange={(closingImageAlignment) => updateTemplate((template) => ({ ...template, lastSlide: { ...template.lastSlide, closingImageAlignment } }))} />
                 <WuInput value={editingTemplate.lastSlide.closingText} onChange={(event) => updateTemplate((template) => ({ ...template, lastSlide: { ...template.lastSlide, closingText: event.target.value } }))} />
                 <FontControls label="Closing text font" font={editingTemplate.lastSlide.closingTextFont} onChange={(closingTextFont) => updateTemplate((template) => ({ ...template, lastSlide: { ...template.lastSlide, closingTextFont } }))} />

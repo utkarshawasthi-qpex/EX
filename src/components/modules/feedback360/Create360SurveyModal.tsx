@@ -54,7 +54,7 @@ const OPTIONS: {
   {
     source: 'template',
     title: '360 template',
-    description: 'Start from the Inclusive Leadership template with ready-made competency items.',
+    description: 'Start from the Inclusive leadership template with ready-made competency items.',
     icon: 'wm-360',
   },
 ]

@@ -25,6 +25,36 @@ body {
   }
 }
 
+/* When the report preview pane is open, the builder is the remaining width. */
+.builder-pane {
+  container-type: inline-size;
+  container-name: builder;
+}
+
+@container builder (max-width: 52rem) {
+  .builder-pane .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container builder (max-width: 40rem) {
+  .builder-pane .field-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .builder-pane .field-row > div:first-child {
+    padding-top: 0;
+  }
+}
+
+.builder-pane .block-desc {
+  display: block;
+  margin-left: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* react-grid-layout widget styles */
 .widget-grid-item {
   overflow: hidden !important;

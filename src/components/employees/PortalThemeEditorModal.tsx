@@ -85,7 +85,7 @@ export function PortalThemeEditorModal({
 
   return (
     <WuModal open={open} onOpenChange={onOpenChange} size="sm" {...preventModalDismiss}>
-      <WuModalHeader>Customize Theme</WuModalHeader>
+      <WuModalHeader>Customize theme</WuModalHeader>
       <WuModalContent>
         <div className="flex flex-col gap-4">
           <WuText size="sm" className="text-gray-600">

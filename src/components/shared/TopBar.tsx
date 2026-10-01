@@ -22,13 +22,13 @@ function getBreadcrumbs(pathname: string) {
   if (pathname.startsWith('/lifecycle/roster/')) {
     return [
       { label: 'New folks', href: '/lifecycle' },
-      { label: 'Employee Profile', href: pathname },
+      { label: 'Employee profile', href: pathname },
     ]
   }
   if (pathname.startsWith('/lifecycle/roster')) {
     return [
       { label: 'New folks', href: '/lifecycle' },
-      { label: 'Manage Employee List', href: '/lifecycle/roster' },
+      { label: 'Manage employee list', href: '/lifecycle/roster' },
     ]
   }
   if (pathname.startsWith('/lifecycle/surveys')) {

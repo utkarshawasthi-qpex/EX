@@ -13,7 +13,7 @@
  * - Other widget types unchanged.
  */
 import dynamic from 'next/dynamic'
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Layout } from 'react-grid-layout/legacy'
 import type {
   DashboardWidget,
@@ -138,15 +138,59 @@ const DEFAULT_SUMMARY_SETTINGS: SummaryAdminSettingsFieldValues = {
 const GROUP_BY_OPTIONS: SelectOption[] = [
   { value: 'Department', label: 'Department' },
   { value: 'Location', label: 'Location' },
-  { value: 'Job Level', label: 'Job Level' },
-  { value: 'Job Title', label: 'Job Title' },
+  { value: 'Job Level', label: 'Job level' },
+  { value: 'Job Title', label: 'Job title' },
 ]
 
-const RESPONSE_RATE_GROUP_OPTIONS: SelectOption[] = [
-  { value: 'Department', label: 'Department' },
-  { value: 'Job Level', label: 'Job Level' },
-  { value: 'Location', label: 'Location' },
+const RESPONSE_RATE_SEGMENT_OPTIONS: SelectOption[] = [
+  { value: 'none', label: '- select -' },
+  { value: 'department', label: 'Department' },
+  { value: 'location', label: 'Location' },
+  { value: 'level', label: 'Level' },
+  { value: 'status', label: 'Status' },
 ]
+
+const RESPONSE_RATE_SEGMENT_VALUES: Record<string, SelectOption[]> = {
+  department: [
+    { value: 'Engineering', label: 'Engineering' },
+    { value: 'Product', label: 'Product' },
+    { value: 'Sales', label: 'Sales' },
+    { value: 'HR', label: 'HR' },
+    { value: 'Marketing', label: 'Marketing' },
+    { value: 'Finance', label: 'Finance' },
+    { value: 'Operations', label: 'Operations' },
+  ],
+  location: [
+    { value: 'Mumbai', label: 'Mumbai' },
+    { value: 'Bangalore', label: 'Bangalore' },
+    { value: 'Delhi', label: 'Delhi' },
+    { value: 'Remote', label: 'Remote' },
+    { value: 'US', label: 'US' },
+  ],
+  level: [
+    { value: 'IC', label: 'IC' },
+    { value: 'Manager', label: 'Manager' },
+    { value: 'Senior Manager', label: 'Senior manager' },
+    { value: 'Director', label: 'Director' },
+    { value: 'VP', label: 'VP' },
+    { value: 'C-Suite', label: 'C-Suite' },
+  ],
+  status: [
+    { value: 'Active', label: 'Active' },
+    { value: 'Inactive', label: 'Inactive' },
+    { value: 'On leave', label: 'On leave' },
+    { value: 'Terminated', label: 'Terminated' },
+  ],
+}
+
+type ResponseRateCriteriaRow = {
+  dimension: string
+  values: string[]
+}
+
+function emptyResponseRateCriteria(): ResponseRateCriteriaRow {
+  return { dimension: 'none', values: [] }
+}
 
 const ANALYTICS_TYPE_WIDGETS: WidgetType[] = [
   'heatmap',
@@ -154,7 +198,7 @@ const ANALYTICS_TYPE_WIDGETS: WidgetType[] = [
   'time_trend',
 ]
 
-const NO_QUESTION_WIDGETS: WidgetType[] = ['notes', 'summary']
+const NO_QUESTION_WIDGETS: WidgetType[] = ['notes', 'summary', 'response_rate']
 
 const MOCK_DEPLOYMENTS: SelectOption[] = [
   { value: '12 May 2026 06:01, 12 May 2026 05:59', label: '12 May 2026 06:01, 12 May 2026 05:59' },
@@ -481,18 +525,148 @@ function getQuestionLabel(question: Question): string {
   return question.text
 }
 
+function AlignedSelect({
+  options,
+  value,
+  values = [],
+  placeholder,
+  disabled,
+  multiple = false,
+  onChange,
+  onValuesChange,
+}: {
+  options: SelectOption[]
+  value?: string
+  values?: string[]
+  placeholder: string
+  disabled?: boolean
+  multiple?: boolean
+  onChange?: (next: string) => void
+  onValuesChange?: (next: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handlePointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [open])
+
+  const selectedLabels = (multiple ? values : value ? [value] : [])
+    .map((item) => options.find((option) => option.value === item)?.label ?? item)
+    .filter((label) => label && label !== '- Select -')
+  const hasValue = selectedLabels.length > 0
+
+  return (
+    <div ref={rootRef} className="relative min-w-0">
+      <button
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={cn(
+          'flex h-10 w-full items-center justify-between gap-2 rounded border px-3 text-left text-sm',
+          disabled
+            ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
+            : 'border-gray-300 bg-white hover:border-gray-400',
+          !disabled && !hasValue && 'text-gray-400',
+          !disabled && hasValue && 'text-gray-800',
+        )}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="truncate">{hasValue ? selectedLabels.join(', ') : placeholder}</span>
+        <span className="wm-arrow-drop-down shrink-0 text-xl leading-none text-gray-400" aria-hidden />
+      </button>
+      {open && !disabled ? (
+        <div
+          role="listbox"
+          aria-multiselectable={multiple || undefined}
+          className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded border border-gray-200 bg-white py-1 shadow-lg"
+        >
+          {options
+            .filter((option) => !multiple || option.value !== 'none')
+            .map((option) => {
+              const checked = multiple ? values.includes(option.value) : value === option.value
+              function selectOption(nextChecked = !checked) {
+                if (multiple) {
+                  onValuesChange?.(
+                    nextChecked
+                      ? [...values, option.value]
+                      : values.filter((item) => item !== option.value),
+                  )
+                  return
+                }
+                onChange?.(option.value)
+                setOpen(false)
+              }
+              return (
+                <div
+                  key={option.value}
+                  role="option"
+                  aria-selected={checked}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50',
+                    checked && !multiple && 'bg-blue-50 font-medium text-blue-700',
+                    !checked && 'text-gray-700',
+                  )}
+                  onClick={() => selectOption()}
+                >
+                  {multiple ? (
+                    <span onClick={(event) => event.stopPropagation()}>
+                      <WuCheckbox checked={checked} onChange={(next: boolean) => selectOption(next)} />
+                    </span>
+                  ) : null}
+                  <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                </div>
+              )
+            })}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function CircleIconButton({
+  label,
+  icon,
+  onClick,
+}: {
+  label: string
+  icon: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className="flex size-9 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+      aria-label={label}
+      onClick={onClick}
+    >
+      <span className={cn(icon, 'text-base leading-none')} aria-hidden />
+    </button>
+  )
+}
+
 function FieldRow({
   label,
   children,
   helper,
+  align = 'start',
 }: {
   label: string
   children: ReactNode
   helper?: string
+  align?: 'start' | 'center'
 }) {
   return (
-    <div className="flex items-start gap-4">
-      <label className="w-32 flex-shrink-0 pt-2 text-sm text-gray-600">{label}</label>
+    <div className={cn('flex gap-4', align === 'center' ? 'items-center' : 'items-start')}>
+      <label className={cn('w-32 shrink-0 text-sm text-gray-600', align === 'start' && 'pt-2')}>
+        {label}
+      </label>
       <div className="min-w-0 flex-1">
         {children}
         {helper && (
@@ -750,12 +924,24 @@ export function AddWidgetModal({
     useState<SummaryAdminSettingsFieldValues>(DEFAULT_SUMMARY_SETTINGS)
   void currentLayout
 
+  const [responseRateSegment, setResponseRateSegment] = useState('none')
+  const [responseRateValues, setResponseRateValues] = useState<string[]>([])
+  const [responseRateCriteria, setResponseRateCriteria] = useState<ResponseRateCriteriaRow[]>([
+    emptyResponseRateCriteria(),
+  ])
+
   const isSummaryFlow = selectedType === 'summary'
+  const isResponseRateFlow = selectedType === 'response_rate'
   const flowSteps = useMemo(() => {
     if (isSummaryFlow) return SUMMARY_STEPS
     if (isDriverAnalysisType(selectedType)) {
       return WIDGET_STEPS.map((stepItem, index) =>
         index === 3 ? { ...stepItem, label: 'Select drivers' } : stepItem,
+      )
+    }
+    if (selectedType === 'response_rate') {
+      return WIDGET_STEPS.map((stepItem, index) =>
+        index === 3 ? { ...stepItem, label: 'Segment' } : stepItem,
       )
     }
     return WIDGET_STEPS
@@ -770,10 +956,11 @@ export function AddWidgetModal({
   const surveyOptions = getSurveyOptions(surveys)
   const filteredSurveys = useMemo(
     () =>
-      surveys.filter((survey) =>
-        survey.title.toLowerCase().includes(surveySearch.trim().toLowerCase()),
-      ),
-    [surveys, surveySearch],
+      surveys.filter((survey) => {
+        if (selectedType === 'response_rate' && survey.type === '360') return false
+        return survey.title.toLowerCase().includes(surveySearch.trim().toLowerCase())
+      }),
+    [selectedType, surveys, surveySearch],
   )
   const markerOptions = getMarkerOptions(selectedSurvey)
   const selectedQuestionObjects = selectedSurvey?.questions.filter((question) =>
@@ -819,6 +1006,9 @@ export function AddWidgetModal({
     setWidgetConfig({})
     setWidgetSize('half')
     setSummarySettings(DEFAULT_SUMMARY_SETTINGS)
+    setResponseRateSegment('none')
+    setResponseRateValues([])
+    setResponseRateCriteria([emptyResponseRateCriteria()])
   }, [surveys])
 
   useEffect(() => {
@@ -857,6 +1047,15 @@ export function AddWidgetModal({
     }
     setWidgetSize(getDefaultWidth(type))
     setSummarySettings(DEFAULT_SUMMARY_SETTINGS)
+    setResponseRateSegment('none')
+    setResponseRateValues([])
+    setResponseRateCriteria([emptyResponseRateCriteria()])
+  }
+
+  function updateResponseRateSegment(next: string) {
+    setResponseRateSegment(next)
+    setResponseRateValues([])
+    setResponseRateCriteria([emptyResponseRateCriteria()])
   }
 
   function handleCreate() {
@@ -888,8 +1087,20 @@ export function AddWidgetModal({
         description: widgetDescription,
         surveyId: selectedSurveyId,
         deployment: selectedDeployment,
-        questions: selectedQuestions,
+        questions: selectedType === 'response_rate' ? [] : selectedQuestions,
         ...widgetConfig,
+        ...(selectedType === 'response_rate'
+          ? {
+              segment: responseRateSegment === 'none' ? '' : responseRateSegment,
+              segmentValues: responseRateSegment === 'none' ? [] : responseRateValues,
+              segmentCriteria:
+                responseRateSegment === 'none'
+                  ? []
+                  : responseRateCriteria
+                      .filter((row) => row.dimension !== 'none')
+                      .map((row) => ({ dimension: row.dimension, values: row.values })),
+            }
+          : {}),
       },
     })
     handleModalOpenChange(false)
@@ -1063,20 +1274,6 @@ export function AddWidgetModal({
             </WuText>
           </div>
         </div>
-      )
-    }
-
-    if (selectedType === 'response_rate') {
-      return (
-        <FieldRow label="Group by">
-          <WuSelect
-            data={RESPONSE_RATE_GROUP_OPTIONS}
-            accessorKey={{ value: 'value', label: 'label' }}
-            value={getConfigOption('groupBy', RESPONSE_RATE_GROUP_OPTIONS, RESPONSE_RATE_GROUP_OPTIONS[1])}
-            onSelect={(value) => updateWidgetConfig('groupBy', (value as SelectOption).value)}
-            variant="outlined"
-          />
-        </FieldRow>
       )
     }
 
@@ -1295,8 +1492,13 @@ export function AddWidgetModal({
             </div>
           </div>
 
-          <div className="rounded border border-gray-100 bg-white p-4">
-            <FieldRow label="Deployment">
+          <div
+            className={cn(
+              'rounded border border-gray-100 bg-white p-4',
+              isResponseRateFlow && 'flex h-full min-h-[390px] flex-col',
+            )}
+          >
+            <FieldRow label="Deployment" align={isResponseRateFlow ? 'center' : 'start'}>
               <WuSelect
                 data={MOCK_DEPLOYMENTS}
                 accessorKey={{ value: 'value', label: 'label' }}
@@ -1356,7 +1558,39 @@ export function AddWidgetModal({
                 </FieldRow>
               </>
             )}
-            {!isDriverAnalysisType(selectedType) && (
+            {isResponseRateFlow ? (
+              <div className="flex min-h-[300px] flex-1 flex-col items-center justify-center px-8 text-center">
+                <svg width="168" height="104" viewBox="0 0 168 104" fill="none" aria-hidden>
+                  <rect x="16" y="28" width="86" height="62" rx="6" fill="#F8FAFC" stroke="#CBD5E1" />
+                  <rect x="28" y="42" width="40" height="6" rx="2" fill="#93C5FD" />
+                  <rect x="28" y="56" width="58" height="4" rx="2" fill="#E2E8F0" />
+                  <rect x="28" y="66" width="46" height="4" rx="2" fill="#E2E8F0" />
+                  <rect x="64" y="12" width="88" height="68" rx="6" fill="white" stroke="#60A5FA" />
+                  <circle cx="94" cy="46" r="16" stroke="#DBEAFE" strokeWidth="6" />
+                  <path
+                    d="M94 30 a16 16 0 0 1 13.9 8"
+                    stroke="#2563EB"
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                  />
+                  <rect x="118" y="34" width="22" height="4" rx="2" fill="#BFDBFE" />
+                  <rect x="118" y="44" width="16" height="4" rx="2" fill="#BFDBFE" />
+                  <rect x="118" y="54" width="20" height="4" rx="2" fill="#BFDBFE" />
+                </svg>
+                <p className="mt-5 text-sm text-blue-600">
+                  Click{' '}
+                  <button
+                    type="button"
+                    className="font-medium hover:underline disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline"
+                    disabled={!selectedSurveyId}
+                    onClick={() => setStep(3)}
+                  >
+                    Next
+                  </button>{' '}
+                  to continue building your widget.
+                </p>
+              </div>
+            ) : !isDriverAnalysisType(selectedType) ? (
               <>
                 <div className="my-3 border-b border-gray-100" />
                 {!needsQuestions ? (
@@ -1406,8 +1640,97 @@ export function AddWidgetModal({
                   </div>
                 )}
               </>
-            )}
+            ) : null}
           </div>
+        </div>
+      )
+    }
+
+    if (step === 3 && isResponseRateFlow) {
+      const segmentValues = RESPONSE_RATE_SEGMENT_VALUES[responseRateSegment] ?? []
+      const segmentChosen = responseRateSegment !== 'none'
+      const criteriaDimensionOptions = RESPONSE_RATE_SEGMENT_OPTIONS.filter(
+        (option) => option.value === 'none' || option.value !== responseRateSegment,
+      )
+      return (
+        <div className="space-y-5">
+          <div>
+            <p className="mb-2 text-sm text-gray-800">Segment</p>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem] items-center gap-x-4">
+              <AlignedSelect
+                options={RESPONSE_RATE_SEGMENT_OPTIONS}
+                value={responseRateSegment}
+                placeholder="- select -"
+                onChange={updateResponseRateSegment}
+              />
+              <AlignedSelect
+                multiple
+                options={segmentValues}
+                values={responseRateValues}
+                placeholder="- select value(s) -"
+                disabled={!segmentChosen}
+                onValuesChange={setResponseRateValues}
+              />
+              <span aria-hidden />
+            </div>
+          </div>
+          {responseRateCriteria.map((row, index) => {
+            const criteriaValues = RESPONSE_RATE_SEGMENT_VALUES[row.dimension] ?? []
+            const isLast = index === responseRateCriteria.length - 1
+            return (
+              <div key={index}>
+                {index === 0 ? <p className="mb-2 text-sm text-gray-800">Criteria</p> : null}
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem] items-center gap-x-4">
+                  <AlignedSelect
+                    options={criteriaDimensionOptions}
+                    value={row.dimension}
+                    placeholder="- select -"
+                    disabled={!segmentChosen}
+                    onChange={(dimension) =>
+                      setResponseRateCriteria((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? { dimension, values: [] } : item,
+                        ),
+                      )
+                    }
+                  />
+                  <AlignedSelect
+                    multiple
+                    options={criteriaValues}
+                    values={row.values}
+                    placeholder="- select value(s) -"
+                    disabled={!segmentChosen || row.dimension === 'none'}
+                    onValuesChange={(next) =>
+                      setResponseRateCriteria((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, values: next } : item,
+                        ),
+                      )
+                    }
+                  />
+                  {isLast ? (
+                    <CircleIconButton
+                      label="Add criteria"
+                      icon="wm-add"
+                      onClick={() =>
+                        setResponseRateCriteria((current) => [...current, emptyResponseRateCriteria()])
+                      }
+                    />
+                  ) : (
+                    <CircleIconButton
+                      label="Remove criteria"
+                      icon="wm-remove"
+                      onClick={() =>
+                        setResponseRateCriteria((current) =>
+                          current.filter((_, itemIndex) => itemIndex !== index),
+                        )
+                      }
+                    />
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
       )
     }
@@ -1480,7 +1803,7 @@ export function AddWidgetModal({
               </WuButton>
             ) : (
               <WuButton variant="primary" disabled={!canContinue} onClick={handleCreate}>
-                Create Widget
+                {isResponseRateFlow ? 'Create widget' : 'Create Widget'}
               </WuButton>
             )}
           </div>

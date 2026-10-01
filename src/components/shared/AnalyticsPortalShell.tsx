@@ -374,7 +374,7 @@ function AnalyticsSidebar({
 
   const exportItems: NavItem[] = [
     {
-      label: 'PPT Templates',
+      label: 'PPT templates',
       href: PPT_TEMPLATES_PATH,
       icon: 'ppt',
       isActive: (path) =>
@@ -383,7 +383,7 @@ function AnalyticsSidebar({
     ...(showOrgContext
       ? [
           {
-            label: 'Org Context',
+            label: 'Org context',
             href: ORG_CONTEXT_PATH,
             icon: 'orgContext' as const,
             adminOnly: true,

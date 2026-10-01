@@ -31,7 +31,7 @@ export function EmployeeImportFormatModal({
   const fields = getEmployeeImportFormatFields(customFields)
   return (
     <WuModal open={open} onOpenChange={onOpenChange} size="md" maxHeight="80vh">
-      <WuModalHeader>Employee Import Format</WuModalHeader>
+      <WuModalHeader>Employee import format</WuModalHeader>
       <WuModalContent>
         <ul className="flex flex-col gap-3 text-sm text-gray-800">
           {fields.map((field) => (

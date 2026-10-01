@@ -21,7 +21,7 @@ const MAIN_TABS: { id: SurveyBuilderMainTab; label: string }[] = [
   { id: 'edit', label: 'Edit' },
   { id: 'distribute', label: 'Distribute' },
   { id: 'analytics', label: 'Analytics' },
-  { id: 'manageData', label: 'Manage Data' },
+  { id: 'manageData', label: 'Manage data' },
 ]
 
 const WORKSPACE_TABS: { id: SurveyBuilderWorkspaceTab; label: string; icon: string }[] = [
@@ -29,7 +29,7 @@ const WORKSPACE_TABS: { id: SurveyBuilderWorkspaceTab; label: string; icon: stri
   { id: 'design', label: 'Design', icon: 'wm-palette' },
   { id: 'settings', label: 'Settings', icon: 'wm-settings' },
   { id: 'languages', label: 'Languages', icon: 'wm-translate' },
-  { id: 'media', label: 'Media Library', icon: 'wm-image' },
+  { id: 'media', label: 'Media library', icon: 'wm-image' },
 ]
 
 export type SurveyBuilderSubTab = {

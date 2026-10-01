@@ -349,7 +349,7 @@ export function CreateInitiativeModal({
                   variant="outlined"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="e.g. Improve manager communication cadence"
+                  placeholder="e.g. improve manager communication cadence"
                 />
               }
             />

@@ -106,7 +106,7 @@ const SURVEY_TRIGGER_EVENTS: SelectOption[] = [
   { value: 'before.survey', label: 'Before survey' },
   { value: 'after.question', label: 'After question' },
   { value: 'after.page', label: 'After page' },
-  { value: 'on.save.continue', label: 'On Save and Continue' },
+  { value: 'on.save.continue', label: 'On save and continue' },
 ]
 
 const TRIGGER_EVENTS: SelectOption[] = [...ROSTER_TRIGGER_EVENTS, ...SURVEY_TRIGGER_EVENTS]
@@ -194,9 +194,9 @@ const STATUS_OPTIONS: SelectOption[] = EMPLOYEE_STATUS_FILTER_OPTIONS.map((optio
 }))
 
 const AFTER_SURVEY_CONDITION_FIELDS: SelectOption[] = [
-  { value: 'system.variables', label: 'System Variable' },
-  { value: 'geo.location', label: 'Geo Location' },
-  { value: 'device.type', label: 'Device Type' },
+  { value: 'system.variables', label: 'System variable' },
+  { value: 'geo.location', label: 'Geo location' },
+  { value: 'device.type', label: 'Device type' },
 ]
 
 const CUSTOM_VARIABLES: SelectOption[] = Array.from({ length: 255 }, (_, index) => ({
@@ -240,37 +240,37 @@ const METHODS: SelectOption[] = [
 ]
 
 const AUTH_TYPES: SelectOption[] = [
-  { value: 'none', label: 'No Auth' },
-  { value: 'apiKey', label: 'API Key' },
-  { value: 'bearer', label: 'Bearer Token' },
-  { value: 'basic', label: 'Basic Auth' },
+  { value: 'none', label: 'No auth' },
+  { value: 'apiKey', label: 'API key' },
+  { value: 'bearer', label: 'Bearer token' },
+  { value: 'basic', label: 'Basic auth' },
 ]
 
 const API_KEY_TARGETS: SelectOption[] = [
   { value: 'header', label: 'Header' },
-  { value: 'query', label: 'Query Params' },
+  { value: 'query', label: 'Query params' },
 ]
 
 const REQUEST_SECTIONS: { id: RequestSection; label: string }[] = [
   { id: 'authorization', label: 'Authorization' },
-  { id: 'header', label: 'Request Header' },
-  { id: 'body', label: 'Request Body' },
+  { id: 'header', label: 'Request header' },
+  { id: 'body', label: 'Request body' },
 ]
 
 const STEPS: { id: ConfigStep; label: string; description: string }[] = [
   {
     id: 'trigger',
-    label: 'Trigger Logic',
+    label: 'Trigger logic',
     description: 'Setup a trigger for your webhook based on specific events and conditions',
   },
   {
     id: 'request',
-    label: 'API Request',
+    label: 'API request',
     description: 'Configure how the webhook should send or receive data using your preferred HTTP method',
   },
   {
     id: 'mapping',
-    label: 'Data Mapping',
+    label: 'Data mapping',
     description: 'Map data received from the API request to custom variables',
   },
 ]

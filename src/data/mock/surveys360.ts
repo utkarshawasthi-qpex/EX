@@ -132,7 +132,7 @@ const INCLUSIVE_LEADERSHIP_QUESTIONS: Survey360Question[] = [
 function createInclusiveLeadershipSection(): Survey360Section {
   return {
     id: 'sec_inclusive_leadership',
-    title: 'Inclusive Leadership',
+    title: 'Inclusive leadership',
     questions: INCLUSIVE_LEADERSHIP_QUESTIONS.map((q) => ({ ...q })),
   }
 }
@@ -140,7 +140,7 @@ function createInclusiveLeadershipSection(): Survey360Section {
 function createEmptySection(): Survey360Section {
   return {
     id: `sec_${Date.now()}`,
-    title: 'New Section',
+    title: 'New section',
     questions: [],
   }
 }
@@ -150,7 +150,7 @@ export function createSurvey360Draft(source: Survey360Source): Survey360 {
   const isTemplate = source === 'template'
   return {
     id: `surv360_${Date.now()}`,
-    title: isTemplate ? 'Inclusive Leadership 360' : 'Untitled 360 Survey',
+    title: isTemplate ? 'Inclusive leadership 360' : 'Untitled 360 Survey',
     source,
     status: 'draft',
     framework: isTemplate ? 'Competency' : 'Custom',
@@ -176,7 +176,7 @@ export function createSurvey360Draft(source: Survey360Source): Survey360 {
 export const mockSurveys360: Survey360[] = [
   {
     id: 'surv360_leadership_2025',
-    title: 'Leadership 360 — Annual 2025',
+    title: 'Leadership 360 — annual 2025',
     source: 'template',
     status: 'active',
     framework: 'Competency',
@@ -187,7 +187,7 @@ export const mockSurveys360: Survey360[] = [
     font: 'Fira Sans',
     displaySettings: { ...DEFAULT_DISPLAY_SETTINGS },
     defaultRelationships: ['Manager'],
-    customRelationships: ['Peer', 'Direct Report'],
+    customRelationships: ['Peer', 'Direct report'],
     languages: ['English'],
     defaultLanguage: 'English',
     mediaFiles: Array.from({ length: 16 }, (_, i) => ({
@@ -199,7 +199,7 @@ export const mockSurveys360: Survey360[] = [
   },
   {
     id: 'surv360_manager_q1',
-    title: 'Manager Effectiveness Q1',
+    title: 'Manager effectiveness Q1',
     source: 'custom',
     status: 'closed',
     framework: 'Custom',
@@ -208,7 +208,7 @@ export const mockSurveys360: Survey360[] = [
     sections: [
       {
         id: 'sec_mgr_1',
-        title: 'Manager Effectiveness',
+        title: 'Manager effectiveness',
         questions: [
           {
             id: 'q_mgr_1',
@@ -238,7 +238,7 @@ export const mockSurveys360: Survey360[] = [
   },
   {
     id: 'surv360_newhire_90',
-    title: 'New Hire 90-Day',
+    title: 'New hire 90-day',
     source: 'template',
     status: 'draft',
     framework: 'Onboarding',

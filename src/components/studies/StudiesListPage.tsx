@@ -587,7 +587,7 @@ export function StudiesListPage() {
       </WuModal>
 
       <WuModal open={useExistingOpen} onOpenChange={setUseExistingOpen} size="md">
-        <WuModalHeader>Use Existing Survey</WuModalHeader>
+        <WuModalHeader>Use existing survey</WuModalHeader>
         <WuModalContent>
           <div className="flex max-h-80 flex-col gap-1 overflow-auto">
             {studies.map((study) => (

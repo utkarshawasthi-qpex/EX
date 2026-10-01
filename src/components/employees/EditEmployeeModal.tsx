@@ -74,7 +74,7 @@ const EMPLOYEE_STATUS_OPTIONS: SelectOption[] = [
 
 const LEVEL_OPTIONS: SelectOption[] = [
   SELECT_PLACEHOLDER,
-  { value: 'Individual Contributor', label: 'Individual Contributor' },
+  { value: 'Individual Contributor', label: 'Individual contributor' },
   { value: 'Manager', label: 'Manager' },
   { value: 'Director', label: 'Director' },
   { value: 'Senior VP/VP', label: 'Senior VP/VP' },
@@ -91,12 +91,12 @@ const CUSTOM_STATUS_OPTIONS: SelectOption[] = [
 
 const TIMEZONE_OPTIONS: SelectOption[] = [
   SELECT_PLACEHOLDER,
-  { value: 'Pacific Time', label: 'Pacific Time' },
-  { value: 'Mountain Time', label: 'Mountain Time' },
-  { value: 'Central Time', label: 'Central Time' },
-  { value: 'Eastern Time', label: 'Eastern Time' },
+  { value: 'Pacific Time', label: 'Pacific time' },
+  { value: 'Mountain Time', label: 'Mountain time' },
+  { value: 'Central Time', label: 'Central time' },
+  { value: 'Eastern Time', label: 'Eastern time' },
   { value: 'GMT', label: 'GMT' },
-  { value: 'India Standard Time', label: 'India Standard Time' },
+  { value: 'India Standard Time', label: 'India standard time' },
 ]
 
 const MEMBER_STATUS_OPTIONS: SelectOption[] = [
@@ -308,7 +308,7 @@ export function EditEmployeeModal({
       maxHeight="90vh"
       {...preventModalDismiss}
     >
-      <WuModalHeader>Edit Employee Details</WuModalHeader>
+      <WuModalHeader>Edit employee details</WuModalHeader>
       <WuModalContent>
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <WuButton

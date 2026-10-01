@@ -303,7 +303,7 @@ export function HubCreateInitiativeModal({ open, onClose }: Props) {
                   variant="outlined"
                   value={customForm.name}
                   onChange={(e) => setCustomForm({ ...customForm, name: e.target.value })}
-                  placeholder="e.g. Improve manager communication cadence"
+                  placeholder="e.g. improve manager communication cadence"
                 />
               }
             />

@@ -26,7 +26,7 @@ export function ManageDataPanel({ survey }: ManageDataPanelProps) {
 
   return (
     <div className="mx-auto max-w-3xl p-6">
-      <WuHeading size="md">Manage Data</WuHeading>
+      <WuHeading size="md">Manage data</WuHeading>
       <WuText size="sm" as="p" className="mt-2 text-gray-500">
         Export responses, clean incomplete submissions, and manage data retention for{' '}
         <span className="font-medium text-gray-700">{survey.title}</span>.

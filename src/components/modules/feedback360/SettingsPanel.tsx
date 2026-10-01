@@ -35,15 +35,15 @@ const DISPLAY_FIELDS: {
   key: Exclude<keyof Survey360['displaySettings'], 'showQuestionNumbers'>
   label: string
 }[] = [
-  { key: 'nextButton', label: 'Next Button' },
-  { key: 'exitButton', label: 'Exit Button' },
-  { key: 'previousButton', label: 'Previous Button' },
-  { key: 'finishButton', label: 'Finish Button' },
-  { key: 'thankYouMessage', label: 'Thank you Message' },
-  { key: 'invalidLink', label: 'Invalid Link' },
-  { key: 'errorMessage', label: 'Error Message' },
-  { key: 'terminateMessage', label: 'Terminate Message' },
-  { key: 'validationStar', label: 'Validation Text' },
+  { key: 'nextButton', label: 'Next button' },
+  { key: 'exitButton', label: 'Exit button' },
+  { key: 'previousButton', label: 'Previous button' },
+  { key: 'finishButton', label: 'Finish button' },
+  { key: 'thankYouMessage', label: 'Thank you message' },
+  { key: 'invalidLink', label: 'Invalid link' },
+  { key: 'errorMessage', label: 'Error message' },
+  { key: 'terminateMessage', label: 'Terminate message' },
+  { key: 'validationStar', label: 'Validation text' },
 ]
 
 export function SettingsPanel({ survey, onChange }: SettingsPanelProps) {
@@ -78,7 +78,7 @@ export function SettingsPanel({ survey, onChange }: SettingsPanelProps) {
     <div className="mx-auto max-w-3xl space-y-8 p-6">
       <section className="rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
-          <WuHeading size="sm">General Display Setting</WuHeading>
+          <WuHeading size="sm">General display setting</WuHeading>
           <button
             type="button"
             className="flex size-5 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white"
@@ -153,7 +153,7 @@ export function SettingsPanel({ survey, onChange }: SettingsPanelProps) {
             <div className="flex-1">
               <WuInput
                 variant="outlined"
-                placeholder="Custom Relationship"
+                placeholder="Custom relationship"
                 value={customDraft}
                 onChange={(event) => setCustomDraft(event.target.value)}
               />

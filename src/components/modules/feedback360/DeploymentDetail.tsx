@@ -85,18 +85,18 @@ type HistoryRow = {
 }
 
 const NAV: { id: WorkspaceSection; label: string }[] = [
-  { id: 'selection', label: 'Participant Selection' },
-  { id: 'options', label: 'Participant Options' },
+  { id: 'selection', label: 'Participant selection' },
+  { id: 'options', label: 'Participant options' },
   { id: 'compose', label: 'Compose' },
   { id: 'templates', label: 'Templates' },
-  { id: 'history', label: 'Sent History' },
+  { id: 'history', label: 'Sent history' },
 ]
 
 const RELATIONSHIPS: { value: Relationship; label: string }[] = [
   { value: 'Self', label: 'Self' },
   { value: 'Manager', label: 'Manager' },
   { value: 'Peer', label: 'Peer' },
-  { value: 'Direct Report', label: 'Direct Report' },
+  { value: 'Direct Report', label: 'Direct report' },
   { value: 'External', label: 'External' },
 ]
 

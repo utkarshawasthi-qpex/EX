@@ -56,7 +56,7 @@ type AddEmployeeModalProps = {
 const STATUS_OPTIONS: SelectOption[] = [
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
-  { value: 'on_leave', label: 'On Leave' },
+  { value: 'on_leave', label: 'On leave' },
 ]
 
 function toOptions(values: string[]): SelectOption[] {
@@ -150,7 +150,7 @@ export function AddEmployeeModal({
 
   return (
     <WuModal open={open} onOpenChange={handleOpenChange} size="md" {...preventModalDismiss}>
-      <WuModalHeader>Add Employee</WuModalHeader>
+      <WuModalHeader>Add employee</WuModalHeader>
       <WuModalContent>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <WuFormGroup

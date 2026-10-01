@@ -62,7 +62,7 @@ export const MOCK_STUDIES: Study[] = [
     createdAt: '2026-06-26',
     responses: 8,
     deployments: 1,
-    folderId: 'new-folks',
+    folderId: 'ca-500',
     surveyId: 'surv360_newhire_90',
   },
   {

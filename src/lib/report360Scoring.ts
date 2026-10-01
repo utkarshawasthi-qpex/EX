@@ -8,7 +8,6 @@ import {
   type Report360BehaviorScore,
   type Report360Block,
   type Report360MasterDesign,
-  type Report360PerformanceCategory,
   type Report360Relationship,
   type Report360Subject,
   type Report360Template,
@@ -194,65 +193,9 @@ export function behaviorsWithData(subject: Report360Subject): Report360BehaviorS
   )
 }
 
-/** Converts a 1-5 rating into the 0-100 scale used for the overall score. */
+/** Converts a 1-5 rating into a 0-100 scale for display. */
 export function ratingToPercent(rating: number): number {
   return Math.round(((rating - 1) / 4) * 100)
-}
-
-export function blockMean(
-  subject: Report360Subject,
-  template: Report360Template,
-  block: Report360Block,
-): number | null {
-  const plan = resolveColumnPlan(subject, template.masterDesign)
-  const columns = scoreColumns(plan, template.masterDesign)
-  const weights = resolveWeights(template, block)
-  const means = behaviorsWithData(subject)
-    .map((behavior) => weightedBehaviorMean(behavior, columns, weights))
-    .filter((value): value is number => value != null)
-  if (means.length === 0) return null
-  return round1(means.reduce((sum, value) => sum + value, 0) / means.length)
-}
-
-/**
- * REQ-07 — one composite score per subject, rolled up from the blocks the admin
- * marked as counting toward it, so weight changes are visible end to end.
- */
-export function computeOverallScore(
-  subject: Report360Subject,
-  template: Report360Template,
-): number | null {
-  const scoredBlocks = template.blocks.filter(
-    (block) => block.enabled && block.includeInOverallScore && block.type !== 'masterDesign',
-  )
-  const means = (scoredBlocks.length > 0 ? scoredBlocks : [undefined])
-    .map((block) =>
-      block
-        ? blockMean(subject, template, block)
-        : (() => {
-            const plan = resolveColumnPlan(subject, template.masterDesign)
-            const columns = scoreColumns(plan, template.masterDesign)
-            const weights = resolveWeights(template)
-            const values = behaviorsWithData(subject)
-              .map((behavior) => weightedBehaviorMean(behavior, columns, weights))
-              .filter((value): value is number => value != null)
-            if (values.length === 0) return null
-            return round1(values.reduce((sum, value) => sum + value, 0) / values.length)
-          })(),
-    )
-    .filter((value): value is number => value != null)
-
-  if (means.length === 0) return null
-  return ratingToPercent(means.reduce((sum, value) => sum + value, 0) / means.length)
-}
-
-export function resolvePerformanceCategory(
-  score: number | null,
-  categories: Report360PerformanceCategory[],
-): Report360PerformanceCategory | null {
-  if (score == null) return null
-  const match = categories.find((category) => score >= category.min && score <= category.max)
-  return match ?? null
 }
 
 export type Report360GapClass = 'blind-spot' | 'hidden-strength' | 'aligned'
@@ -384,19 +327,6 @@ export function blockHasData(
         : { hasData: false, reason: 'Fewer than 3 competencies have ratings' }
     }
 
-    case 'gapAnalysis': {
-      const hasSelf = subject.evaluatorCounts.self > 0
-      const hasOthers = plan.columns.some((column) => !column.relationships.includes('self'))
-      if (!hasSelf) return { hasData: false, reason: 'No self-evaluation submitted' }
-      if (!hasOthers) return { hasData: false, reason: 'No evaluator groups available to compare against' }
-      return ok
-    }
-
-    case 'performanceTrend':
-      return subject.trend.length >= 2
-        ? ok
-        : { hasData: false, reason: 'No prior cycle to compare against' }
-
     case 'rankingByRelationship':
       return plan.columns.length > 0
         ? ok
@@ -432,14 +362,6 @@ export function blockHasData(
   }
 }
 
-export type Report360Audience = 'subject' | 'manager' | 'admin'
-
-export function blockVisibleTo(block: Report360Block, audience: Report360Audience): boolean {
-  if (audience === 'manager') return block.visibleToManager
-  if (audience === 'subject') return block.visibleToSubject
-  return block.visibleToAdmin
-}
-
 export type Report360SkippedBlock = {
   blockId: string
   title: string
@@ -458,21 +380,12 @@ export type Report360ReportPlan = {
 export function resolveReportPlan(
   subject: Report360Subject,
   template: Report360Template,
-  audience: Report360Audience = 'admin',
 ): Report360ReportPlan {
   const blocks: Report360Block[] = []
   const skipped: Report360SkippedBlock[] = []
 
   template.blocks.forEach((block) => {
     if (block.type === 'masterDesign' || !block.enabled) return
-    if (!blockVisibleTo(block, audience)) {
-      skipped.push({
-        blockId: block.id,
-        title: block.title,
-        reason: `Hidden from the ${audience} view`,
-      })
-      return
-    }
     const check = blockHasData(block, subject, template)
     if (!check.hasData && template.masterDesign.skipEmptyBlocks) {
       skipped.push({ blockId: block.id, title: block.title, reason: check.reason })
@@ -487,8 +400,6 @@ export function resolveReportPlan(
 export type MergeVariableContext = {
   subject: Report360Subject
   programName: string
-  overallScore: number | null
-  categoryLabel: string
   deploymentDate: string
 }
 
@@ -498,8 +409,8 @@ export function resolveMergeVariables(text: string, context: MergeVariableContex
     .replaceAll('${FIRST_NAME_SUBJECT}', firstName ?? context.subject.name)
     .replaceAll('${LAST_NAME_SUBJECT}', rest.join(' '))
     .replaceAll('${DEPLOYMENT_DATE_MMM_DD_YYYY}', context.deploymentDate)
-    .replaceAll('${OVERALL_SCORE_PCT}', context.overallScore == null ? '' : `${context.overallScore}%`)
-    .replaceAll('${PERFORMANCE_CATEGORY}', context.categoryLabel)
+    .replaceAll('${OVERALL_SCORE_PCT}', '')
+    .replaceAll('${PERFORMANCE_CATEGORY}', '')
     .replaceAll('${EVALUATOR_COUNT}', String(evaluatorTotal(context.subject)))
     .replaceAll('${PROGRAM_NAME}', context.programName)
 }

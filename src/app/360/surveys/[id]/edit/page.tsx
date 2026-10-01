@@ -10,6 +10,7 @@ import { LanguagesPanel } from '@/components/modules/feedback360/LanguagesPanel'
 import { ManageDataPanel } from '@/components/modules/feedback360/ManageDataPanel'
 import { MediaLibraryPanel } from '@/components/modules/feedback360/MediaLibraryPanel'
 import { ReportBuilder } from '@/components/modules/feedback360/ReportBuilder'
+import { SurveyDataPanel } from '@/components/modules/feedback360/SurveyDataPanel'
 import { SettingsPanel } from '@/components/modules/feedback360/SettingsPanel'
 import { WorkspacePanel } from '@/components/modules/feedback360/WorkspacePanel'
 import {
@@ -28,7 +29,7 @@ import { setSurveyBuilderCrumb } from '@/lib/surveyBuilderCrumb'
 const DISTRIBUTE_TABS: SurveyBuilderSubTab[] = [
   { id: 'deployments', label: 'Deployments', icon: 'wm-grid-view' },
   { id: 'send', label: 'Send', icon: 'wm-mail' },
-  { id: 'reportOptions', label: 'Report Options', icon: 'wm-build' },
+  { id: 'reportOptions', label: 'Report options', icon: 'wm-build' },
   { id: 'portal', label: 'Portal', icon: 'wm-description' },
 ]
 
@@ -165,13 +166,9 @@ export default function Survey360EditPage() {
         {mainTab === 'distribute' && (
           <DistributePanel survey={survey} section={distributeSection} />
         )}
-        {mainTab === 'analytics' && analyticsSection === 'data' && (
-          <div className="flex flex-col items-center justify-center px-6 py-24 text-center">
-            <WuText size="sm" as="p" className="max-w-md text-gray-500">
-              360 analytics for this survey will appear here.
-            </WuText>
-          </div>
-        )}
+        {mainTab === 'analytics' && analyticsSection === 'data' && survey ? (
+          <SurveyDataPanel survey={survey} />
+        ) : null}
         <div className={mainTab === 'analytics' && analyticsSection === 'individualReports' ? undefined : 'hidden'}>
           <ReportBuilder
             key={survey.id}

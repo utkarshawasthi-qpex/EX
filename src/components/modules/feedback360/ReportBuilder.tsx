@@ -1,7 +1,8 @@
 'use client'
 
-import { useId, useMemo, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import '@npm-questionpro/wick-ui-editor/dist/style.css'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { ReportPreview } from '@/components/modules/feedback360/ReportPreview'
 import {
@@ -10,32 +11,31 @@ import {
   REPORT360_COMPETENCIES,
   REPORT360_CONSTANT_BLOCK_TYPES,
   REPORT360_MERGE_VARIABLES,
-  REPORT360_OPEN_QUESTIONS,
   REPORT360_RELATIONSHIPS,
   REPORT360_RELATIONSHIP_LABELS,
   REPORT360_SCORED_BLOCK_TYPES,
+  REPORT360_STARTER_BLOCK_TYPES,
+  REPORT360_TEMPLATE_OPTIONS,
   cloneReport360Template,
   createDefaultReport360Template,
   createReport360Block,
+  createDefaultReportBlocks,
+  report360SpiderQuestions,
   type Report360Block,
   type Report360BlockType,
   type Report360CoverTemplate,
   type Report360LogoAsset,
   type Report360MasterDesign,
-  type Report360PerformanceCategory,
   type Report360Relationship,
   type Report360RelationshipIcon,
   type Report360Template,
 } from '@/data/mock-360-reports'
+import { MOCK_STUDIES, STUDY_FOLDERS } from '@/data/mock-studies'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { weightTotal } from '@/lib/report360Scoring'
-import {
-  saveReport360TemplateToLibrary,
-  useReport360Template,
-  useSavedReport360Templates,
-} from '@/lib/report360Store'
+import { getReport360Template, useReport360Template } from '@/lib/report360Store'
 import { cn } from '@/lib/utils'
-import type { Survey360 } from '@/data/mock/surveys360'
+import { mockSurveys360, type Survey360 } from '@/data/mock/surveys360'
 
 const WuButton = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuButton })),
@@ -43,10 +43,6 @@ const WuButton = dynamic(
 )
 const WuCheckbox = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuCheckbox })),
-  { ssr: false },
-)
-const WuFormGroup = dynamic(
-  () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuFormGroup })),
   { ssr: false },
 )
 const WuInput = dynamic(
@@ -59,6 +55,10 @@ const WuSelect = dynamic(
 )
 const WuToggle = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuToggle })),
+  { ssr: false },
+)
+const WuContentEditor = dynamic(
+  () => import('@npm-questionpro/wick-ui-editor').then((mod) => ({ default: mod.WuContentEditor })),
   { ssr: false },
 )
 const WuText = dynamic(
@@ -92,25 +92,37 @@ const RELATIONSHIPS = REPORT360_RELATIONSHIPS
 
 const FONT_OPTIONS: SelectOption[] = [
   { value: 'Fira Sans', label: 'Fira Sans' },
-  { value: 'Inter', label: 'Inter' },
+  { value: 'Helvetica', label: 'Helvetica' },
+  { value: 'Times New Roman', label: 'Times New Roman' },
+  { value: 'Arial', label: 'Arial' },
+  { value: 'Avant Garde', label: 'Avant Garde' },
+  { value: 'Courier New', label: 'Courier New' },
+  { value: 'Verdana Pro', label: 'Verdana Pro' },
   { value: 'Georgia', label: 'Georgia' },
-]
-
-const PAGE_SIZE_OPTIONS: SelectOption[] = [
-  { value: 'Letter', label: 'Letter' },
-  { value: 'A4', label: 'A4' },
+  { value: 'Tahoma', label: 'Tahoma' },
 ]
 
 const CHART_OPTIONS: SelectOption[] = [
-  { value: 'bar', label: 'Bar' },
-  { value: 'radar', label: 'Radar' },
+  { value: 'bar', label: 'Default' },
+  { value: 'horizontalBar', label: 'Horizontal bar chart' },
 ]
 
-const LINE_STYLE_OPTIONS: SelectOption[] = [
-  { value: 'solid', label: 'Solid' },
-  { value: 'dashed', label: 'Dashed' },
-  { value: 'dotted', label: 'Dotted' },
+const DISPLAY_RANK_OPTIONS: SelectOption[] = [
+  { value: 'top', label: 'Top' },
+  { value: 'bottom', label: 'Bottom' },
 ]
+
+const BEHAVIOR_COUNT_OPTIONS: SelectOption[] = [1, 2, 3, 4, 5].map((count) => ({
+  value: String(count),
+  label: String(count),
+}))
+
+const RELATIONSHIP_OPTIONS: SelectOption[] = REPORT360_RELATIONSHIPS.map((key) => ({
+  value: key,
+  label: REPORT360_RELATIONSHIP_LABELS[key],
+}))
+
+const SETTINGS_GRID = 'settings-grid grid items-center gap-x-6 gap-y-1 md:grid-cols-2'
 
 const PRIORITY_OPTIONS: SelectOption[] = [
   { value: '#1', label: '#1' },
@@ -119,48 +131,109 @@ const PRIORITY_OPTIONS: SelectOption[] = [
   { value: '#1 to #3', label: '#1 to #3' },
 ]
 
-const DISPLAY_MODE_OPTIONS: SelectOption[] = [
-  { value: 'grouped', label: 'Grouped by question' },
-  { value: 'combined', label: 'Combined (Legacy)' },
-]
-
-const AI_SOURCE_OPTIONS: SelectOption[] = [
-  { value: 'All open-ended questions', label: 'All open-ended questions' },
-  ...REPORT360_OPEN_QUESTIONS.map((question) => ({ value: question.text, label: question.text })),
-]
-
 /** Prototype logos live in localStorage, so keep the data URL small. */
 const MAX_LOGO_BYTES = 150 * 1024
 
-const COVER_TEMPLATES: { value: Report360CoverTemplate; label: string; hint: string }[] = [
-  { value: 'classic', label: 'Classic', hint: 'Name bottom-left, details stacked below' },
-  { value: 'centered', label: 'Centered', hint: 'Title block centered on the page' },
-  { value: 'split', label: 'Split', hint: 'Color band on the left, details on the right' },
+const COVER_TEMPLATES: { value: Report360CoverTemplate; label: string; hint: string; imageSize: string }[] = [
+  { value: 'classic', label: 'Left', hint: 'Name at the top left. An uploaded image sits beside it.', imageSize: '350 × 460 px' },
+  { value: 'centered', label: 'Center', hint: 'Title centered. An uploaded image fills the top of the page.', imageSize: '1240 × 540 px' },
+  { value: 'split', label: 'Split', hint: 'Color band on the left. An uploaded image fills that band.', imageSize: '410 × 1670 px' },
 ]
 
+function CoverTextEditor({
+  value,
+  editorKey,
+  onChange,
+  showVariables = false,
+}: {
+  value: string
+  editorKey: string | number
+  onChange: (next: string) => void
+  showVariables?: boolean
+}) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const savedRange = useRef<Range | null>(null)
+
+  function editorSurface() {
+    const surface = rootRef.current?.querySelector('.ProseMirror')
+    return surface instanceof HTMLElement ? surface : null
+  }
+
+  function insertToken(token: string) {
+    if (!token) return
+    const surface = editorSurface()
+    if (!surface) return
+    surface.focus()
+    const selection = window.getSelection()
+    if (savedRange.current && selection) {
+      selection.removeAllRanges()
+      selection.addRange(savedRange.current)
+    }
+    document.execCommand('insertText', false, token)
+  }
+
+  return (
+    <div ref={rootRef}>
+      <WuContentEditor
+        key={editorKey}
+        defaultValue={value}
+        toolbarPosition="top"
+        customFonts={FONT_OPTIONS.map((font) => font.value).filter((font) => font !== 'Fira Sans')}
+        onUpdate={onChange}
+        customToolbarChildren={
+          showVariables ? (
+          <select
+            aria-label="Insert variable"
+            className="ml-1 h-8 rounded border border-transparent bg-transparent px-1 text-xs text-gray-600 hover:border-gray-200"
+            defaultValue=""
+            onMouseDown={() => {
+              const selection = window.getSelection()
+              if (!selection || selection.rangeCount === 0) return
+              const range = selection.getRangeAt(0)
+              if (editorSurface()?.contains(range.commonAncestorContainer)) {
+                savedRange.current = range.cloneRange()
+              }
+            }}
+            onChange={(event) => {
+              insertToken(event.target.value)
+              event.target.value = ''
+            }}
+          >
+            <option value="">Insert variable</option>
+            {REPORT360_MERGE_VARIABLES.map((variable) => (
+              <option key={variable.token} value={variable.token}>
+                {variable.description}
+              </option>
+            ))}
+          </select>
+          ) : undefined
+        }
+      />
+    </div>
+  )
+}
+
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <p className="mb-1 text-xs font-medium text-gray-600">{children}</p>
+  return <p className="mb-1 text-sm text-gray-700">{children}</p>
 }
 
 function TextArea({
   value,
   onChange,
-  rows = 3,
   id,
+  resetKey = 0,
 }: {
   value: string
   onChange: (value: string) => void
   rows?: number
   id?: string
+  resetKey?: string | number
 }) {
+  const editorKey = useId()
   return (
-    <textarea
-      id={id}
-      rows={rows}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-500"
-    />
+    <div id={id}>
+      <CoverTextEditor value={value} editorKey={`${editorKey}-${resetKey}`} onChange={onChange} />
+    </div>
   )
 }
 
@@ -230,104 +303,34 @@ function WeightSliders({
   )
 }
 
-function PerformanceCategoryEditor({
-  categories,
+function LimitedLineField({
+  value,
   onChange,
 }: {
-  categories: Report360PerformanceCategory[]
-  onChange: (next: Report360PerformanceCategory[]) => void
+  value: string
+  onChange: (next: string) => void
 }) {
-  function update(id: string, patch: Partial<Report360PerformanceCategory>) {
-    onChange(categories.map((item) => (item.id === id ? { ...item, ...patch } : item)))
-  }
+  const [writing, setWriting] = useState(false)
+  const showLimit = writing && value.length > 0
 
   return (
-    <div className="space-y-3">
-      {categories.map((category) => (
-        <div key={category.id} className="grid grid-cols-[1fr_72px_72px_56px_32px] items-end gap-2">
-          <div>
-            <FieldLabel>Label</FieldLabel>
-            <WuInput
-              variant="outlined"
-              value={category.label}
-              onChange={(event) => update(category.id, { label: event.target.value })}
-            />
-          </div>
-          <div>
-            <FieldLabel>Min %</FieldLabel>
-            <WuInput
-              variant="outlined"
-              type="number"
-              value={String(category.min)}
-              onChange={(event) => update(category.id, { min: Number(event.target.value) || 0 })}
-            />
-          </div>
-          <div>
-            <FieldLabel>Max %</FieldLabel>
-            <WuInput
-              variant="outlined"
-              type="number"
-              value={String(category.max)}
-              onChange={(event) => update(category.id, { max: Number(event.target.value) || 0 })}
-            />
-          </div>
-          <div>
-            <FieldLabel>Color</FieldLabel>
-            <input
-              type="color"
-              value={category.color}
-              onChange={(event) => update(category.id, { color: event.target.value })}
-              className="h-9 w-full cursor-pointer rounded border border-gray-300"
-            />
-          </div>
-          <button
-            type="button"
-            className="mb-2 text-gray-400 hover:text-red-600"
-            aria-label={`Remove ${category.label}`}
-            onClick={() => onChange(categories.filter((item) => item.id !== category.id))}
-          >
-            ✕
-          </button>
-        </div>
-      ))}
-      <WuButton
-        variant="secondary"
-        onClick={() =>
-          onChange([
-            ...categories,
-            {
-              id: `cat_${Date.now()}`,
-              label: 'New category',
-              min: 0,
-              max: 0,
-              color: '#6B7280',
-            },
-          ])
-        }
-      >
-        + Add category
-      </WuButton>
+    <div className="relative" onFocus={() => setWriting(true)} onBlur={() => setWriting(false)}>
+      <WuInput
+        variant="outlined"
+        value={value}
+        maxLength={100}
+        className={showLimit ? '!pr-14' : undefined}
+        onChange={(event) => onChange(event.target.value.slice(0, 100))}
+      />
+      {showLimit ? (
+        <>
+          <span className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 rounded-b bg-[#1B87E6]" />
+          <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs font-medium text-green-600">
+            {value.length}/100
+          </span>
+        </>
+      ) : null}
     </div>
-  )
-}
-
-function InsertVariableSelect({ onInsert }: { onInsert: (token: string) => void }) {
-  const options: SelectOption[] = REPORT360_MERGE_VARIABLES.map((variable) => ({
-    value: variable.token,
-    label: `${variable.token} — ${variable.description}`,
-  }))
-  return (
-    <WuSelect
-      data={options}
-      accessorKey={{ value: 'value', label: 'label' }}
-      value={null}
-      onSelect={(option) => {
-        const token = (option as SelectOption | null)?.value
-        if (token) onInsert(token)
-      }}
-      variant="outlined"
-      placeholder="Insert Variable"
-    />
   )
 }
 
@@ -345,7 +348,7 @@ function FieldRow({
   return (
     <div
       className={cn(
-        'grid grid-cols-[minmax(148px,38%)_minmax(0,1fr)] gap-x-4 py-2.5',
+        'field-row grid min-w-0 grid-cols-[minmax(7.5rem,13.5rem)_minmax(0,1fr)] gap-x-3 py-2.5',
         align === 'center' ? 'items-center' : 'items-start',
       )}
     >
@@ -404,11 +407,13 @@ function LogoField({
   onChange,
   disabled,
   emptyLabel,
+  sizeHint,
 }: {
   logo: Report360LogoAsset | null
   onChange: (next: Report360LogoAsset | null) => void
   disabled?: boolean
   emptyLabel: string
+  sizeHint?: string
 }) {
   const { showToast } = useWuShowToast()
   const inputId = useId()
@@ -443,9 +448,10 @@ function LogoField({
         onChange={(event) => handleFile(event.target.files?.[0])}
       />
       {logo ? (
-        <div className="flex items-center gap-2 rounded border border-gray-200 px-2.5 py-1.5">
+        <div className="flex h-9 items-center gap-2 rounded border border-gray-200 px-2.5">
           <LogoThumb logo={logo} />
           <span className="min-w-0 flex-1 truncate text-sm text-gray-700">{logo.name}</span>
+          {sizeHint ? <span className="shrink-0 text-xs text-gray-400">{sizeHint}</span> : null}
           <label htmlFor={inputId} className="cursor-pointer text-xs text-blue-700 hover:underline">
             Replace
           </label>
@@ -460,12 +466,13 @@ function LogoField({
       ) : (
         <label
           htmlFor={inputId}
-          className="flex cursor-pointer items-center justify-center gap-2 rounded border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-500 hover:border-gray-400"
+          className="flex h-9 cursor-pointer items-center justify-center gap-2 rounded border border-dashed border-gray-300 bg-gray-50 px-3 text-sm text-gray-500 hover:border-gray-400"
         >
-          {emptyLabel}
+          <span className="wm-image text-base text-gray-400" aria-hidden />
+          <span className="min-w-0 truncate">{emptyLabel}</span>
+          {sizeHint ? <span className="shrink-0 text-xs text-gray-400">{sizeHint}</span> : null}
         </label>
       )}
-      <p className="mt-1 text-[11px] text-gray-400">*only PNG and JPEG files accepted</p>
     </div>
   )
 }
@@ -503,13 +510,13 @@ function MasterDesignPreview({ design }: { design: Report360MasterDesign }) {
       >
         <span className="flex items-center gap-2">
           {design.showLogo ? <LogoThumb logo={design.leftHeaderLogo} /> : null}
-          <span>{design.headerText || 'Left Header Text'}</span>
+          <span>{design.headerText || 'Left header text'}</span>
         </span>
         {design.showLogo ? <LogoThumb logo={design.rightHeaderLogo} /> : null}
       </div>
       <div className="px-4 py-3">
         <p className="mb-2 text-sm font-semibold" style={{ color: design.themeColor }}>
-          Competency Detail View
+          All items
         </p>
         <table className="w-full text-left text-[11px]" style={{ borderColor: design.tableBorderColor }}>
           <thead>
@@ -550,9 +557,14 @@ function MasterDesignPreview({ design }: { design: Report360MasterDesign }) {
           </tbody>
         </table>
       </div>
-      <div className="flex items-center justify-between px-4 py-2 text-[11px] text-gray-400">
-        <span>{design.footerText || 'Footer Text'}</span>
-        <span>{design.pageNumbering ? 'Page 1' : ''}</span>
+      <div className="flex items-center justify-between border-t border-gray-200 px-4 py-2 text-[11px] text-gray-400">
+        <span>
+          {design.footerText || 'Footer text'}
+          {design.pageNumbering ? ' · Page 1' : ''}
+        </span>
+        <span className="text-[10px] font-semibold tracking-tight text-[#1B3A6B]">
+          question<span className="text-[#1B87E6]">pro</span>
+        </span>
       </div>
     </div>
   )
@@ -567,10 +579,14 @@ function MasterDesignFields({
 }) {
   const [weightsOpen, setWeightsOpen] = useState(false)
   const [iconsOpen, setIconsOpen] = useState(false)
+  const [iconsDraft, setIconsDraft] = useState(design.relationshipIcons)
+  const [weightsDraft, setWeightsDraft] = useState({
+    enabled: design.globalWeightsEnabled,
+    weights: design.relationshipWeights,
+  })
   const fontValue = FONT_OPTIONS.find((item) => item.value === design.fontFamily) ?? FONT_OPTIONS[0]
-  const pageValue =
-    PAGE_SIZE_OPTIONS.find((item) => item.value === design.pageSize) ?? PAGE_SIZE_OPTIONS[0]
   const weightsOk = !design.globalWeightsEnabled || weightTotal(design.relationshipWeights) === 100
+  const draftWeightsOk = !weightsDraft.enabled || weightTotal(weightsDraft.weights) === 100
 
   return (
     <div className="space-y-8">
@@ -578,293 +594,195 @@ function MasterDesignFields({
 
       <section>
         <SectionHeading>Header &amp; page</SectionHeading>
-        <div className="grid gap-x-10 md:grid-cols-2">
-          <div>
-            <FieldRow label="Report Logo">
-              <WuToggle
-                checked={design.showLogo}
-                onChange={(checked) => onChange({ ...design, showLogo: checked })}
-              />
-            </FieldRow>
-            <FieldRow
-              align="start"
-              label={
-                <>
-                  Left Header Logo
-                  <InfoTip text="Appears in the top-left of every report page. PNG or JPEG." />
-                </>
-              }
-            >
-              <LogoField
-                logo={design.leftHeaderLogo}
-                emptyLabel="Add Left Header Logo"
-                disabled={!design.showLogo}
-                onChange={(leftHeaderLogo) => onChange({ ...design, leftHeaderLogo })}
-              />
-            </FieldRow>
-            <FieldRow
-              align="start"
-              label={
-                <>
-                  Right Header Logo
-                  <InfoTip text="Appears in the top-right of every report page. PNG or JPEG." />
-                </>
-              }
-            >
-              <LogoField
-                logo={design.rightHeaderLogo}
-                emptyLabel="Add Right Header Logo"
-                disabled={!design.showLogo}
-                onChange={(rightHeaderLogo) => onChange({ ...design, rightHeaderLogo })}
-              />
-            </FieldRow>
-            <FieldRow label="Left Header Text">
-              <WuInput
-                variant="outlined"
-                value={design.headerText}
-                onChange={(event) => onChange({ ...design, headerText: event.target.value })}
-              />
-            </FieldRow>
-          </div>
-          <div>
-            <FieldRow label="Page Number">
-              <WuToggle
-                checked={design.pageNumbering}
-                onChange={(checked) => onChange({ ...design, pageNumbering: checked })}
-              />
-            </FieldRow>
-            <FieldRow label="Footer Text">
-              <WuInput
-                variant="outlined"
-                value={design.footerText}
-                onChange={(event) => onChange({ ...design, footerText: event.target.value })}
-              />
-            </FieldRow>
-            <FieldRow label="Page Size">
-              <WuSelect
-                data={PAGE_SIZE_OPTIONS}
-                accessorKey={{ value: 'value', label: 'label' }}
-                value={pageValue}
-                onSelect={(option) =>
-                  onChange({
-                    ...design,
-                    pageSize:
-                      ((option as SelectOption | null)?.value as 'Letter' | 'A4') ?? design.pageSize,
-                  })
-                }
-                variant="outlined"
-              />
-            </FieldRow>
-          </div>
+        <div className={SETTINGS_GRID}>
+          <FieldRow label="Report logo">
+            <WuToggle
+              checked={design.showLogo}
+              onChange={(checked) => onChange({ ...design, showLogo: checked })}
+            />
+          </FieldRow>
+          <FieldRow label="Page number">
+            <WuToggle
+              checked={design.pageNumbering}
+              onChange={(checked) => onChange({ ...design, pageNumbering: checked })}
+            />
+          </FieldRow>
+          <FieldRow
+            label={
+              <>
+                Left header logo
+                <InfoTip text="Appears in the top-left of every report page. PNG or JPEG." />
+              </>
+            }
+          >
+            <LogoField
+              logo={design.leftHeaderLogo}
+              emptyLabel="Add left header logo"
+              disabled={!design.showLogo}
+              onChange={(leftHeaderLogo) => onChange({ ...design, leftHeaderLogo })}
+            />
+          </FieldRow>
+          <FieldRow label="Left header text">
+            <LimitedLineField
+              value={design.headerText}
+              onChange={(headerText) => onChange({ ...design, headerText })}
+            />
+          </FieldRow>
+          <FieldRow
+            label={
+              <>
+                Right header logo
+                <InfoTip text="Appears in the top-right of every report page. PNG or JPEG." />
+              </>
+            }
+          >
+            <LogoField
+              logo={design.rightHeaderLogo}
+              emptyLabel="Add right header logo"
+              disabled={!design.showLogo}
+              onChange={(rightHeaderLogo) => onChange({ ...design, rightHeaderLogo })}
+            />
+          </FieldRow>
+          <FieldRow label="Footer text">
+            <LimitedLineField
+              value={design.footerText}
+              onChange={(footerText) => onChange({ ...design, footerText })}
+            />
+          </FieldRow>
         </div>
+        <p className="mt-2 text-xs text-gray-400">Logos accept PNG and JPEG files.</p>
       </section>
 
       <section>
         <SectionHeading>Typography &amp; table</SectionHeading>
-        <div className="grid gap-x-10 md:grid-cols-2">
-          <div>
-            <FieldRow label="Theme Color">
-              <ColorField
-                value={design.themeColor}
-                onChange={(themeColor) => onChange({ ...design, themeColor })}
-              />
-            </FieldRow>
-            <FieldRow label="Font Family">
-              <WuSelect
-                data={FONT_OPTIONS}
-                accessorKey={{ value: 'value', label: 'label' }}
-                value={fontValue}
-                onSelect={(option) =>
-                  onChange({
-                    ...design,
-                    fontFamily: (option as SelectOption | null)?.value ?? design.fontFamily,
-                  })
-                }
-                variant="outlined"
-              />
-            </FieldRow>
-            <FieldRow label="Font Color">
+        <div className={SETTINGS_GRID}>
+          <FieldRow label="Font">
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <WuSelect
+                  data={FONT_OPTIONS}
+                  accessorKey={{ value: 'value', label: 'label' }}
+                  value={fontValue}
+                  onSelect={(option) =>
+                    onChange({
+                      ...design,
+                      fontFamily: (option as SelectOption | null)?.value ?? design.fontFamily,
+                    })
+                  }
+                  variant="outlined"
+                />
+              </div>
               <ColorField
                 value={design.fontColor}
                 onChange={(fontColor) => onChange({ ...design, fontColor })}
               />
-            </FieldRow>
-          </div>
-          <div>
-            <FieldRow label="Table Heading Text Color">
-              <ColorField
-                value={design.tableHeadingTextColor}
-                onChange={(tableHeadingTextColor) => onChange({ ...design, tableHeadingTextColor })}
-              />
-            </FieldRow>
-            <FieldRow label="Table Background 1">
-              <ColorField
-                value={design.tableBackground1}
-                onChange={(tableBackground1) => onChange({ ...design, tableBackground1 })}
-              />
-            </FieldRow>
-            <FieldRow label="Table Background 2">
-              <ColorField
-                value={design.tableBackground2}
-                onChange={(tableBackground2) => onChange({ ...design, tableBackground2 })}
-              />
-            </FieldRow>
-            <FieldRow label="Table Border">
-              <ColorField
-                value={design.tableBorderColor}
-                onChange={(tableBorderColor) => onChange({ ...design, tableBorderColor })}
-              />
-            </FieldRow>
-          </div>
+            </div>
+          </FieldRow>
+          <FieldRow label="Theme color">
+            <ColorField
+              value={design.themeColor}
+              onChange={(themeColor) => onChange({ ...design, themeColor })}
+            />
+          </FieldRow>
+          <FieldRow label="Table heading text color">
+            <ColorField
+              value={design.tableHeadingTextColor}
+              onChange={(tableHeadingTextColor) => onChange({ ...design, tableHeadingTextColor })}
+            />
+          </FieldRow>
+          <FieldRow label="Table background 1">
+            <ColorField
+              value={design.tableBackground1}
+              onChange={(tableBackground1) => onChange({ ...design, tableBackground1 })}
+            />
+          </FieldRow>
+          <FieldRow label="Table border">
+            <ColorField
+              value={design.tableBorderColor}
+              onChange={(tableBorderColor) => onChange({ ...design, tableBorderColor })}
+            />
+          </FieldRow>
+          <FieldRow label="Table background 2">
+            <ColorField
+              value={design.tableBackground2}
+              onChange={(tableBackground2) => onChange({ ...design, tableBackground2 })}
+            />
+          </FieldRow>
         </div>
       </section>
 
       <section>
-        <SectionHeading>Relationships</SectionHeading>
-        <div className="grid gap-x-10 md:grid-cols-2">
-          <FieldRow
-            align="start"
-            label="Relationship Icons"
-            hint="Letter and color used in tables and charts"
+        <SectionHeading>Relationships &amp; categories</SectionHeading>
+        <div className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200">
+          <button
+            type="button"
+            className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-gray-50"
+            onClick={() => {
+              setIconsDraft(design.relationshipIcons)
+              setIconsOpen(true)
+            }}
           >
-            <div className="flex items-center gap-2">
-              <RelationshipIconPills icons={design.relationshipIcons} />
-              <button
-                type="button"
-                className="text-sm text-gray-400 hover:text-blue-700"
-                aria-label="Edit relationship icons"
-                onClick={() => setIconsOpen((open) => !open)}
-              >
-                ✎
-              </button>
-            </div>
-            {iconsOpen ? (
-              <div className="mt-3 space-y-2 rounded border border-gray-100 p-3">
-                {RELATIONSHIPS.map((key) => (
-                  <div key={key} className="grid grid-cols-[120px_56px_1fr] items-center gap-2">
-                    <span className="text-sm text-gray-700">{REPORT360_RELATIONSHIP_LABELS[key]}</span>
-                    <WuInput
-                      variant="outlined"
-                      value={design.relationshipIcons[key]?.letter ?? ''}
-                      onChange={(event) =>
-                        onChange({
-                          ...design,
-                          relationshipIcons: {
-                            ...design.relationshipIcons,
-                            [key]: {
-                              ...design.relationshipIcons[key],
-                              letter: event.target.value.slice(0, 2).toUpperCase(),
-                            },
-                          },
-                        })
-                      }
-                    />
-                    <ColorField
-                      value={design.relationshipIcons[key]?.color ?? '#6B7280'}
-                      onChange={(color) =>
-                        onChange({
-                          ...design,
-                          relationshipIcons: {
-                            ...design.relationshipIcons,
-                            [key]: { ...design.relationshipIcons[key], color },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </FieldRow>
-          <FieldRow
-            label="Relationship Weight Configuration"
-            hint={weightsOk ? undefined : 'Weights must equal 100%'}
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-gray-900">Relationship icons</span>
+              <span className="mt-1.5 block">
+                <RelationshipIconPills icons={design.relationshipIcons} />
+              </span>
+            </span>
+            <span className="shrink-0 text-sm font-medium text-blue-700">Edit</span>
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-gray-50"
+            onClick={() => {
+              setWeightsDraft({
+                enabled: design.globalWeightsEnabled,
+                weights: design.relationshipWeights,
+              })
+              setWeightsOpen(true)
+            }}
           >
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline"
-              onClick={() => setWeightsOpen(true)}
-            >
-              <span aria-hidden>✎</span> Configure Weights
-            </button>
-          </FieldRow>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-gray-900">Relationship weight configuration</span>
+              <span className={cn('mt-0.5 block text-xs', weightsOk ? 'text-gray-500' : 'text-red-600')}>
+                {design.globalWeightsEnabled
+                  ? `Custom weights · ${weightTotal(design.relationshipWeights)}%`
+                  : 'All relationships weighted equally'}
+              </span>
+            </span>
+            <span className="shrink-0 text-sm font-medium text-blue-700">Edit</span>
+          </button>
         </div>
       </section>
 
       <section>
         <SectionHeading>Scoring</SectionHeading>
-        <div className="grid gap-x-10 md:grid-cols-2">
-          <div>
-            <FieldRow label="Exclude Self in Priority Score">
-              <WuToggle
-                checked={design.excludeSelfInPriorityScore}
-                onChange={(checked) => onChange({ ...design, excludeSelfInPriorityScore: checked })}
-              />
-            </FieldRow>
-            <FieldRow label="Exclude Self in Average Score">
-              <WuToggle
-                checked={design.excludeSelfInAverageScore}
-                onChange={(checked) => onChange({ ...design, excludeSelfInAverageScore: checked })}
-              />
-            </FieldRow>
-          </div>
-          <div>
-            <FieldRow label="Show Category Headers">
-              <WuToggle
-                checked={design.showCategoryHeaders}
-                onChange={(checked) => onChange({ ...design, showCategoryHeaders: checked })}
-              />
-            </FieldRow>
-            <FieldRow label="Category Header Title">
-              <div className={cn(!design.showCategoryHeaders && 'pointer-events-none opacity-40')}>
-                <WuInput
-                  variant="outlined"
-                  value={design.categoryHeaderTitle}
-                  onChange={(event) => onChange({ ...design, categoryHeaderTitle: event.target.value })}
-                />
-              </div>
-            </FieldRow>
-          </div>
-        </div>
-        <div className="mt-4">
-          <p className="mb-1 text-sm text-gray-700">Performance categories</p>
-          <p className="mb-3 text-xs text-gray-400">
-            Bands used to label a subject&apos;s overall score on the cover and executive summary.
-          </p>
-          <PerformanceCategoryEditor
-            categories={design.performanceCategories}
-            onChange={(performanceCategories) => onChange({ ...design, performanceCategories })}
-          />
-        </div>
-      </section>
-
-      <section>
-        <SectionHeading>Empty pages &amp; confidentiality</SectionHeading>
-        <div className="grid gap-x-10 md:grid-cols-2">
-          <FieldRow
-            label="Skip Empty Blocks"
-            hint="Remove a block with no data instead of printing a blank page"
-          >
+        <div className={SETTINGS_GRID}>
+          <FieldRow label="Exclude self in priority score">
             <WuToggle
-              checked={design.skipEmptyBlocks}
-              onChange={(checked) => onChange({ ...design, skipEmptyBlocks: checked })}
+              checked={design.excludeSelfInPriorityScore}
+              onChange={(checked) => onChange({ ...design, excludeSelfInPriorityScore: checked })}
             />
           </FieldRow>
-          <FieldRow
-            label="Minimum Raters Per Group"
-            hint="Smaller groups merge into Combined others. Self and Manager are exempt."
-          >
-            <WuInput
-              variant="outlined"
-              type="number"
-              value={String(design.minRatersPerGroup)}
-              onChange={(event) =>
-                onChange({
-                  ...design,
-                  minRatersPerGroup: Math.max(1, Number(event.target.value) || 1),
-                })
-              }
+          <FieldRow label="Exclude self in average score">
+            <WuToggle
+              checked={design.excludeSelfInAverageScore}
+              onChange={(checked) => onChange({ ...design, excludeSelfInAverageScore: checked })}
             />
+          </FieldRow>
+          <FieldRow label="Show category headers">
+            <WuToggle
+              checked={design.showCategoryHeaders}
+              onChange={(checked) => onChange({ ...design, showCategoryHeaders: checked })}
+            />
+          </FieldRow>
+          <FieldRow label="Category header title">
+            <div className={cn(!design.showCategoryHeaders && 'pointer-events-none opacity-40')}>
+              <WuInput
+                variant="outlined"
+                value={design.categoryHeaderTitle}
+                onChange={(event) => onChange({ ...design, categoryHeaderTitle: event.target.value })}
+              />
+            </div>
           </FieldRow>
         </div>
       </section>
@@ -886,7 +804,7 @@ function MasterDesignFields({
         maxWidth="560px"
         {...preventModalDismiss}
       >
-        <WuModalHeader>Relationship Weight Configuration</WuModalHeader>
+        <WuModalHeader>Relationship weight configuration</WuModalHeader>
         <WuModalContent>
           <p className="mb-4 text-sm text-gray-500">
             These weights apply to every block where a mean is calculated, unless a block overrides
@@ -894,14 +812,14 @@ function MasterDesignFields({
           </p>
           <WuToggle
             Label="Apply relationship weights globally"
-            checked={design.globalWeightsEnabled}
-            onChange={(checked) => onChange({ ...design, globalWeightsEnabled: checked })}
+            checked={weightsDraft.enabled}
+            onChange={(checked) => setWeightsDraft((current) => ({ ...current, enabled: checked }))}
           />
-          {design.globalWeightsEnabled ? (
+          {weightsDraft.enabled ? (
             <div className="mt-4">
               <WeightSliders
-                weights={design.relationshipWeights}
-                onChange={(relationshipWeights) => onChange({ ...design, relationshipWeights })}
+                weights={weightsDraft.weights}
+                onChange={(weights) => setWeightsDraft((current) => ({ ...current, weights }))}
               />
             </div>
           ) : (
@@ -911,7 +829,80 @@ function MasterDesignFields({
           )}
         </WuModalContent>
         <WuModalFooter>
-          <WuButton onClick={() => setWeightsOpen(false)} disabled={!weightsOk}>
+          <WuButton variant="secondary" onClick={() => setWeightsOpen(false)}>
+            Cancel
+          </WuButton>
+          <WuButton
+            variant="primary"
+            disabled={!draftWeightsOk}
+            onClick={() => {
+              onChange({
+                ...design,
+                globalWeightsEnabled: weightsDraft.enabled,
+                relationshipWeights: weightsDraft.weights,
+              })
+              setWeightsOpen(false)
+            }}
+          >
+            Done
+          </WuButton>
+        </WuModalFooter>
+      </WuModal>
+
+      <WuModal
+        open={iconsOpen}
+        onOpenChange={setIconsOpen}
+        variant="action"
+        size="md"
+        {...preventModalDismiss}
+      >
+        <WuModalHeader>Relationship icons</WuModalHeader>
+        <WuModalContent>
+          <p className="mb-4 text-sm text-gray-500">
+            Letter and color used for each relationship in tables and charts.
+          </p>
+          <div className="space-y-3">
+            {RELATIONSHIPS.map((key) => (
+              <div key={key} className="grid grid-cols-[8.5rem_4.5rem_auto] items-center gap-3">
+                <span className="text-sm text-gray-800">{REPORT360_RELATIONSHIP_LABELS[key]}</span>
+                <WuInput
+                  variant="outlined"
+                  value={iconsDraft[key]?.letter ?? ''}
+                  aria-label={`${REPORT360_RELATIONSHIP_LABELS[key]} letter`}
+                  onChange={(event) =>
+                    setIconsDraft((current) => ({
+                      ...current,
+                      [key]: {
+                        ...current[key],
+                        letter: event.target.value.slice(0, 2).toUpperCase(),
+                      },
+                    }))
+                  }
+                />
+                <ColorField
+                  value={iconsDraft[key]?.color ?? '#6B7280'}
+                  onChange={(color) =>
+                    setIconsDraft((current) => ({
+                      ...current,
+                      [key]: { ...current[key], color },
+                    }))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        </WuModalContent>
+        <WuModalFooter>
+          <WuButton variant="secondary" onClick={() => setIconsOpen(false)}>
+            Cancel
+          </WuButton>
+          <WuButton
+            variant="primary"
+            onClick={() => {
+              onChange({ ...design, relationshipIcons: iconsDraft })
+              setIconsOpen(false)
+            }}
+          >
             Done
           </WuButton>
         </WuModalFooter>
@@ -930,25 +921,24 @@ function GeneralFields({
   onChange: (patch: Partial<Report360Block>) => void
 }) {
   const dataSource = sectionOptions.find((item) => item.value === block.dataSource) ?? sectionOptions[0]
-  const showDataSource = !['cover', 'introduction', 'nominatedRaters', 'customContent'].includes(
-    block.type,
-  )
+  const showDataSource = ![
+    'cover',
+    'introduction',
+    'nominatedRaters',
+    'customContent',
+    'executiveSummary',
+  ].includes(block.type)
   const isCustomTitle = block.title !== block.defaultTitle
 
   return (
     <div>
       <SectionHeading>General</SectionHeading>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <WuFormGroup
-            Label="Title"
-            Input={
-              <WuInput
-                variant="outlined"
-                value={block.title}
-                onChange={(event) => onChange({ title: event.target.value })}
-              />
-            }
+      <div className={block.type === 'introduction' || showDataSource ? SETTINGS_GRID : undefined}>
+        <FieldRow label="Title" align="start">
+          <WuInput
+            variant="outlined"
+            value={block.title}
+            onChange={(event) => onChange({ title: event.target.value })}
           />
           {isCustomTitle ? (
             <button
@@ -959,22 +949,26 @@ function GeneralFields({
               Reset to Default Name
             </button>
           ) : null}
-        </div>
-        {showDataSource ? (
-          <WuFormGroup
-            Label="Data Source"
-            Input={
-              <WuSelect
-                data={sectionOptions}
-                accessorKey={{ value: 'value', label: 'label' }}
-                value={dataSource}
-                onSelect={(option) =>
-                  onChange({ dataSource: (option as SelectOption | null)?.value ?? block.dataSource })
-                }
-                variant="outlined"
-              />
-            }
-          />
+        </FieldRow>
+        {block.type === 'introduction' ? (
+          <FieldRow label="Relationship icons">
+            <WuToggle
+              checked={block.relationshipIcons}
+              onChange={(relationshipIcons) => onChange({ relationshipIcons })}
+            />
+          </FieldRow>
+        ) : showDataSource ? (
+          <FieldRow label="Data source">
+            <WuSelect
+              data={sectionOptions}
+              accessorKey={{ value: 'value', label: 'label' }}
+              value={dataSource}
+              onSelect={(option) =>
+                onChange({ dataSource: (option as SelectOption | null)?.value ?? block.dataSource })
+              }
+              variant="outlined"
+            />
+          </FieldRow>
         ) : null}
       </div>
       {block.type !== 'customContent' ? (
@@ -983,9 +977,9 @@ function GeneralFields({
           <TextArea value={block.introduction} onChange={(introduction) => onChange({ introduction })} />
         </div>
       ) : null}
-      {REPORT360_SCORED_BLOCK_TYPES.includes(block.type) ? (
+      {REPORT360_SCORED_BLOCK_TYPES.includes(block.type) || block.type === 'executiveSummary' ? (
         <div className="mt-3">
-          <FieldLabel>Closing Text</FieldLabel>
+          <FieldLabel>Closing text</FieldLabel>
           <TextArea value={block.closingText} onChange={(closingText) => onChange({ closingText })} />
         </div>
       ) : null}
@@ -996,14 +990,29 @@ function GeneralFields({
 function CoverFields({
   block,
   onChange,
+  onSave,
+  onReset,
 }: {
   block: Report360Block
   onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
 }) {
+  const [editorKey, setEditorKey] = useState(0)
+
   return (
     <div className="space-y-6">
       <div>
-        <SectionHeading>Cover template</SectionHeading>
+        <div className="mb-3 flex items-center justify-between gap-4 border-b border-gray-100 pb-1">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Cover template</h4>
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            Background
+            <ColorField
+              value={block.coverBackgroundColor}
+              onChange={(coverBackgroundColor) => onChange({ coverBackgroundColor })}
+            />
+          </div>
+        </div>
         <div className="grid gap-3 sm:grid-cols-3">
           {COVER_TEMPLATES.map((template) => {
             const active = block.coverTemplate === template.value
@@ -1022,15 +1031,21 @@ function CoverFields({
                   style={{ background: block.coverBackgroundColor }}
                 >
                   {template.value === 'classic' ? (
-                    <div className="mt-auto w-full px-2 pb-2">
-                      <div className="h-1.5 w-2/3 rounded bg-white/80" />
-                      <div className="mt-1 h-1 w-1/2 rounded bg-white/50" />
+                    <div className="flex h-full w-full items-start justify-between px-2 py-2">
+                      <div className="mt-1">
+                        <div className="h-1.5 w-10 rounded bg-white/80" />
+                        <div className="mt-1 h-1 w-7 rounded bg-white/50" />
+                      </div>
+                      <div className="h-8 w-5 bg-white/20" />
                     </div>
                   ) : null}
                   {template.value === 'centered' ? (
-                    <div className="m-auto w-2/3">
-                      <div className="mx-auto h-1.5 w-full rounded bg-white/80" />
-                      <div className="mx-auto mt-1 h-1 w-1/2 rounded bg-white/50" />
+                    <div className="flex h-full w-full flex-col">
+                      <div className="h-[46%] bg-white/20" />
+                      <div className="flex flex-1 flex-col items-center justify-center px-3">
+                        <div className="h-1.5 w-2/3 rounded bg-white/80" />
+                        <div className="mt-1 h-1 w-1/3 rounded bg-white/50" />
+                      </div>
                     </div>
                   ) : null}
                   {template.value === 'split' ? (
@@ -1049,83 +1064,111 @@ function CoverFields({
             )
           })}
         </div>
-        <div className="mt-4 max-w-[220px]">
-          <FieldLabel>Background color</FieldLabel>
-          <input
-            type="color"
-            value={block.coverBackgroundColor}
-            onChange={(event) => onChange({ coverBackgroundColor: event.target.value })}
-            className="h-9 w-full cursor-pointer rounded border border-gray-300"
+      </div>
+
+      <div className={SETTINGS_GRID}>
+        <FieldRow align="start" label="Cover image">
+          <LogoField
+            logo={block.coverImage}
+            emptyLabel="Add cover image"
+            sizeHint={COVER_TEMPLATES.find((item) => item.value === block.coverTemplate)?.imageSize}
+            onChange={(coverImage) => onChange({ coverImage })}
           />
-        </div>
+        </FieldRow>
+        <FieldRow label="Relationship icons">
+          <WuToggle
+            checked={block.relationshipIcons}
+            onChange={(relationshipIcons) => onChange({ relationshipIcons })}
+          />
+        </FieldRow>
+      </div>
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Survey respondents">
+          <WuToggle
+            checked={block.showSurveyRespondents}
+            onChange={(showSurveyRespondents) => onChange({ showSurveyRespondents })}
+          />
+        </FieldRow>
+        <FieldRow label="Exclude zero responses">
+          <WuToggle
+            checked={block.excludeZeroResponses}
+            onChange={(excludeZeroResponses) => onChange({ excludeZeroResponses })}
+          />
+        </FieldRow>
+        <FieldRow label="Survey respondents - total sent">
+          <WuToggle
+            checked={block.showTotalSent}
+            onChange={(showTotalSent) => onChange({ showTotalSent })}
+          />
+        </FieldRow>
+        <FieldRow label="Nominated raters">
+          <WuToggle
+            checked={block.showNominatedRatersOnCover}
+            onChange={(showNominatedRatersOnCover) => onChange({ showNominatedRatersOnCover })}
+          />
+        </FieldRow>
+      </div>
+
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Report label">
+          <WuInput
+            variant="outlined"
+            value={block.coverLabel}
+            onChange={(event) => onChange({ coverLabel: event.target.value })}
+          />
+        </FieldRow>
       </div>
 
       <div>
-        <SectionHeading>Cover content</SectionHeading>
-        <div className="mb-3 max-w-[320px]">
-          <InsertVariableSelect
-            onInsert={(token) => onChange({ introduction: `${block.introduction}${token}` })}
-          />
-        </div>
-        <FieldLabel>Cover text</FieldLabel>
-        <TextArea
-          value={block.introduction}
-          rows={3}
-          onChange={(introduction) => onChange({ introduction })}
+        <p className="mb-2 text-sm text-gray-700">Text content</p>
+        <CoverTextEditor
+          editorKey={editorKey}
+          value={block.coverBody}
+          showVariables
+          onChange={(coverBody) => onChange({ coverBody })}
         />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <WuToggle
-            Label="Show Overall Score on Cover"
-            checked={block.showOverallScoreOnCover}
-            onChange={(showOverallScoreOnCover) => onChange({ showOverallScoreOnCover })}
-          />
-          <WuToggle
-            Label="Show Performance Category on Cover"
-            checked={block.showPerformanceCategoryOnCover}
-            onChange={(showPerformanceCategoryOnCover) => onChange({ showPerformanceCategoryOnCover })}
-          />
-        </div>
       </div>
 
       <div>
         <SectionHeading>Back cover</SectionHeading>
-        <WuToggle
-          Label="Include Back Cover"
-          checked={block.includeBackCover}
-          onChange={(includeBackCover) => onChange({ includeBackCover })}
-        />
-        {block.includeBackCover ? (
-          <div className="mt-4 space-y-4">
+        <div className={SETTINGS_GRID}>
+          <FieldRow label="Include back cover">
             <WuToggle
-              Label="Show logo on back cover"
-              checked={block.backCoverLogo}
-              onChange={(backCoverLogo) => onChange({ backCoverLogo })}
+              checked={block.includeBackCover}
+              onChange={(includeBackCover) => onChange({ includeBackCover })}
             />
-            <div className="grid gap-4 md:grid-cols-2">
-              <WuFormGroup
-                Label="Contact name"
-                Input={
-                  <WuInput
-                    variant="outlined"
-                    value={block.contactName}
-                    onChange={(event) => onChange({ contactName: event.target.value })}
-                  />
-                }
+          </FieldRow>
+          {block.includeBackCover ? (
+            <FieldRow label="Show logo on back cover">
+              <WuToggle
+                checked={block.backCoverLogo}
+                onChange={(backCoverLogo) => onChange({ backCoverLogo })}
               />
-              <WuFormGroup
-                Label="Contact email"
-                Input={
-                  <WuInput
-                    variant="outlined"
-                    value={block.contactEmail}
-                    onChange={(event) => onChange({ contactEmail: event.target.value })}
-                  />
-                }
-              />
+            </FieldRow>
+          ) : null}
+        </div>
+        {block.includeBackCover ? (
+          <div className="mt-2 space-y-4">
+            <div className={SETTINGS_GRID}>
+              <FieldRow label="Contact name">
+                <WuInput
+                  variant="outlined"
+                  value={block.contactName}
+                  onChange={(event) => onChange({ contactName: event.target.value })}
+                />
+              </FieldRow>
+              <FieldRow label="Contact email">
+                <WuInput
+                  variant="outlined"
+                  value={block.contactEmail}
+                  onChange={(event) => onChange({ contactEmail: event.target.value })}
+                />
+              </FieldRow>
             </div>
             <div>
               <FieldLabel>Confidentiality note</FieldLabel>
               <TextArea
+                resetKey={editorKey}
                 value={block.confidentialityNote}
                 onChange={(confidentialityNote) => onChange({ confidentialityNote })}
               />
@@ -1133,293 +1176,1922 @@ function CoverFields({
           </div>
         ) : null}
       </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            onReset()
+            setEditorKey((key) => key + 1)
+          }}
+        >
+          <span className="wm-refresh mr-1 text-sm" aria-hidden />
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
     </div>
   )
 }
 
-function CommentsFields({
+function RankingByBehaviorFields({
   block,
+  sectionOptions,
   onChange,
+  onSave,
+  onReset,
 }: {
   block: Report360Block
+  sectionOptions: SelectOption[]
   onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
 }) {
-  const displayMode =
-    DISPLAY_MODE_OPTIONS.find((item) => item.value === block.commentDisplayMode) ??
-    DISPLAY_MODE_OPTIONS[0]
-  const multipleQuestions = block.commentQuestionIds.length > 1
+  const dataSource = sectionOptions.find((item) => item.value === block.dataSource) ?? null
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+  const [weightsOpen, setWeightsOpen] = useState(false)
+  const [weightsDraft, setWeightsDraft] = useState(block.relationshipWeights)
+  const [overrideDraft, setOverrideDraft] = useState(block.useBlockWeights)
+  const draftWeightsOk = !overrideDraft || weightTotal(weightsDraft) === 100
+
 
   return (
-    <div>
-      <SectionHeading>Questions</SectionHeading>
-      <div className="space-y-2">
-        {REPORT360_OPEN_QUESTIONS.map((question) => {
-          const checked = block.commentQuestionIds.includes(question.id)
-          return (
-            <label key={question.id} className="flex items-start gap-2 text-sm text-gray-700">
-              <WuCheckbox
-                checked={checked}
-                onChange={() =>
-                  onChange({
-                    commentQuestionIds: checked
-                      ? block.commentQuestionIds.filter((id) => id !== question.id)
-                      : [...block.commentQuestionIds, question.id],
-                  })
-                }
-              />
-              {question.text}
-            </label>
-          )
-        })}
-      </div>
-      {block.commentQuestionIds.length === 0 ? (
-        <p className="mt-2 text-xs text-red-600">Select at least one question.</p>
-      ) : null}
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        {multipleQuestions ? (
-          <WuFormGroup
-            Label="Display Mode"
-            Input={
-              <WuSelect
-                data={DISPLAY_MODE_OPTIONS}
-                accessorKey={{ value: 'value', label: 'label' }}
-                value={displayMode}
-                onSelect={(option) =>
-                  onChange({
-                    commentDisplayMode:
-                      ((option as SelectOption | null)?.value as 'grouped' | 'combined') ??
-                      block.commentDisplayMode,
-                  })
-                }
-                variant="outlined"
-              />
+    <div className="space-y-6">
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Title" align="start">
+          <WuInput
+            variant="outlined"
+            value={block.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+          />
+          {isCustomTitle ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => onChange({ title: block.defaultTitle })}
+            >
+              Reset to Default Name
+            </button>
+          ) : null}
+        </FieldRow>
+        <FieldRow label="Data source">
+          <WuSelect
+            data={sectionOptions}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={dataSource}
+            onSelect={(option) =>
+              onChange({ dataSource: (option as SelectOption | null)?.value ?? block.dataSource })
             }
+            variant="outlined"
+            placeholder="Select data source"
           />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
+      </div>
+
+
+      <FieldRow label="Relationship weight configuration">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setWeightsDraft(block.relationshipWeights)
+            setOverrideDraft(block.useBlockWeights)
+            setWeightsOpen(true)
+          }}
+        >
+          {block.useBlockWeights ? 'Edit weights' : 'Configure weights'}
+        </WuButton>
+      </FieldRow>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+
+
+      <WuModal open={weightsOpen} onOpenChange={setWeightsOpen} variant="action" size="md" {...preventModalDismiss}>
+        <WuModalHeader>Relationship weight configuration</WuModalHeader>
+        <WuModalContent>
+          <div className="space-y-4">
+            <WuToggle
+              Label="Override global relationship weights"
+              checked={overrideDraft}
+              onChange={setOverrideDraft}
+            />
+            {overrideDraft ? (
+              <WeightSliders weights={weightsDraft} onChange={setWeightsDraft} />
+            ) : (
+              <p className="text-sm text-gray-500">Using the global weights from Master Design.</p>
+            )}
+          </div>
+        </WuModalContent>
+        <WuModalFooter>
+          <WuButton variant="secondary" onClick={() => setWeightsOpen(false)}>
+            Cancel
+          </WuButton>
+          <WuButton
+            variant="primary"
+            disabled={!draftWeightsOk}
+            onClick={() => {
+              onChange({ useBlockWeights: overrideDraft, relationshipWeights: weightsDraft })
+              setWeightsOpen(false)
+            }}
+          >
+            Done
+          </WuButton>
+        </WuModalFooter>
+      </WuModal>
+    </div>
+  )
+}
+
+function PriorityAreasFields({
+  block,
+  sectionOptions,
+  onChange,
+  onSave,
+  onReset,
+}: {
+  block: Report360Block
+  sectionOptions: SelectOption[]
+  onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
+}) {
+  const dataSource = sectionOptions.find((item) => item.value === block.dataSource) ?? null
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+
+  return (
+    <div className="space-y-6">
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Title" align="start">
+          <WuInput
+            variant="outlined"
+            value={block.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+          />
+          {isCustomTitle ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => onChange({ title: block.defaultTitle })}
+            >
+              Reset to Default Name
+            </button>
+          ) : null}
+        </FieldRow>
+        <FieldRow label="Data source">
+          <WuSelect
+            data={sectionOptions}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={dataSource}
+            onSelect={(option) =>
+              onChange({ dataSource: (option as SelectOption | null)?.value ?? block.dataSource })
+            }
+            variant="outlined"
+            placeholder="Select data source"
+          />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
+      </div>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+    </div>
+  )
+}
+
+function SurveyRespondentsFields({
+  block,
+  onChange,
+  onSave,
+  onReset,
+}: {
+  block: Report360Block
+  onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
+}) {
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+
+  return (
+    <div className="space-y-6">
+      <FieldRow label="Title" align="start">
+        <WuInput
+          variant="outlined"
+          value={block.title}
+          onChange={(event) => onChange({ title: event.target.value })}
+        />
+        {isCustomTitle ? (
+          <button
+            type="button"
+            className="mt-1 text-xs text-blue-700 hover:underline"
+            onClick={() => onChange({ title: block.defaultTitle })}
+          >
+            Reset to Default Name
+          </button>
         ) : null}
-        <div className="self-end pb-2">
+      </FieldRow>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
+      </div>
+
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Show survey respondents - total sent">
           <WuToggle
-            Label="Show relationship label on each comment"
-            checked={block.showRelationshipLabel}
-            onChange={(showRelationshipLabel) => onChange({ showRelationshipLabel })}
+            checked={block.showTotalSent}
+            onChange={(showTotalSent) => onChange({ showTotalSent })}
           />
-        </div>
+        </FieldRow>
+        <FieldRow label="Exclude zero responses">
+          <WuToggle
+            checked={block.excludeZeroResponses}
+            onChange={(excludeZeroResponses) => onChange({ excludeZeroResponses })}
+          />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
       </div>
     </div>
   )
 }
 
-function AiFields({
+function PrioritySurveyFields({
   block,
+  sectionOptions,
   onChange,
+  onSave,
+  onReset,
 }: {
   block: Report360Block
+  sectionOptions: SelectOption[]
   onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
 }) {
-  const source =
-    AI_SOURCE_OPTIONS.find((item) => item.value === block.aiDataSource) ?? AI_SOURCE_OPTIONS[0]
+  const dataSource = sectionOptions.find((item) => item.value === block.dataSource) ?? null
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+  const [weightsOpen, setWeightsOpen] = useState(false)
+  const [weightsDraft, setWeightsDraft] = useState(block.relationshipWeights)
+  const [overrideDraft, setOverrideDraft] = useState(block.useBlockWeights)
+  const draftWeightsOk = !overrideDraft || weightTotal(weightsDraft) === 100
+
   return (
-    <div>
-      <SectionHeading>QxBot settings</SectionHeading>
-      <div className="grid gap-4 md:grid-cols-2">
-        <WuFormGroup
-          Label="Analyze responses from"
-          Input={
-            <WuSelect
-              data={AI_SOURCE_OPTIONS}
-              accessorKey={{ value: 'value', label: 'label' }}
-              value={source}
-              onSelect={(option) =>
-                onChange({ aiDataSource: (option as SelectOption | null)?.value ?? block.aiDataSource })
-              }
-              variant="outlined"
-            />
-          }
-        />
-        <WuFormGroup
-          Label="Recommendations to show"
-          Input={
-            <WuInput
-              variant="outlined"
-              type="number"
-              value={String(block.aiRecommendationCount)}
-              onChange={(event) =>
-                onChange({
-                  aiRecommendationCount: Math.min(5, Math.max(1, Number(event.target.value) || 1)),
-                })
-              }
-            />
-          }
+    <div className="space-y-6">
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Title" align="start">
+          <WuInput
+            variant="outlined"
+            value={block.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+          />
+          {isCustomTitle ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => onChange({ title: block.defaultTitle })}
+            >
+              Reset to Default Name
+            </button>
+          ) : null}
+        </FieldRow>
+        <FieldRow label="Data source">
+          <WuSelect
+            data={sectionOptions}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={dataSource}
+            onSelect={(option) =>
+              onChange({ dataSource: (option as SelectOption | null)?.value ?? block.dataSource })
+            }
+            variant="outlined"
+            placeholder="Select data source"
+          />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
         />
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <WuToggle
-          Label="Sentiment summary bar"
-          checked={block.showSentimentBar}
-          onChange={(showSentimentBar) => onChange({ showSentimentBar })}
-        />
-        <WuToggle
-          Label="Theme tags on cards"
-          checked={block.showThemeTags}
-          onChange={(showThemeTags) => onChange({ showThemeTags })}
-        />
-        <WuToggle
-          Label="Reinforcement when feedback is all positive"
-          checked={block.includeReinforcement}
-          onChange={(includeReinforcement) => onChange({ includeReinforcement })}
+
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Priority text">
+          <WuInput
+            variant="outlined"
+            value={block.priorityText}
+            onChange={(event) => onChange({ priorityText: event.target.value })}
+          />
+        </FieldRow>
+        <FieldRow label="Relationship weight configuration">
+          <WuButton
+            variant="secondary"
+            onClick={() => {
+              setWeightsDraft(block.relationshipWeights)
+              setOverrideDraft(block.useBlockWeights)
+              setWeightsOpen(true)
+            }}
+          >
+            {block.useBlockWeights ? 'Edit weights' : 'Configure weights'}
+          </WuButton>
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
         />
       </div>
-      <p className="mt-3 text-xs text-gray-500">
-        A minimum of 3 responses is required before recommendations are generated.
-      </p>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+
+      <WuModal open={weightsOpen} onOpenChange={setWeightsOpen} variant="action" size="md" {...preventModalDismiss}>
+        <WuModalHeader>Relationship weight configuration</WuModalHeader>
+        <WuModalContent>
+          <div className="space-y-4">
+            <WuToggle
+              Label="Override global relationship weights"
+              checked={overrideDraft}
+              onChange={setOverrideDraft}
+            />
+            {overrideDraft ? (
+              <WeightSliders weights={weightsDraft} onChange={setWeightsDraft} />
+            ) : (
+              <p className="text-sm text-gray-500">Using the global weights from Master Design.</p>
+            )}
+          </div>
+        </WuModalContent>
+        <WuModalFooter>
+          <WuButton variant="secondary" onClick={() => setWeightsOpen(false)}>
+            Cancel
+          </WuButton>
+          <WuButton
+            variant="primary"
+            disabled={!draftWeightsOk}
+            onClick={() => {
+              onChange({ useBlockWeights: overrideDraft, relationshipWeights: weightsDraft })
+              setWeightsOpen(false)
+            }}
+          >
+            Done
+          </WuButton>
+        </WuModalFooter>
+      </WuModal>
     </div>
   )
 }
 
-function DisplayOptionFields({
+function PresentationTextFields({
   block,
   onChange,
+  onSave,
+  onReset,
 }: {
   block: Report360Block
   onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
 }) {
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+
+  return (
+    <div className="space-y-6">
+      <FieldRow label="Title" align="start">
+        <WuInput
+          variant="outlined"
+          value={block.title}
+          onChange={(event) => onChange({ title: event.target.value })}
+        />
+        {isCustomTitle ? (
+          <button
+            type="button"
+            className="mt-1 text-xs text-blue-700 hover:underline"
+            onClick={() => onChange({ title: block.defaultTitle })}
+          >
+            Reset to Default Name
+          </button>
+        ) : null}
+      </FieldRow>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
+      </div>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+    </div>
+  )
+}
+
+function NominatedRatersFields({
+  block,
+  onChange,
+  onSave,
+  onReset,
+}: {
+  block: Report360Block
+  onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
+}) {
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+
+  return (
+    <div className="space-y-6">
+      <FieldRow label="Title" align="start">
+        <WuInput
+          variant="outlined"
+          value={block.title}
+          onChange={(event) => onChange({ title: event.target.value })}
+        />
+        {isCustomTitle ? (
+          <button
+            type="button"
+            className="mt-1 text-xs text-blue-700 hover:underline"
+            onClick={() => onChange({ title: block.defaultTitle })}
+          >
+            Reset to Default Name
+          </button>
+        ) : null}
+      </FieldRow>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
+      </div>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+    </div>
+  )
+}
+
+function DevelopmentResultsFields({
+  block,
+  sectionOptions,
+  onChange,
+  onSave,
+  onReset,
+}: {
+  block: Report360Block
+  sectionOptions: SelectOption[]
+  onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
+}) {
+  const dataSource = sectionOptions.find((item) => item.value === block.dataSource) ?? null
+  const selectedPriorities = PRIORITY_OPTIONS.filter((item) => block.actionPlanPriorities.includes(item.value))
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+
+  return (
+    <div className="space-y-6">
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Title" align="start">
+          <WuInput
+            variant="outlined"
+            value={block.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+          />
+          {isCustomTitle ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => onChange({ title: block.defaultTitle })}
+            >
+              Reset to Default Name
+            </button>
+          ) : null}
+        </FieldRow>
+        <FieldRow label="Data source">
+          <WuSelect
+            data={sectionOptions}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={dataSource}
+            onSelect={(option) =>
+              onChange({ dataSource: (option as SelectOption | null)?.value ?? block.dataSource })
+            }
+            variant="outlined"
+            placeholder="Select data source"
+          />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
+      </div>
+
+      <FieldRow label="Priorities">
+        <WuSelect
+          data={PRIORITY_OPTIONS}
+          accessorKey={{ value: 'value', label: 'label' }}
+          value={selectedPriorities}
+          multiple
+          placeholder="Nothing selected"
+          onSelect={(value: unknown) => {
+            const next = (Array.isArray(value) ? value : value ? [value] : []) as SelectOption[]
+            onChange({ actionPlanPriorities: next.map((option) => option.value) })
+          }}
+          variant="outlined"
+        />
+      </FieldRow>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+    </div>
+  )
+}
+
+function AiSummaryFields({
+  block,
+  sectionOptions,
+  onChange,
+  onSave,
+  onReset,
+}: {
+  block: Report360Block
+  sectionOptions: SelectOption[]
+  onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
+}) {
+  const sourceOptions = useMemo<SelectOption[]>(() => {
+    const options: SelectOption[] = [{ value: 'All', label: 'All' }]
+    const seen = new Set<string>(['All'])
+    ;[
+      ...sectionOptions,
+      ...REPORT360_COMPETENCIES.map((competency) => ({ value: competency.name, label: competency.name })),
+    ].forEach((option) => {
+      if (seen.has(option.value)) return
+      seen.add(option.value)
+      options.push(option)
+    })
+    return options
+  }, [sectionOptions])
+  const dataSource = sourceOptions.find((item) => item.value === block.dataSource) ?? sourceOptions[0]
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+
+  return (
+    <div className="space-y-6">
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Title" align="start">
+          <WuInput
+            variant="outlined"
+            value={block.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+          />
+          {isCustomTitle ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => onChange({ title: block.defaultTitle })}
+            >
+              Reset to Default Name
+            </button>
+          ) : null}
+        </FieldRow>
+        <FieldRow label="Data source">
+          <WuSelect
+            data={sourceOptions}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={dataSource}
+            onSelect={(option) =>
+              onChange({ dataSource: (option as SelectOption | null)?.value ?? 'All' })
+            }
+            variant="outlined"
+            placeholder="Select data source"
+          />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
+      </div>
+
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Merge comments">
+          <WuToggle
+            checked={block.commentDisplayMode === 'combined'}
+            onChange={(merged) => onChange({ commentDisplayMode: merged ? 'combined' : 'grouped' })}
+          />
+        </FieldRow>
+        <FieldRow label="Generate recommendations">
+          <WuToggle
+            checked={block.generateRecommendations}
+            onChange={(generateRecommendations) => onChange({ generateRecommendations })}
+          />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+    </div>
+  )
+}
+
+function OptionCell({ label, children }: { label: string; children: React.ReactNode }) {
+  return <FieldRow label={label}>{children}</FieldRow>
+}
+
+function AllItemsFields({
+  block,
+  sectionOptions,
+  onChange,
+  onSave,
+  onReset,
+}: {
+  block: Report360Block
+  sectionOptions: SelectOption[]
+  onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
+}) {
+  const dataSource = sectionOptions.find((item) => item.value === block.dataSource) ?? sectionOptions[0]
   const chartValue = CHART_OPTIONS.find((item) => item.value === block.chartType) ?? CHART_OPTIONS[0]
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+  const [weightsOpen, setWeightsOpen] = useState(false)
+  const [weightsDraft, setWeightsDraft] = useState(block.relationshipWeights)
+  const [overrideDraft, setOverrideDraft] = useState(block.useBlockWeights)
+  const draftWeightsOk = !overrideDraft || weightTotal(weightsDraft) === 100
+
+
   return (
-    <div>
-      <SectionHeading>Display options</SectionHeading>
-      <div className="grid gap-4 md:grid-cols-2">
-        <WuFormGroup
-          Label="Chart type"
-          Input={
+    <div className="space-y-6">
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Title" align="start">
+          <WuInput
+            variant="outlined"
+            value={block.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+          />
+          {isCustomTitle ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => onChange({ title: block.defaultTitle })}
+            >
+              Reset to Default Name
+            </button>
+          ) : null}
+        </FieldRow>
+        <FieldRow label="Data source">
+          <WuSelect
+            data={sectionOptions}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={dataSource}
+            onSelect={(option) =>
+              onChange({ dataSource: (option as SelectOption | null)?.value ?? block.dataSource })
+            }
+            variant="outlined"
+            placeholder="Select data source"
+          />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
+      </div>
+
+
+      <div className={SETTINGS_GRID}>
+        <OptionCell label="Priority column">
+          <WuToggle
+            checked={block.priorityColumn}
+            onChange={(priorityColumn) => onChange({ priorityColumn })}
+          />
+        </OptionCell>
+        <OptionCell label="Mean column">
+          <WuToggle checked={block.meanColumn} onChange={(meanColumn) => onChange({ meanColumn })} />
+        </OptionCell>
+        <OptionCell label="Chart type">
+          <div className="w-full">
             <WuSelect
               data={CHART_OPTIONS}
               accessorKey={{ value: 'value', label: 'label' }}
               value={chartValue}
               onSelect={(option) =>
                 onChange({
-                  chartType: ((option as SelectOption | null)?.value as 'bar' | 'radar') ?? block.chartType,
+                  chartType: ((option as SelectOption | null)?.value as 'bar' | 'horizontalBar') ?? block.chartType,
                 })
               }
               variant="outlined"
             />
-          }
+          </div>
+        </OptionCell>
+        <OptionCell label="Relationship icons">
+          <WuToggle
+            checked={block.relationshipIcons}
+            onChange={(relationshipIcons) => onChange({ relationshipIcons })}
+          />
+        </OptionCell>
+        <OptionCell label="Behaviours per page">
+          <WuInput
+            variant="outlined"
+            type="number"
+            value={String(block.behavioursPerPage)}
+            onChange={(event) =>
+              onChange({ behavioursPerPage: Math.max(1, Number(event.target.value) || 1) })
+            }
+          />
+        </OptionCell>
+        <OptionCell label="Relationship weight configuration">
+          <WuButton
+            variant="secondary"
+            onClick={() => {
+              setWeightsDraft(block.relationshipWeights)
+              setOverrideDraft(block.useBlockWeights)
+              setWeightsOpen(true)
+            }}
+          >
+            {block.useBlockWeights ? 'Edit weights' : 'Configure weights'}
+          </WuButton>
+        </OptionCell>
+        <OptionCell label="Priority text">
+          <WuInput
+            variant="outlined"
+            value={block.priorityText}
+            disabled={!block.priorityColumn}
+            onChange={(event) => onChange({ priorityText: event.target.value })}
+          />
+        </OptionCell>
+        <OptionCell label="Enable tabular data">
+          <WuToggle
+            checked={block.tabularData}
+            onChange={(tabularData) => onChange({ tabularData })}
+          />
+        </OptionCell>
+        <OptionCell label="AI insights">
+          <WuToggle
+            checked={block.qxBotInsights}
+            onChange={(qxBotInsights) => onChange({ qxBotInsights })}
+          />
+        </OptionCell>
+        <OptionCell label="Tabular data heading">
+          <WuInput
+            variant="outlined"
+            value={block.tabularDataHeading}
+            disabled={!block.tabularData}
+            placeholder="Table heading"
+            onChange={(event) => onChange({ tabularDataHeading: event.target.value })}
+          />
+        </OptionCell>
+      </div>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
         />
-        <WuFormGroup
-          Label="Behaviours per page"
-          Input={
-            <WuInput
-              variant="outlined"
-              type="number"
-              value={String(block.behavioursPerPage)}
-              onChange={(event) => onChange({ behavioursPerPage: Number(event.target.value) || 1 })}
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+
+
+      <WuModal open={weightsOpen} onOpenChange={setWeightsOpen} variant="action" size="md" {...preventModalDismiss}>
+        <WuModalHeader>Relationship weight configuration</WuModalHeader>
+        <WuModalContent>
+          <div className="space-y-4">
+            <WuToggle
+              Label="Override global relationship weights"
+              checked={overrideDraft}
+              onChange={setOverrideDraft}
             />
-          }
-        />
-      </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <WuToggle Label="Mean Column" checked={block.meanColumn} onChange={(meanColumn) => onChange({ meanColumn })} />
-        <WuToggle
-          Label="Relationship Icons"
-          checked={block.relationshipIcons}
-          onChange={(relationshipIcons) => onChange({ relationshipIcons })}
-        />
-        <WuToggle
-          Label="Tabular Data"
-          checked={block.tabularData}
-          onChange={(tabularData) => onChange({ tabularData })}
-        />
-        <WuToggle
-          Label="Priority Column"
-          checked={block.priorityColumn}
-          onChange={(priorityColumn) => onChange({ priorityColumn })}
-        />
-        <WuToggle
-          Label="QxBot Insights"
-          checked={block.qxBotInsights}
-          onChange={(qxBotInsights) => onChange({ qxBotInsights })}
-        />
-      </div>
+            {overrideDraft ? (
+              <WeightSliders weights={weightsDraft} onChange={setWeightsDraft} />
+            ) : (
+              <p className="text-sm text-gray-500">Using the global weights from Master Design.</p>
+            )}
+          </div>
+        </WuModalContent>
+        <WuModalFooter>
+          <WuButton variant="secondary" onClick={() => setWeightsOpen(false)}>
+            Cancel
+          </WuButton>
+          <WuButton
+            variant="primary"
+            disabled={!draftWeightsOk}
+            onClick={() => {
+              onChange({ useBlockWeights: overrideDraft, relationshipWeights: weightsDraft })
+              setWeightsOpen(false)
+            }}
+          >
+            Done
+          </WuButton>
+        </WuModalFooter>
+      </WuModal>
     </div>
   )
 }
 
-function SpiderFields({
+function OverallDataFields({
+  block,
+  sectionOptions,
+  onChange,
+  onSave,
+  onReset,
+}: {
+  block: Report360Block
+  sectionOptions: SelectOption[]
+  onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
+}) {
+  const dataSource = sectionOptions.find((item) => item.value === block.dataSource) ?? null
+  const chartValue = CHART_OPTIONS.find((item) => item.value === block.chartType) ?? CHART_OPTIONS[0]
+  const displayValue =
+    DISPLAY_RANK_OPTIONS.find((item) => item.value === block.behaviorDisplay) ?? DISPLAY_RANK_OPTIONS[0]
+  const count = Math.min(5, Math.max(1, block.itemCount || 1))
+  const countValue =
+    BEHAVIOR_COUNT_OPTIONS.find((item) => item.value === String(count)) ?? BEHAVIOR_COUNT_OPTIONS[0]
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+  const [weightsOpen, setWeightsOpen] = useState(false)
+  const [weightsDraft, setWeightsDraft] = useState(block.relationshipWeights)
+  const [overrideDraft, setOverrideDraft] = useState(block.useBlockWeights)
+  const draftWeightsOk = !overrideDraft || weightTotal(weightsDraft) === 100
+
+
+  return (
+    <div className="space-y-6">
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Title" align="start">
+          <WuInput
+            variant="outlined"
+            value={block.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+          />
+          {isCustomTitle ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => onChange({ title: block.defaultTitle })}
+            >
+              Reset to Default Name
+            </button>
+          ) : null}
+        </FieldRow>
+        <FieldRow label="Data source">
+          <WuSelect
+            data={sectionOptions}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={dataSource}
+            onSelect={(option) =>
+              onChange({ dataSource: (option as SelectOption | null)?.value ?? block.dataSource })
+            }
+            variant="outlined"
+            placeholder="Select data source"
+          />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
+      </div>
+
+
+      <div className={SETTINGS_GRID}>
+        <OptionCell label="Priority column">
+          <WuToggle
+            checked={block.priorityColumn}
+            onChange={(priorityColumn) => onChange({ priorityColumn })}
+          />
+        </OptionCell>
+        <OptionCell label="Display">
+          <div className="flex items-center gap-2">
+            <div className="w-28">
+              <WuSelect
+                data={DISPLAY_RANK_OPTIONS}
+                accessorKey={{ value: 'value', label: 'label' }}
+                value={displayValue}
+                onSelect={(option) =>
+                  onChange({
+                    behaviorDisplay:
+                      ((option as SelectOption | null)?.value as 'top' | 'bottom') ?? block.behaviorDisplay,
+                  })
+                }
+                variant="outlined"
+              />
+            </div>
+            <div className="w-20">
+              <WuSelect
+                data={BEHAVIOR_COUNT_OPTIONS}
+                accessorKey={{ value: 'value', label: 'label' }}
+                value={countValue}
+                onSelect={(option) =>
+                  onChange({
+                    itemCount: Math.min(5, Math.max(1, Number((option as SelectOption | null)?.value) || 1)),
+                  })
+                }
+                variant="outlined"
+              />
+            </div>
+            <span className="text-sm text-gray-700">Behaviors</span>
+          </div>
+        </OptionCell>
+        <OptionCell label="Chart type">
+          <WuSelect
+            data={CHART_OPTIONS}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={chartValue}
+            onSelect={(option) =>
+              onChange({
+                chartType: ((option as SelectOption | null)?.value as 'bar' | 'horizontalBar') ?? block.chartType,
+              })
+            }
+            variant="outlined"
+          />
+        </OptionCell>
+        <OptionCell label="Mean column">
+          <WuToggle checked={block.meanColumn} onChange={(meanColumn) => onChange({ meanColumn })} />
+        </OptionCell>
+        <OptionCell label="Priority text">
+          <WuInput
+            variant="outlined"
+            value={block.priorityText}
+            disabled={!block.priorityColumn}
+            onChange={(event) => onChange({ priorityText: event.target.value })}
+          />
+        </OptionCell>
+        <OptionCell label="Relationship icons">
+          <WuToggle
+            checked={block.relationshipIcons}
+            onChange={(relationshipIcons) => onChange({ relationshipIcons })}
+          />
+        </OptionCell>
+        <div className="hidden md:block" aria-hidden />
+        <OptionCell label="Relationship weight configuration">
+          <WuButton
+            variant="secondary"
+            onClick={() => {
+              setWeightsDraft(block.relationshipWeights)
+              setOverrideDraft(block.useBlockWeights)
+              setWeightsOpen(true)
+            }}
+          >
+            {block.useBlockWeights ? 'Edit weights' : 'Configure weights'}
+          </WuButton>
+        </OptionCell>
+      </div>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+
+
+      <WuModal open={weightsOpen} onOpenChange={setWeightsOpen} variant="action" size="md" {...preventModalDismiss}>
+        <WuModalHeader>Relationship weight configuration</WuModalHeader>
+        <WuModalContent>
+          <div className="space-y-4">
+            <WuToggle
+              Label="Override global relationship weights"
+              checked={overrideDraft}
+              onChange={setOverrideDraft}
+            />
+            {overrideDraft ? (
+              <WeightSliders weights={weightsDraft} onChange={setWeightsDraft} />
+            ) : (
+              <p className="text-sm text-gray-500">Using the global weights from Master Design.</p>
+            )}
+          </div>
+        </WuModalContent>
+        <WuModalFooter>
+          <WuButton variant="secondary" onClick={() => setWeightsOpen(false)}>
+            Cancel
+          </WuButton>
+          <WuButton
+            variant="primary"
+            disabled={!draftWeightsOk}
+            onClick={() => {
+              onChange({ useBlockWeights: overrideDraft, relationshipWeights: weightsDraft })
+              setWeightsOpen(false)
+            }}
+          >
+            Done
+          </WuButton>
+        </WuModalFooter>
+      </WuModal>
+    </div>
+  )
+}
+
+function ActionPlanFields({
+  block,
+  sectionOptions,
+  onChange,
+  onSave,
+  onReset,
+}: {
+  block: Report360Block
+  sectionOptions: SelectOption[]
+  onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
+}) {
+  const dataSource = sectionOptions.find((item) => item.value === block.dataSource) ?? null
+  const chartValue = CHART_OPTIONS.find((item) => item.value === block.chartType) ?? CHART_OPTIONS[0]
+  const selectedPriorities = PRIORITY_OPTIONS.filter((item) => block.actionPlanPriorities.includes(item.value))
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+
+
+  return (
+    <div className="space-y-6">
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Title" align="start">
+          <WuInput
+            variant="outlined"
+            value={block.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+          />
+          {isCustomTitle ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => onChange({ title: block.defaultTitle })}
+            >
+              Reset to Default Name
+            </button>
+          ) : null}
+        </FieldRow>
+        <FieldRow label="Data source">
+          <WuSelect
+            data={sectionOptions}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={dataSource}
+            onSelect={(option) =>
+              onChange({ dataSource: (option as SelectOption | null)?.value ?? block.dataSource })
+            }
+            variant="outlined"
+            placeholder="Select data source"
+          />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
+      </div>
+
+
+      <div className="space-y-1">
+        <FieldRow label="Priorities">
+          <WuSelect
+            data={PRIORITY_OPTIONS}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={selectedPriorities}
+            multiple
+            placeholder="Nothing selected"
+            onSelect={(value: unknown) => {
+              const next = (Array.isArray(value) ? value : value ? [value] : []) as SelectOption[]
+              onChange({ actionPlanPriorities: next.map((option) => option.value) })
+            }}
+            variant="outlined"
+          />
+        </FieldRow>
+        <FieldRow label="Manager comments">
+          <WuToggle
+            checked={block.showManagerComments}
+            onChange={(showManagerComments) => onChange({ showManagerComments })}
+          />
+        </FieldRow>
+        <FieldRow label="Priority column">
+          <WuToggle
+            checked={block.priorityColumn}
+            onChange={(priorityColumn) => onChange({ priorityColumn })}
+          />
+        </FieldRow>
+        <FieldRow label="Chart type">
+          <WuSelect
+            data={CHART_OPTIONS}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={chartValue}
+            onSelect={(option) =>
+              onChange({
+                chartType: ((option as SelectOption | null)?.value as 'bar' | 'horizontalBar') ?? block.chartType,
+              })
+            }
+            variant="outlined"
+          />
+        </FieldRow>
+        <FieldRow label="Behaviors per page">
+          <WuInput
+            variant="outlined"
+            type="number"
+            value={String(block.behavioursPerPage)}
+            onChange={(event) =>
+              onChange({ behavioursPerPage: Math.max(1, Number(event.target.value) || 1) })
+            }
+          />
+        </FieldRow>
+        <FieldRow label="Priority text">
+          <WuInput
+            variant="outlined"
+            value={block.priorityText}
+            disabled={!block.priorityColumn}
+            onChange={(event) => onChange({ priorityText: event.target.value })}
+          />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+
+    </div>
+  )
+}
+
+function RankingRelationshipFields({
+  block,
+  sectionOptions,
+  onChange,
+  onSave,
+  onReset,
+}: {
+  block: Report360Block
+  sectionOptions: SelectOption[]
+  onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
+}) {
+  const dataSource = sectionOptions.find((item) => item.value === block.dataSource) ?? null
+  const chartValue = CHART_OPTIONS.find((item) => item.value === block.chartType) ?? CHART_OPTIONS[0]
+  const displayValue =
+    DISPLAY_RANK_OPTIONS.find((item) => item.value === block.behaviorDisplay) ?? DISPLAY_RANK_OPTIONS[0]
+  const count = Math.min(5, Math.max(1, block.rankingCount || 1))
+  const countValue =
+    BEHAVIOR_COUNT_OPTIONS.find((item) => item.value === String(count)) ?? BEHAVIOR_COUNT_OPTIONS[0]
+  const selectedRelationships = RELATIONSHIP_OPTIONS.filter((item) =>
+    block.rankingRelationships.includes(item.value as Report360Relationship),
+  )
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+  const [weightsOpen, setWeightsOpen] = useState(false)
+  const [weightsDraft, setWeightsDraft] = useState(block.relationshipWeights)
+  const [overrideDraft, setOverrideDraft] = useState(block.useBlockWeights)
+  const draftWeightsOk = !overrideDraft || weightTotal(weightsDraft) === 100
+
+
+  return (
+    <div className="space-y-6">
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Title" align="start">
+          <WuInput
+            variant="outlined"
+            value={block.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+          />
+          {isCustomTitle ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => onChange({ title: block.defaultTitle })}
+            >
+              Reset to Default Name
+            </button>
+          ) : null}
+        </FieldRow>
+        <FieldRow label="Data source">
+          <WuSelect
+            data={sectionOptions}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={dataSource}
+            onSelect={(option) =>
+              onChange({ dataSource: (option as SelectOption | null)?.value ?? block.dataSource })
+            }
+            variant="outlined"
+            placeholder="Select data source"
+          />
+        </FieldRow>
+      </div>
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
+      </div>
+
+
+      <div className={SETTINGS_GRID}>
+        <OptionCell label="Relationships">
+          <WuSelect
+            data={RELATIONSHIP_OPTIONS}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={selectedRelationships}
+            multiple
+            placeholder="Nothing selected"
+            onSelect={(value: unknown) => {
+              const next = (Array.isArray(value) ? value : value ? [value] : []) as SelectOption[]
+              onChange({
+                rankingRelationships: next.map((option) => option.value as Report360Relationship),
+              })
+            }}
+            variant="outlined"
+          />
+        </OptionCell>
+        <OptionCell label="Display">
+          <div className="flex items-center gap-2">
+            <div className="w-28">
+              <WuSelect
+                data={DISPLAY_RANK_OPTIONS}
+                accessorKey={{ value: 'value', label: 'label' }}
+                value={displayValue}
+                onSelect={(option) =>
+                  onChange({
+                    behaviorDisplay:
+                      ((option as SelectOption | null)?.value as 'top' | 'bottom') ?? block.behaviorDisplay,
+                  })
+                }
+                variant="outlined"
+              />
+            </div>
+            <div className="w-20">
+              <WuSelect
+                data={BEHAVIOR_COUNT_OPTIONS}
+                accessorKey={{ value: 'value', label: 'label' }}
+                value={countValue}
+                onSelect={(option) =>
+                  onChange({
+                    rankingCount: Math.min(5, Math.max(1, Number((option as SelectOption | null)?.value) || 1)),
+                  })
+                }
+                variant="outlined"
+              />
+            </div>
+            <span className="text-sm text-gray-700">Behaviors</span>
+          </div>
+        </OptionCell>
+        <OptionCell label="Manager comments">
+          <WuToggle
+            checked={block.showManagerComments}
+            onChange={(showManagerComments) => onChange({ showManagerComments })}
+          />
+        </OptionCell>
+        <OptionCell label="Mean column">
+          <WuToggle checked={block.meanColumn} onChange={(meanColumn) => onChange({ meanColumn })} />
+        </OptionCell>
+        <OptionCell label="Priority column">
+          <WuToggle
+            checked={block.priorityColumn}
+            onChange={(priorityColumn) => onChange({ priorityColumn })}
+          />
+        </OptionCell>
+        <OptionCell label="Relationship icons">
+          <WuToggle
+            checked={block.relationshipIcons}
+            onChange={(relationshipIcons) => onChange({ relationshipIcons })}
+          />
+        </OptionCell>
+        <OptionCell label="Chart type">
+          <WuSelect
+            data={CHART_OPTIONS}
+            accessorKey={{ value: 'value', label: 'label' }}
+            value={chartValue}
+            onSelect={(option) =>
+              onChange({
+                chartType: ((option as SelectOption | null)?.value as 'bar' | 'horizontalBar') ?? block.chartType,
+              })
+            }
+            variant="outlined"
+          />
+        </OptionCell>
+        <OptionCell label="Relationship weight configuration">
+          <WuButton
+            variant="secondary"
+            onClick={() => {
+              setWeightsDraft(block.relationshipWeights)
+              setOverrideDraft(block.useBlockWeights)
+              setWeightsOpen(true)
+            }}
+          >
+            {block.useBlockWeights ? 'Edit weights' : 'Configure weights'}
+          </WuButton>
+        </OptionCell>
+        <OptionCell label="Priority text">
+          <WuInput
+            variant="outlined"
+            value={block.priorityText}
+            disabled={!block.priorityColumn}
+            onChange={(event) => onChange({ priorityText: event.target.value })}
+          />
+        </OptionCell>
+      </div>
+
+      <div>
+        <FieldLabel>Closing text</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.closingText}
+          onChange={(closingText) => onChange({ closingText })}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+
+
+      <WuModal open={weightsOpen} onOpenChange={setWeightsOpen} variant="action" size="md" {...preventModalDismiss}>
+        <WuModalHeader>Relationship weight configuration</WuModalHeader>
+        <WuModalContent>
+          <div className="space-y-4">
+            <WuToggle
+              Label="Override global relationship weights"
+              checked={overrideDraft}
+              onChange={setOverrideDraft}
+            />
+            {overrideDraft ? (
+              <WeightSliders weights={weightsDraft} onChange={setWeightsDraft} />
+            ) : (
+              <p className="text-sm text-gray-500">Using the global weights from Master Design.</p>
+            )}
+          </div>
+        </WuModalContent>
+        <WuModalFooter>
+          <WuButton variant="secondary" onClick={() => setWeightsOpen(false)}>
+            Cancel
+          </WuButton>
+          <WuButton
+            variant="primary"
+            disabled={!draftWeightsOk}
+            onClick={() => {
+              onChange({ useBlockWeights: overrideDraft, relationshipWeights: weightsDraft })
+              setWeightsOpen(false)
+            }}
+          >
+            Done
+          </WuButton>
+        </WuModalFooter>
+      </WuModal>
+    </div>
+  )
+}
+
+function ChecklistMultiSelect({
+  options = [],
+  groups = [],
+  selectedIds,
+  onChange,
+  placeholder,
+}: {
+  options?: { id: string; label: string }[]
+  groups?: { id: string; label: string; options: { id: string; label: string }[] }[]
+  selectedIds: string[]
+  onChange: (ids: string[]) => void
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const allIds = groups.length > 0 ? groups.flatMap((group) => group.options.map((option) => option.id)) : options.map((option) => option.id)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [open])
+  const summary =
+    selectedIds.length === 0
+      ? placeholder
+      : `${selectedIds.length} item${selectedIds.length === 1 ? '' : 's'} selected`
+
+  function setChecked(id: string, checked: boolean) {
+    if (checked) {
+      onChange(selectedIds.includes(id) ? selectedIds : [...selectedIds, id])
+      return
+    }
+    onChange(selectedIds.filter((item) => item !== id))
+  }
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <button
+        type="button"
+        className="flex h-10 w-full items-center justify-between rounded border border-gray-300 bg-white px-3 text-left text-sm"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className={selectedIds.length === 0 ? 'text-gray-400' : 'text-gray-800'}>{summary}</span>
+        <span className="text-gray-400" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open ? (
+        <div className="absolute z-30 mt-1 max-h-80 w-full min-w-[16rem] overflow-auto rounded border border-gray-200 bg-white shadow-lg">
+          <div className="grid grid-cols-2 border-b border-gray-100 text-sm">
+            <button type="button" className="px-3 py-2 text-blue-700 hover:bg-gray-50" onClick={() => onChange(allIds)}>
+              Select All
+            </button>
+            <button
+              type="button"
+              className="border-l border-gray-100 px-3 py-2 text-blue-700 hover:bg-gray-50"
+              onClick={() => onChange([])}
+            >
+              Deselect All
+            </button>
+          </div>
+          {groups.length > 0
+            ? groups.map((group) => (
+                <div key={group.id} className="border-b border-gray-50 py-1">
+                  <p className="px-3 py-1 text-xs font-semibold text-gray-500">{group.label}</p>
+                  {group.options.map((option) => (
+                    <div key={option.id} className="px-3 py-1.5 text-sm text-gray-700">
+                      <WuCheckbox
+                        checked={selectedIds.includes(option.id)}
+                        Label={option.label}
+                        onChange={(checked) => setChecked(option.id, checked)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ))
+            : options.map((option) => (
+                <div key={option.id} className="px-3 py-1.5 text-sm text-gray-700">
+                  <WuCheckbox
+                    checked={selectedIds.includes(option.id)}
+                    Label={option.label}
+                    onChange={(checked) => setChecked(option.id, checked)}
+                  />
+                </div>
+              ))}
+          {allIds.length === 0 ? <p className="px-3 py-3 text-sm text-gray-500">Nothing to select</p> : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function SpiderChartFields({
   block,
   onChange,
+  onSave,
+  onReset,
 }: {
   block: Report360Block
   onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onReset: () => void
 }) {
-  const tooFew = block.spiderCompetencyIds.length < 3
+  const catalog = report360SpiderQuestions()
+  const isCustomTitle = block.title !== block.defaultTitle
+  const [editorKey, setEditorKey] = useState(0)
+  const [sourceHint, setSourceHint] = useState('')
+  const [weightsOpen, setWeightsOpen] = useState(false)
+  const [weightsDraft, setWeightsDraft] = useState(block.relationshipWeights)
+  const [overrideDraft, setOverrideDraft] = useState(block.useBlockWeights)
+  const draftWeightsOk = !overrideDraft || weightTotal(weightsDraft) === 100
+  const questionGroups = REPORT360_COMPETENCIES.filter((competency) =>
+    block.spiderCompetencyIds.includes(competency.id),
+  ).map((competency) => ({
+    id: competency.id,
+    label: competency.name,
+    options: catalog
+      .filter((question) => question.competencyId === competency.id)
+      .map((question) => ({ id: question.id, label: question.text })),
+  }))
+
+  function updateSources(nextIds: string[]) {
+    const adding = nextIds.length > block.spiderCompetencyIds.length
+    if (nextIds.length < 3 && !adding) {
+      setSourceHint('Select at least 3 data sources.')
+      return
+    }
+    setSourceHint(nextIds.length < 3 ? 'Select at least 3 data sources.' : '')
+    const added = nextIds.filter((id) => !block.spiderCompetencyIds.includes(id))
+    const removed = new Set(block.spiderCompetencyIds.filter((id) => !nextIds.includes(id)))
+    const kept = block.spiderQuestionIds.filter((id) => {
+      const question = catalog.find((item) => item.id === id)
+      return question != null && !removed.has(question.competencyId)
+    })
+    const addedQuestions = catalog.filter((question) => added.includes(question.competencyId)).map((question) => question.id)
+    onChange({
+      spiderCompetencyIds: nextIds,
+      spiderQuestionIds: [...kept, ...addedQuestions.filter((id) => !kept.includes(id))],
+    })
+  }
+
   return (
-    <div>
-      <SectionHeading>Chart content</SectionHeading>
-      <FieldLabel>Competencies</FieldLabel>
-      <div className="flex flex-wrap gap-3">
-        {REPORT360_COMPETENCIES.map((competency) => {
-          const checked = block.spiderCompetencyIds.includes(competency.id)
-          return (
-            <label key={competency.id} className="flex items-center gap-2 text-sm text-gray-700">
-              <WuCheckbox
-                checked={checked}
-                onChange={() =>
-                  onChange({
-                    spiderCompetencyIds: checked
-                      ? block.spiderCompetencyIds.filter((id) => id !== competency.id)
-                      : [...block.spiderCompetencyIds, competency.id],
-                  })
-                }
-              />
-              {competency.name}
-            </label>
-          )
-        })}
+    <div className="space-y-6">
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Title" align="start">
+          <WuInput
+            variant="outlined"
+            value={block.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+          />
+          {isCustomTitle ? (
+            <button
+              type="button"
+              className="mt-1 text-xs text-blue-700 hover:underline"
+              onClick={() => onChange({ title: block.defaultTitle })}
+            >
+              Reset to Default Name
+            </button>
+          ) : null}
+        </FieldRow>
+        <FieldRow label="Data source">
+          <ChecklistMultiSelect
+            options={REPORT360_COMPETENCIES.map((competency) => ({ id: competency.id, label: competency.name }))}
+            selectedIds={block.spiderCompetencyIds}
+            onChange={updateSources}
+            placeholder="Nothing selected"
+          />
+          {sourceHint || block.spiderCompetencyIds.length < 3 ? (
+            <p className="mt-1 text-xs text-red-600">Select at least 3 data sources.</p>
+          ) : null}
+        </FieldRow>
       </div>
-      <p className={cn('mt-2 text-xs', tooFew ? 'text-red-600' : 'text-gray-500')}>
-        Select at least 3 competencies.
-      </p>
-      <div className="mt-4 space-y-2">
-        <FieldLabel>Relationship lines</FieldLabel>
-        {RELATIONSHIPS.map((key) => {
-          const selected = block.spiderRelationships.includes(key)
-          const styleValue =
-            LINE_STYLE_OPTIONS.find((item) => item.value === block.lineStyles[key]) ?? LINE_STYLE_OPTIONS[0]
-          return (
-            <div key={key} className="grid grid-cols-[160px_1fr] items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <WuCheckbox
-                  checked={selected}
-                  onChange={() =>
-                    onChange({
-                      spiderRelationships: selected
-                        ? block.spiderRelationships.filter((item) => item !== key)
-                        : [...block.spiderRelationships, key],
-                    })
-                  }
-                />
-                {REPORT360_RELATIONSHIP_LABELS[key]}
-              </label>
-              {selected ? (
-                <WuSelect
-                  data={LINE_STYLE_OPTIONS}
-                  accessorKey={{ value: 'value', label: 'label' }}
-                  value={styleValue}
-                  onSelect={(option) =>
-                    onChange({
-                      lineStyles: {
-                        ...block.lineStyles,
-                        [key]:
-                          ((option as SelectOption | null)?.value as 'solid' | 'dashed' | 'dotted') ??
-                          'solid',
-                      },
-                    })
-                  }
-                  variant="outlined"
-                />
-              ) : null}
-            </div>
-          )
-        })}
+
+      <div>
+        <FieldLabel>Introduction</FieldLabel>
+        <TextArea
+          resetKey={editorKey}
+          value={block.introduction}
+          onChange={(introduction) => onChange({ introduction })}
+        />
       </div>
+
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Relationships">
+          <ChecklistMultiSelect
+            options={REPORT360_RELATIONSHIPS.map((key) => ({ id: key, label: REPORT360_RELATIONSHIP_LABELS[key] }))}
+            selectedIds={block.spiderRelationships}
+            onChange={(ids) => onChange({ spiderRelationships: ids as Report360Relationship[] })}
+            placeholder="Nothing selected"
+          />
+        </FieldRow>
+        <FieldRow label="Questions">
+          <ChecklistMultiSelect
+            groups={questionGroups}
+            selectedIds={block.spiderQuestionIds.filter((id) =>
+              questionGroups.some((group) => group.options.some((option) => option.id === id)),
+            )}
+            onChange={(spiderQuestionIds) => onChange({ spiderQuestionIds })}
+            placeholder="Nothing selected"
+          />
+        </FieldRow>
+      </div>
+
+      <FieldRow label="Relationship weight configuration">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setWeightsDraft(block.relationshipWeights)
+            setOverrideDraft(block.useBlockWeights)
+            setWeightsOpen(true)
+          }}
+        >
+          {block.useBlockWeights ? 'Edit weights' : 'Configure weights'}
+        </WuButton>
+      </FieldRow>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <WuButton
+          variant="secondary"
+          onClick={() => {
+            setEditorKey((key) => key + 1)
+            onReset()
+          }}
+        >
+          Reset
+        </WuButton>
+        <WuButton variant="primary" onClick={onSave}>
+          Save
+        </WuButton>
+      </div>
+
+      <WuModal open={weightsOpen} onOpenChange={setWeightsOpen} variant="action" size="md" {...preventModalDismiss}>
+        <WuModalHeader>Relationship weight configuration</WuModalHeader>
+        <WuModalContent>
+          <div className="space-y-4">
+            <WuToggle
+              Label="Override global relationship weights"
+              checked={overrideDraft}
+              onChange={setOverrideDraft}
+            />
+            {overrideDraft ? (
+              <WeightSliders weights={weightsDraft} onChange={setWeightsDraft} />
+            ) : (
+              <p className="text-sm text-gray-500">Using the global weights from Master Design.</p>
+            )}
+          </div>
+        </WuModalContent>
+        <WuModalFooter>
+          <WuButton variant="secondary" onClick={() => setWeightsOpen(false)}>
+            Cancel
+          </WuButton>
+          <WuButton
+            variant="primary"
+            disabled={!draftWeightsOk}
+            onClick={() => {
+              onChange({ useBlockWeights: overrideDraft, relationshipWeights: weightsDraft })
+              setWeightsOpen(false)
+            }}
+          >
+            Done
+          </WuButton>
+        </WuModalFooter>
+      </WuModal>
     </div>
   )
 }
@@ -1434,20 +3106,17 @@ function ItemCountField({
   onChange: (patch: Partial<Report360Block>) => void
 }) {
   return (
-    <div className="max-w-[220px]">
-      <WuFormGroup
-        Label={label}
-        Input={
-          <WuInput
-            variant="outlined"
-            type="number"
-            value={String(block.itemCount)}
-            onChange={(event) =>
-              onChange({ itemCount: Math.min(10, Math.max(1, Number(event.target.value) || 1)) })
-            }
-          />
-        }
-      />
+    <div className={SETTINGS_GRID}>
+      <FieldRow label={label}>
+        <WuInput
+          variant="outlined"
+          type="number"
+          value={String(block.itemCount)}
+          onChange={(event) =>
+            onChange({ itemCount: Math.min(10, Math.max(1, Number(event.target.value) || 1)) })
+          }
+        />
+      </FieldRow>
     </div>
   )
 }
@@ -1460,58 +3129,27 @@ function WeightingFields({
   onChange: (patch: Partial<Report360Block>) => void
 }) {
   return (
-    <CollapsibleSection title="Weighting">
-      <div className="space-y-3 rounded border border-gray-100 p-3">
-        <WuToggle
-          Label="Include in Overall Score"
-          checked={block.includeInOverallScore}
-          onChange={(includeInOverallScore) => onChange({ includeInOverallScore })}
-        />
-        <WuToggle
-          Label="Override global relationship weights"
-          checked={block.useBlockWeights}
-          onChange={(useBlockWeights) => onChange({ useBlockWeights })}
-        />
-        {block.useBlockWeights ? (
+    <div>
+      <SectionHeading>Weighting</SectionHeading>
+      <div className={SETTINGS_GRID}>
+        <FieldRow label="Override global relationship weights">
+          <WuToggle
+            checked={block.useBlockWeights}
+            onChange={(useBlockWeights) => onChange({ useBlockWeights })}
+          />
+        </FieldRow>
+      </div>
+      {block.useBlockWeights ? (
+        <div className="mt-3">
           <WeightSliders
             weights={block.relationshipWeights}
             onChange={(relationshipWeights) => onChange({ relationshipWeights })}
           />
-        ) : (
-          <p className="text-xs text-gray-500">Using the global weights from Master Design.</p>
-        )}
-      </div>
-    </CollapsibleSection>
-  )
-}
-
-function VisibilityFields({
-  block,
-  onChange,
-}: {
-  block: Report360Block
-  onChange: (patch: Partial<Report360Block>) => void
-}) {
-  return (
-    <CollapsibleSection title="Visibility">
-      <div className="flex flex-wrap gap-4">
-        <WuToggle
-          Label="Subject"
-          checked={block.visibleToSubject}
-          onChange={(visibleToSubject) => onChange({ visibleToSubject })}
-        />
-        <WuToggle
-          Label="Manager"
-          checked={block.visibleToManager}
-          onChange={(visibleToManager) => onChange({ visibleToManager })}
-        />
-        <WuToggle
-          Label="Admin"
-          checked={block.visibleToAdmin}
-          onChange={(visibleToAdmin) => onChange({ visibleToAdmin })}
-        />
-      </div>
-    </CollapsibleSection>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-gray-500">Using the global weights from Master Design.</p>
+      )}
+    </div>
   )
 }
 
@@ -1521,92 +3159,187 @@ function BlockSettings({
   sectionOptions,
   onMasterChange,
   onChange,
+  onSave,
+  onResetCover,
+  onResetAllItems,
+  onResetOverallData,
+  onResetRanking,
+  onResetActionPlan,
+  onResetDevelopmentResults,
+  onResetNominatedRaters,
+  onResetSurveyRespondents,
+  onResetPriorityAreas,
+  onResetRankingByBehavior,
+  onResetPresentation,
+  onResetPrioritySurvey,
+  onResetAiSummary,
+  onResetSpider,
 }: {
   block: Report360Block
   masterDesign: Report360MasterDesign
   sectionOptions: SelectOption[]
   onMasterChange: (next: Report360MasterDesign) => void
   onChange: (patch: Partial<Report360Block>) => void
+  onSave: () => void
+  onResetCover: () => void
+  onResetAllItems: () => void
+  onResetOverallData: () => void
+  onResetRanking: () => void
+  onResetActionPlan: () => void
+  onResetDevelopmentResults: () => void
+  onResetNominatedRaters: () => void
+  onResetSurveyRespondents: () => void
+  onResetPriorityAreas: () => void
+  onResetRankingByBehavior: () => void
+  onResetPresentation: () => void
+  onResetPrioritySurvey: () => void
+  onResetAiSummary: () => void
+  onResetSpider: () => void
 }) {
   if (block.type === 'masterDesign') {
     return <MasterDesignFields design={masterDesign} onChange={onMasterChange} />
   }
 
-  const scored = REPORT360_SCORED_BLOCK_TYPES.includes(block.type)
+  const scored =
+    REPORT360_SCORED_BLOCK_TYPES.includes(block.type) &&
+    block.type !== 'executiveSummary' &&
+    block.type !== 'competencyDetail' &&
+    block.type !== 'overallData' &&
+    block.type !== 'rankingByRelationship' &&
+    block.type !== 'keyDevelopmentAreas' &&
+    block.type !== 'strengthGrowthIndicators' &&
+    block.type !== 'competencyPriorityIndex' &&
+    block.type !== 'spiderChart'
 
   return (
     <div className="space-y-6">
-      <GeneralFields block={block} sectionOptions={sectionOptions} onChange={onChange} />
+      {block.type === 'cover' ||
+      block.type === 'competencyDetail' ||
+      block.type === 'overallData' ||
+      block.type === 'rankingByRelationship' ||
+      block.type === 'actionPlan' ||
+      block.type === 'priorityComments' ||
+      block.type === 'nominatedRaters' ||
+      block.type === 'surveyRespondents' ||
+      block.type === 'keyDevelopmentAreas' ||
+      block.type === 'strengthGrowthIndicators' ||
+      block.type === 'customContent' ||
+      block.type === 'competencyPriorityIndex' ||
+      block.type === 'aiRecommendations' ||
+      block.type === 'spiderChart' ? null : (
+        <GeneralFields block={block} sectionOptions={sectionOptions} onChange={onChange} />
+      )}
 
-      {block.type === 'cover' ? <CoverFields block={block} onChange={onChange} /> : null}
-      {block.type === 'competencyDetail' ? <DisplayOptionFields block={block} onChange={onChange} /> : null}
-      {block.type === 'spiderChart' ? <SpiderFields block={block} onChange={onChange} /> : null}
-      {block.type === 'priorityComments' ? <CommentsFields block={block} onChange={onChange} /> : null}
-      {block.type === 'aiRecommendations' ? <AiFields block={block} onChange={onChange} /> : null}
-      {block.type === 'keyDevelopmentAreas' ? (
-        <ItemCountField block={block} label="Development areas to show" onChange={onChange} />
+      {block.type === 'cover' ? (
+        <CoverFields block={block} onChange={onChange} onSave={onSave} onReset={onResetCover} />
       ) : null}
-      {block.type === 'strengthGrowthIndicators' ? (
-        <ItemCountField block={block} label="Items per column" onChange={onChange} />
+      {block.type === 'competencyDetail' ? (
+        <AllItemsFields
+          block={block}
+          sectionOptions={sectionOptions}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetAllItems}
+        />
       ) : null}
       {block.type === 'overallData' ? (
-        <ItemCountField block={block} label="Behaviors to show" onChange={onChange} />
+        <OverallDataFields
+          block={block}
+          sectionOptions={sectionOptions}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetOverallData}
+        />
+      ) : null}
+      {block.type === 'spiderChart' ? (
+        <SpiderChartFields block={block} onChange={onChange} onSave={onSave} onReset={onResetSpider} />
+      ) : null}
+      {block.type === 'surveyRespondents' ? (
+        <SurveyRespondentsFields
+          block={block}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetSurveyRespondents}
+        />
+      ) : null}
+      {block.type === 'nominatedRaters' ? (
+        <NominatedRatersFields
+          block={block}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetNominatedRaters}
+        />
+      ) : null}
+      {block.type === 'priorityComments' ? (
+        <DevelopmentResultsFields
+          block={block}
+          sectionOptions={sectionOptions}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetDevelopmentResults}
+        />
+      ) : null}
+      {block.type === 'aiRecommendations' ? (
+        <AiSummaryFields
+          block={block}
+          sectionOptions={sectionOptions}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetAiSummary}
+        />
+      ) : null}
+      {block.type === 'keyDevelopmentAreas' ? (
+        <PriorityAreasFields
+          block={block}
+          sectionOptions={sectionOptions}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetPriorityAreas}
+        />
+      ) : null}
+      {block.type === 'strengthGrowthIndicators' ? (
+        <RankingByBehaviorFields
+          block={block}
+          sectionOptions={sectionOptions}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetRankingByBehavior}
+        />
       ) : null}
       {block.type === 'rankingByRelationship' ? (
-        <div className="max-w-[220px]">
-          <WuFormGroup
-            Label="Priorities to display (max 5)"
-            Input={
-              <WuInput
-                variant="outlined"
-                type="number"
-                value={String(block.rankingCount)}
-                onChange={(event) =>
-                  onChange({ rankingCount: Math.min(5, Math.max(1, Number(event.target.value) || 1)) })
-                }
-              />
-            }
-          />
-        </div>
+        <RankingRelationshipFields
+          block={block}
+          sectionOptions={sectionOptions}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetRanking}
+        />
       ) : null}
       {block.type === 'actionPlan' ? (
-        <div>
-          <SectionHeading>Priorities</SectionHeading>
-          <div className="flex flex-wrap gap-3">
-            {PRIORITY_OPTIONS.map((option) => {
-              const checked = block.actionPlanPriorities.includes(option.value)
-              return (
-                <label key={option.value} className="flex items-center gap-2 text-sm text-gray-700">
-                  <WuCheckbox
-                    checked={checked}
-                    onChange={() =>
-                      onChange({
-                        actionPlanPriorities: checked
-                          ? block.actionPlanPriorities.filter((item) => item !== option.value)
-                          : [...block.actionPlanPriorities, option.value],
-                      })
-                    }
-                  />
-                  {option.label}
-                </label>
-              )
-            })}
-          </div>
-        </div>
+        <ActionPlanFields
+          block={block}
+          sectionOptions={sectionOptions}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetActionPlan}
+        />
+      ) : null}
+      {block.type === 'competencyPriorityIndex' ? (
+        <PrioritySurveyFields
+          block={block}
+          sectionOptions={sectionOptions}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetPrioritySurvey}
+        />
       ) : null}
       {block.type === 'customContent' ? (
-        <div>
-          <SectionHeading>Page content</SectionHeading>
-          <TextArea
-            rows={6}
-            value={block.customBody}
-            onChange={(customBody) => onChange({ customBody })}
-          />
-          <p className="mt-2 text-xs text-gray-500">
-            Free-form page. Use it for a leadership message, the competency model, or program next
-            steps.
-          </p>
-        </div>
+        <PresentationTextFields
+          block={block}
+          onChange={onChange}
+          onSave={onSave}
+          onReset={onResetPresentation}
+        />
       ) : null}
 
       {scored ? <WeightingFields block={block} onChange={onChange} /> : null}
@@ -1617,8 +3350,43 @@ function BlockSettings({
           </p>
         </CollapsibleSection>
       ) : null}
-      <VisibilityFields block={block} onChange={onChange} />
     </div>
+  )
+}
+
+function BlockCatalogCard({
+  type,
+  selected,
+  onToggle,
+}: {
+  type: Report360BlockType
+  selected: boolean
+  onToggle: (type: Report360BlockType) => void
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'flex min-h-[80px] cursor-pointer gap-4 rounded-lg border p-4 text-left transition-all hover:border-blue-400 hover:shadow-sm',
+        selected ? 'border-blue-500 bg-blue-50' : 'border-gray-200',
+      )}
+      onClick={() => onToggle(type)}
+    >
+      <span
+        className="flex h-16 w-20 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-lg font-semibold text-blue-700"
+        aria-hidden
+      >
+        {REPORT360_BLOCK_DEFAULT_TITLES[type].charAt(0)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <WuText size="sm" as="span" className="font-semibold text-gray-900">
+          {REPORT360_BLOCK_DEFAULT_TITLES[type]}
+        </WuText>
+        <WuText size="sm" as="span" className="mt-1 block text-gray-500">
+          {REPORT360_BLOCK_DESCRIPTIONS[type]}
+        </WuText>
+      </span>
+    </button>
   )
 }
 
@@ -1634,23 +3402,18 @@ export function ReportBuilder({
   const { showToast } = useWuShowToast()
   const [previewing, setPreviewing] = useState(startInPreview)
   const { template, setTemplate, save, reset } = useReport360Template(survey.id)
-  const savedTemplates = useSavedReport360Templates()
-  const [expandedId, setExpandedId] = useState('block_competencyDetail')
+  const [expandedId, setExpandedId] = useState('')
   const [dragId, setDragId] = useState<string | null>(null)
-  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
-  const [templateName, setTemplateName] = useState('')
-  const [templateNameError, setTemplateNameError] = useState('')
-  const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null)
-  const [reportBeforeTemplate, setReportBeforeTemplate] = useState<Report360Template | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingDraft, setEditingDraft] = useState<Report360Template | null>(null)
-  const isEditing = editingId !== null && editingDraft !== null
-  const activeTemplate = isEditing ? editingDraft : template
-  const editingTemplate = savedTemplates.find((item) => item.id === editingId) ?? null
+  const [addOpen, setAddOpen] = useState(false)
+  const [blocksToAdd, setBlocksToAdd] = useState<Report360BlockType[]>([])
+  const [useExistingOpen, setUseExistingOpen] = useState(false)
+  const [sourceFolderId, setSourceFolderId] = useState('new-folks')
+  const [sourceSurveyId, setSourceSurveyId] = useState('')
+  const [copiedFromTitle, setCopiedFromTitle] = useState<string | null>(null)
+  const activeTemplate = template
 
   function commit(next: Report360Template) {
-    if (isEditing) setEditingDraft(next)
-    else setTemplate(next)
+    setTemplate(next)
   }
 
   const sectionOptions = useMemo<SelectOption[]>(
@@ -1658,19 +3421,9 @@ export function ReportBuilder({
     [survey.sections],
   )
 
-  const templateOptions: SelectOption[] = savedTemplates.map((item) => ({
-    value: item.id,
-    label: item.name,
-  }))
-  const addableBlocks: SelectOption[] = (
-    Object.keys(REPORT360_BLOCK_DEFAULT_TITLES) as Report360BlockType[]
+  const addableBlockTypes = (Object.keys(REPORT360_BLOCK_DEFAULT_TITLES) as Report360BlockType[]).filter(
+    (type) => !REPORT360_CONSTANT_BLOCK_TYPES.includes(type),
   )
-    .filter(
-      (type) =>
-        !REPORT360_CONSTANT_BLOCK_TYPES.includes(type) &&
-        !activeTemplate.blocks.some((block) => block.type === type),
-    )
-    .map((type) => ({ value: type, label: REPORT360_BLOCK_DEFAULT_TITLES[type] }))
 
   const errors = useMemo(() => {
     const list: string[] = []
@@ -1687,11 +3440,7 @@ export function ReportBuilder({
     })
     const spider = activeTemplate.blocks.find((block) => block.type === 'spiderChart')
     if (spider?.enabled && spider.spiderCompetencyIds.length < 3) {
-      list.push('Spider / Radar Chart needs at least 3 competencies.')
-    }
-    const comments = activeTemplate.blocks.find((block) => block.type === 'priorityComments')
-    if (comments?.enabled && comments.commentQuestionIds.length === 0) {
-      list.push('Priority Comments & Evidence needs at least one question.')
+      list.push(`${REPORT360_BLOCK_DEFAULT_TITLES.spiderChart} needs at least 3 data sources.`)
     }
     return list
   }, [activeTemplate])
@@ -1701,15 +3450,6 @@ export function ReportBuilder({
       ...activeTemplate,
       blocks: activeTemplate.blocks.map((block) => (block.id === blockId ? { ...block, ...patch } : block)),
     })
-  }
-
-  function moveBlock(blockId: string, direction: -1 | 1) {
-    const index = activeTemplate.blocks.findIndex((block) => block.id === blockId)
-    const target = index + direction
-    if (index < 1 || target < 1 || target >= activeTemplate.blocks.length) return
-    const next = [...activeTemplate.blocks]
-    ;[next[index], next[target]] = [next[target], next[index]]
-    commit({ ...activeTemplate, blocks: next })
   }
 
   function reorder(sourceId: string, targetId: string) {
@@ -1730,11 +3470,6 @@ export function ReportBuilder({
       showToast({ message: errors[0], variant: 'error' })
       return
     }
-    if (isEditing && editingTemplate) {
-      saveReport360TemplateToLibrary(editingTemplate.name, activeTemplate)
-      showToast({ message: `${editingTemplate.name} updated`, variant: 'success' })
-      return
-    }
     save(activeTemplate)
     showToast({ message: 'Report saved', variant: 'success' })
   }
@@ -1742,77 +3477,103 @@ export function ReportBuilder({
   function handleReset() {
     const next = reset()
     setTemplate(next)
-    setAppliedTemplateId(null)
-    setReportBeforeTemplate(null)
-    setEditingId(null)
-    setEditingDraft(null)
-    setExpandedId('block_competencyDetail')
+    setCopiedFromTitle(null)
+    setExpandedId('')
     showToast({ message: 'Report reset', variant: 'success' })
   }
 
-  function leaveTemplateEditor() {
-    setEditingId(null)
-    setEditingDraft(null)
-    setExpandedId('')
+  const workforceOptions = STUDY_FOLDERS.filter((folder) => folder.value !== 'all-folders')
+
+  const surveysInWorkforce = useMemo(() => {
+    const seen = new Set<string>()
+    return MOCK_STUDIES.flatMap((study) => {
+      if (study.type !== '360 Review' || study.folderId !== sourceFolderId || !study.surveyId) return []
+      if (study.surveyId === survey.id || seen.has(study.surveyId)) return []
+      seen.add(study.surveyId)
+      return [
+        {
+          value: study.surveyId,
+          label: mockSurveys360.find((item) => item.id === study.surveyId)?.title ?? study.name,
+        },
+      ]
+    })
+  }, [sourceFolderId, survey.id])
+
+  const surveyOptions =
+    surveysInWorkforce.length > 0 ? surveysInWorkforce : [{ value: '', label: 'No 360 surveys' }]
+
+  function openUseExisting() {
+    const folderId = workforceOptions[0]?.value ?? 'new-folks'
+    setSourceFolderId(folderId)
+    const first = MOCK_STUDIES.find(
+      (study) =>
+        study.type === '360 Review' &&
+        study.folderId === folderId &&
+        study.surveyId &&
+        study.surveyId !== survey.id,
+    )
+    setSourceSurveyId(first?.surveyId ?? '')
+    setUseExistingOpen(true)
   }
 
-  function handleUseTemplate(templateId: string) {
-    const saved = savedTemplates.find((item) => item.id === templateId)
-    if (!saved || saved.id === appliedTemplateId) return
-    setReportBeforeTemplate(cloneReport360Template(template))
-    leaveTemplateEditor()
-    setAppliedTemplateId(saved.id)
-    setTemplate(cloneReport360Template(saved.template))
+  function reportForSurvey(surveyId: string): Report360Template {
+    const stored = getReport360Template(surveyId)
+    const untouched =
+      stored.blocks.length === REPORT360_STARTER_BLOCK_TYPES.length &&
+      stored.blocks.every((block, index) => block.type === REPORT360_STARTER_BLOCK_TYPES[index])
+    if (!untouched) return stored
+    const seeded: Record<string, Report360Template> = {
+      surv360_leadership_2025: REPORT360_TEMPLATE_OPTIONS[0].template,
+      surv360_manager_q1: REPORT360_TEMPLATE_OPTIONS[1].template,
+      surv360_newhire_90: REPORT360_TEMPLATE_OPTIONS[2].template,
+    }
+    return seeded[surveyId] ?? stored
+  }
+
+  function selectWorkforce(folderId: string) {
+    setSourceFolderId(folderId)
+    const first = MOCK_STUDIES.find(
+      (study) =>
+        study.type === '360 Review' &&
+        study.folderId === folderId &&
+        study.surveyId &&
+        study.surveyId !== survey.id,
+    )
+    setSourceSurveyId(first?.surveyId ?? '')
+  }
+
+  function confirmUseExisting() {
+    const source = surveysInWorkforce.find((item) => item.value === sourceSurveyId)
+    if (!source) return
+    setTemplate(cloneReport360Template(reportForSurvey(source.value)))
+    setCopiedFromTitle(source.label)
+    setUseExistingOpen(false)
     showToast({
-      message: `${saved.name} applied to this report. Changes here stay on the report.`,
+      message: `Report settings copied from ${source.label}.`,
       variant: 'success',
     })
   }
 
-  function restorePreviousReport() {
-    if (!reportBeforeTemplate) return
-    setTemplate(cloneReport360Template(reportBeforeTemplate))
-    setReportBeforeTemplate(null)
-    setAppliedTemplateId(null)
-    leaveTemplateEditor()
-    setPreviewing(false)
+  function toggleBlockToAdd(type: Report360BlockType) {
+    setBlocksToAdd((current) =>
+      current.includes(type) ? current.filter((item) => item !== type) : [...current, type],
+    )
   }
 
-  function handleEditTemplate(templateId: string) {
-    const saved = savedTemplates.find((item) => item.id === templateId)
-    if (!saved) return
-    setEditingId(saved.id)
-    setEditingDraft(cloneReport360Template(saved.template))
-    setExpandedId('block_masterDesign')
-  }
-
-  function handleSaveAsTemplate() {
-    const name = templateName.trim()
-    if (!name) {
-      setTemplateNameError('Template name is required.')
-      return
-    }
-    if (errors.length > 0) {
-      showToast({ message: errors[0], variant: 'error' })
-      return
-    }
-    const existing = savedTemplates.some((item) => item.name.toLowerCase() === name.toLowerCase())
-    const saved = saveReport360TemplateToLibrary(name, activeTemplate)
-    setAppliedTemplateId(saved.id)
-    setSaveTemplateOpen(false)
-    setTemplateName('')
-    setTemplateNameError('')
+  function addSelectedBlocks() {
+    if (blocksToAdd.length === 0) return
+    const stamp = Date.now().toString(36)
+    const created = blocksToAdd.map((type, index) =>
+      createReport360Block(type, `block_${type}_${stamp}_${index}`),
+    )
+    commit({ ...activeTemplate, blocks: [...activeTemplate.blocks, ...created] })
+    setExpandedId(created[created.length - 1]?.id ?? '')
+    setBlocksToAdd([])
+    setAddOpen(false)
     showToast({
-      message: existing ? `${name} updated` : `${name} saved as a template`,
+      message: created.length === 1 ? 'Block added' : `${created.length} blocks added`,
       variant: 'success',
     })
-  }
-
-  function addBlock(type: Report360BlockType) {
-    if (activeTemplate.blocks.some((block) => block.type === type)) return
-    const block = createReport360Block(type)
-    commit({ ...activeTemplate, blocks: [...activeTemplate.blocks, block] })
-    setExpandedId(block.id)
   }
 
   function removeBlock(blockId: string) {
@@ -1823,108 +3584,56 @@ export function ReportBuilder({
   }
 
   const enabledCount = activeTemplate.blocks.filter((block) => block.enabled && !block.locked).length
-  const appliedTemplate = savedTemplates.find((item) => item.id === appliedTemplateId) ?? null
-
-  if (previewing) {
-    return (
-      <ReportPreview
-        survey={survey}
-        template={activeTemplate}
-        backLabel={isEditing ? 'Back to template' : 'Back to builder'}
-        onBack={() => setPreviewing(false)}
-        onGoToDistribute={onGoToDistribute}
-      />
+  const isStarterReport =
+    activeTemplate.blocks.length === REPORT360_STARTER_BLOCK_TYPES.length &&
+    REPORT360_STARTER_BLOCK_TYPES.every((type) =>
+      activeTemplate.blocks.some((block) => block.type === type),
     )
+
+  function createWithTemplate() {
+    const created = createDefaultReportBlocks(survey.sections)
+    commit({ ...activeTemplate, blocks: [...activeTemplate.blocks, ...created] })
+    setExpandedId('')
+    showToast({ message: 'Default report added', variant: 'success' })
   }
 
   return (
-    <div className="flex min-h-full flex-col">
-      <header className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 bg-gray-50 px-6 pt-6 pb-4">
+    <div className={cn('flex min-h-full', previewing && 'h-full min-h-0')}>
+      <div className={cn('flex min-w-0 flex-1 flex-col', previewing && 'builder-pane overflow-y-auto')}>
+      <header className={cn('sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 bg-gray-50 pt-5 pb-4', previewing ? 'px-4' : 'px-6')}>
         <div>
           <p className="text-xs text-gray-500">{survey.title}</p>
-          <h1 className="text-2xl font-semibold text-gray-900">
-            {isEditing && editingTemplate ? editingTemplate.name : 'Report Builder'}
-          </h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Report builder</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {isEditing
-              ? 'Editing this template. The report setup is unchanged until you use the template.'
-              : appliedTemplate
-                ? `Using ${appliedTemplate.name} on this report · ${enabledCount} blocks enabled`
-                : `${enabledCount} blocks enabled · drag to reorder`}
+            {copiedFromTitle
+              ? `Copied from ${copiedFromTitle} · ${enabledCount} blocks enabled`
+              : `${enabledCount} blocks enabled · drag to reorder`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {isEditing ? (
-            <WuButton variant="secondary" onClick={leaveTemplateEditor}>
-              Back to report
-            </WuButton>
-          ) : reportBeforeTemplate ? (
-            <WuButton variant="secondary" onClick={restorePreviousReport}>
-              Back
-            </WuButton>
-          ) : null}
-          {isEditing ? null : (
-            <div className="min-w-[180px]">
-              <WuSelect
-                data={templateOptions}
-                accessorKey={{ value: 'value', label: 'label' }}
-                value={appliedTemplate ? { value: appliedTemplate.id, label: appliedTemplate.name } : null}
-                onSelect={(option) => {
-                  const templateId = (option as SelectOption | null)?.value
-                  if (templateId) handleUseTemplate(templateId)
-                }}
-                variant="outlined"
-                placeholder={templateOptions.length > 0 ? 'Use a template' : 'No saved templates'}
-              />
-            </div>
-          )}
-          {templateOptions.length > 0 ? (
-            <div className="min-w-[180px]">
-              <WuSelect
-                data={templateOptions}
-                accessorKey={{ value: 'value', label: 'label' }}
-                value={editingTemplate ? { value: editingTemplate.id, label: editingTemplate.name } : null}
-                onSelect={(option) => {
-                  const templateId = (option as SelectOption | null)?.value
-                  if (templateId) handleEditTemplate(templateId)
-                }}
-                variant="outlined"
-                placeholder="Edit template"
-              />
-            </div>
-          ) : null}
-          {!isEditing && !appliedTemplateId ? (
-            <WuButton
-              variant="secondary"
-              onClick={() => {
-                setTemplateName('')
-                setTemplateNameError('')
-                setSaveTemplateOpen(true)
-              }}
-            >
-              Save as template
-            </WuButton>
-          ) : null}
-          {isEditing ? (
-            <WuButton variant="secondary" onClick={() => setExpandedId('block_masterDesign')}>
-              Configure template
-            </WuButton>
-          ) : null}
+          <WuButton variant="secondary" onClick={openUseExisting}>
+            Use an existing report
+          </WuButton>
           <WuButton variant="primary" onClick={() => setPreviewing(true)}>
             Preview
           </WuButton>
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col gap-3 px-6 py-6">
+      <div className={cn('flex min-w-0 flex-1 flex-col gap-3 py-6', previewing ? 'px-4' : 'px-6')}>
         {activeTemplate.blocks.map((block, blockIndex) => {
           const expanded = expandedId === block.id
+          const isSetup = block.type === 'masterDesign'
+          const blockNumber = activeTemplate.blocks
+            .slice(0, blockIndex + 1)
+            .filter((item) => item.type !== 'masterDesign').length
           return (
+            <Fragment key={block.id}>
             <section
-              key={block.id}
-              draggable={!block.locked}
-              onDragStart={() => setDragId(block.id)}
-              onDragOver={(event) => event.preventDefault()}
+              onDragOver={(event) => {
+                if (!dragId || block.locked) return
+                event.preventDefault()
+              }}
               onDrop={() => {
                 if (dragId) reorder(dragId, block.id)
                 setDragId(null)
@@ -1932,39 +3641,32 @@ export function ReportBuilder({
               className={cn(
                 'rounded-lg border bg-white shadow-sm',
                 expanded ? 'border-blue-200' : 'border-gray-200',
+                dragId === block.id ? 'opacity-60' : '',
               )}
             >
-              <div className="flex items-center gap-3 px-4 py-3">
-                <span className="w-5 text-right text-sm tabular-nums text-gray-500">
-                  {blockIndex + 1}
-                </span>
-                {block.locked ? (
-                  <span className="w-4" aria-hidden />
-                ) : (
-                  <span className="flex flex-col leading-none">
-                    <button
-                      type="button"
-                      className="text-[10px] text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                      aria-label={`Move ${block.title} up`}
-                      disabled={blockIndex <= 1}
-                      onClick={() => moveBlock(block.id, -1)}
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      className="text-[10px] text-gray-400 hover:text-gray-700 disabled:opacity-30"
-                      aria-label={`Move ${block.title} down`}
-                      disabled={blockIndex >= activeTemplate.blocks.length - 1}
-                      onClick={() => moveBlock(block.id, 1)}
-                    >
-                      ▼
-                    </button>
-                  </span>
+              <div className="flex min-w-0 items-center gap-3 px-4 py-3">
+                {isSetup ? <span className="w-4" aria-hidden /> : (
+                  <button
+                    type="button"
+                    draggable
+                    aria-label={`Drag to reorder ${block.title}`}
+                    className="cursor-grab text-gray-400 active:cursor-grabbing"
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'move'
+                      event.dataTransfer.setData('text/plain', block.id)
+                      setDragId(block.id)
+                    }}
+                    onDragEnd={() => setDragId(null)}
+                  >
+                    ⋮⋮
+                  </button>
                 )}
+                <span className="w-5 text-right text-sm tabular-nums text-gray-500">
+                  {isSetup ? '' : blockNumber}
+                </span>
                 <button
                   type="button"
-                  className="min-w-0 flex-1 text-left"
+                  className="min-w-0 flex-1 overflow-hidden text-left"
                   onClick={() => setExpandedId(expanded ? '' : block.id)}
                 >
                   <span className="font-medium text-gray-900">{block.title}</span>
@@ -1973,16 +3675,12 @@ export function ReportBuilder({
                       ({block.defaultTitle})
                     </span>
                   ) : null}
-                  <span className="ml-3 text-sm font-normal text-gray-400">
+                  <span className="block-desc ml-3 text-sm font-normal text-gray-400">
                     {REPORT360_BLOCK_DESCRIPTIONS[block.type]}
                   </span>
                 </button>
-                {block.locked ? (
-                  <WuText size="sm" className="text-gray-400">
-                    Always on
-                  </WuText>
-                ) : (
-                  <div className="flex items-center gap-3">
+                {isSetup ? null : (
+                  <div className="flex shrink-0 items-center gap-3">
                     {REPORT360_CONSTANT_BLOCK_TYPES.includes(block.type) ? null : (
                       <button
                         type="button"
@@ -2007,31 +3705,258 @@ export function ReportBuilder({
                     sectionOptions={
                       sectionOptions.length > 0
                         ? sectionOptions
-                        : [{ value: 'Inclusive Leadership', label: 'Inclusive Leadership' }]
+                        : [{ value: 'Inclusive leadership', label: 'Inclusive leadership' }]
                     }
                     onMasterChange={(masterDesign) => commit({ ...activeTemplate, masterDesign })}
                     onChange={(patch) => updateBlock(block.id, patch)}
+                    onSave={handleSave}
+                    onResetCover={() => {
+                      const fresh = createReport360Block('cover')
+                      updateBlock(block.id, {
+                        coverTemplate: fresh.coverTemplate,
+                        coverBackgroundColor: fresh.coverBackgroundColor,
+                        showOverallScoreOnCover: fresh.showOverallScoreOnCover,
+                        showPerformanceCategoryOnCover: fresh.showPerformanceCategoryOnCover,
+                        coverImage: fresh.coverImage,
+                        coverLabel: fresh.coverLabel,
+                        coverBody: fresh.coverBody,
+                        relationshipIcons: fresh.relationshipIcons,
+                        showSurveyRespondents: fresh.showSurveyRespondents,
+                        excludeZeroResponses: fresh.excludeZeroResponses,
+                        showTotalSent: fresh.showTotalSent,
+                        showNominatedRatersOnCover: fresh.showNominatedRatersOnCover,
+                        includeBackCover: fresh.includeBackCover,
+                        backCoverLogo: fresh.backCoverLogo,
+                        contactName: fresh.contactName,
+                        contactEmail: fresh.contactEmail,
+                        confidentialityNote: fresh.confidentialityNote,
+                      })
+                      showToast({ message: 'Cover page reset', variant: 'success' })
+                    }}
+                    onResetAllItems={() => {
+                      const fresh = createReport360Block('competencyDetail')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                        dataSource: fresh.dataSource,
+                        chartType: fresh.chartType,
+                        meanColumn: fresh.meanColumn,
+                        relationshipIcons: fresh.relationshipIcons,
+                        tabularData: fresh.tabularData,
+                        priorityColumn: fresh.priorityColumn,
+                        qxBotInsights: fresh.qxBotInsights,
+                        priorityText: fresh.priorityText,
+                        tabularDataHeading: fresh.tabularDataHeading,
+                        conditionalTexts: fresh.conditionalTexts,
+                        conditionalElse: fresh.conditionalElse,
+                        behavioursPerPage: fresh.behavioursPerPage,
+                        useBlockWeights: fresh.useBlockWeights,
+                        relationshipWeights: fresh.relationshipWeights,
+                      })
+                      showToast({ message: 'All items block reset', variant: 'success' })
+                    }}
+                    onResetOverallData={() => {
+                      const fresh = createReport360Block('overallData')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                        dataSource: fresh.dataSource,
+                        chartType: fresh.chartType,
+                        meanColumn: fresh.meanColumn,
+                        relationshipIcons: fresh.relationshipIcons,
+                        priorityColumn: fresh.priorityColumn,
+                        priorityText: fresh.priorityText,
+                        conditionalTexts: fresh.conditionalTexts,
+                        conditionalElse: fresh.conditionalElse,
+                        itemCount: fresh.itemCount,
+                        behaviorDisplay: fresh.behaviorDisplay,
+                        useBlockWeights: fresh.useBlockWeights,
+                        relationshipWeights: fresh.relationshipWeights,
+                      })
+                      showToast({ message: 'Overall data block reset', variant: 'success' })
+                    }}
+                    onResetRanking={() => {
+                      const fresh = createReport360Block('rankingByRelationship')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                        dataSource: fresh.dataSource,
+                        chartType: fresh.chartType,
+                        meanColumn: fresh.meanColumn,
+                        relationshipIcons: fresh.relationshipIcons,
+                        priorityColumn: fresh.priorityColumn,
+                        priorityText: fresh.priorityText,
+                        conditionalTexts: fresh.conditionalTexts,
+                        conditionalElse: fresh.conditionalElse,
+                        rankingCount: fresh.rankingCount,
+                        behaviorDisplay: fresh.behaviorDisplay,
+                        rankingRelationships: fresh.rankingRelationships,
+                        showManagerComments: fresh.showManagerComments,
+                        useBlockWeights: fresh.useBlockWeights,
+                        relationshipWeights: fresh.relationshipWeights,
+                      })
+                      showToast({ message: 'Ranking relationship block reset', variant: 'success' })
+                    }}
+                    onResetActionPlan={() => {
+                      const fresh = createReport360Block('actionPlan')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                        dataSource: fresh.dataSource,
+                        chartType: fresh.chartType,
+                        priorityColumn: fresh.priorityColumn,
+                        priorityText: fresh.priorityText,
+                        conditionalTexts: fresh.conditionalTexts,
+                        conditionalElse: fresh.conditionalElse,
+                        behavioursPerPage: fresh.behavioursPerPage,
+                        actionPlanPriorities: fresh.actionPlanPriorities,
+                        showManagerComments: fresh.showManagerComments,
+                      })
+                      showToast({ message: 'Action plan block reset', variant: 'success' })
+                    }}
+                    onResetDevelopmentResults={() => {
+                      const fresh = createReport360Block('priorityComments')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                        dataSource: fresh.dataSource,
+                        actionPlanPriorities: fresh.actionPlanPriorities,
+                      })
+                      showToast({ message: 'Details of development results reset', variant: 'success' })
+                    }}
+                    onResetNominatedRaters={() => {
+                      const fresh = createReport360Block('nominatedRaters')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                      })
+                      showToast({ message: 'Nominated raters block reset', variant: 'success' })
+                    }}
+                    onResetSurveyRespondents={() => {
+                      const fresh = createReport360Block('surveyRespondents')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                        showTotalSent: fresh.showTotalSent,
+                        excludeZeroResponses: fresh.excludeZeroResponses,
+                      })
+                      showToast({ message: 'Survey respondents block reset', variant: 'success' })
+                    }}
+                    onResetPriorityAreas={() => {
+                      const fresh = createReport360Block('keyDevelopmentAreas')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                        dataSource: fresh.dataSource,
+                      })
+                      showToast({ message: 'Priority areas of development reset', variant: 'success' })
+                    }}
+                    onResetRankingByBehavior={() => {
+                      const fresh = createReport360Block('strengthGrowthIndicators')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                        dataSource: fresh.dataSource,
+                        conditionalTexts: fresh.conditionalTexts,
+                        conditionalElse: fresh.conditionalElse,
+                        useBlockWeights: fresh.useBlockWeights,
+                        relationshipWeights: fresh.relationshipWeights,
+                      })
+                      showToast({ message: 'Ranking by behavior block reset', variant: 'success' })
+                    }}
+                    onResetPresentation={() => {
+                      const fresh = createReport360Block('customContent')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                      })
+                      showToast({ message: 'Presentation text block reset', variant: 'success' })
+                    }}
+                    onResetPrioritySurvey={() => {
+                      const fresh = createReport360Block('competencyPriorityIndex')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                        dataSource: fresh.dataSource,
+                        priorityText: fresh.priorityText,
+                        useBlockWeights: fresh.useBlockWeights,
+                        relationshipWeights: fresh.relationshipWeights,
+                      })
+                      showToast({ message: 'Priority areas of development - survey reset', variant: 'success' })
+                    }}
+                    onResetAiSummary={() => {
+                      const fresh = createReport360Block('aiRecommendations')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        closingText: fresh.closingText,
+                        dataSource: fresh.dataSource,
+                        commentDisplayMode: fresh.commentDisplayMode,
+                        generateRecommendations: fresh.generateRecommendations,
+                        showSentimentBar: fresh.showSentimentBar,
+                      })
+                      showToast({ message: 'AI insights and recommendations reset', variant: 'success' })
+                    }}
+                    onResetSpider={() => {
+                      const fresh = createReport360Block('spiderChart')
+                      updateBlock(block.id, {
+                        title: fresh.defaultTitle,
+                        introduction: fresh.introduction,
+                        spiderCompetencyIds: fresh.spiderCompetencyIds,
+                        spiderQuestionIds: fresh.spiderQuestionIds,
+                        spiderRelationships: fresh.spiderRelationships,
+                        useBlockWeights: fresh.useBlockWeights,
+                        relationshipWeights: fresh.relationshipWeights,
+                      })
+                      showToast({ message: 'Spider chart block reset', variant: 'success' })
+                    }}
                   />
                 </div>
               ) : null}
             </section>
+            {isSetup ? (
+              <p className="px-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Blocks
+              </p>
+            ) : null}
+            </Fragment>
           )
         })}
-        {addableBlocks.length > 0 ? (
-          <div className="w-72">
-            <WuSelect
-              data={addableBlocks}
-              accessorKey={{ value: 'value', label: 'label' }}
-              value={null}
-              placeholder="Add a block"
-              onSelect={(option) => {
-                const type = (option as SelectOption | null)?.value
-                if (type) addBlock(type as Report360BlockType)
-              }}
-              variant="outlined"
-            />
-          </div>
-        ) : null}
+        <div className={cn('grid gap-3', isStarterReport && 'sm:grid-cols-2')}>
+          <button
+            type="button"
+            className="flex h-14 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white text-sm font-medium text-blue-700 hover:border-blue-300 hover:bg-blue-50"
+            onClick={() => {
+              setBlocksToAdd([])
+              setAddOpen(true)
+            }}
+          >
+            <span className="text-lg leading-none" aria-hidden>
+              +
+            </span>
+            Add a block
+          </button>
+          {isStarterReport ? (
+            <button
+              type="button"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#1B3A6B] bg-slate-50 text-sm font-medium text-[#1B3A6B] hover:bg-slate-100"
+              onClick={createWithTemplate}
+            >
+              Create default report
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <footer className="sticky bottom-0 flex flex-wrap items-center justify-end gap-3 border-t border-gray-200 bg-white px-6 py-4">
@@ -2041,52 +3966,133 @@ export function ReportBuilder({
             {errors.length > 1 ? ` (+${errors.length - 1} more)` : ''}
           </p>
         ) : null}
-        {isEditing ? (
-          <WuButton variant="secondary" onClick={leaveTemplateEditor}>
-            Back to report
-          </WuButton>
-        ) : (
-          <WuButton variant="secondary" onClick={handleReset}>
-            Reset
-          </WuButton>
-        )}
+        <WuButton variant="secondary" onClick={handleReset}>
+          Reset
+        </WuButton>
         <WuButton onClick={handleSave} disabled={errors.length > 0}>
-          {isEditing ? 'Save template' : 'Save changes'}
+          Save changes
         </WuButton>
       </footer>
 
-      <WuModal open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen} size="md" {...preventModalDismiss}>
-        <WuModalHeader>Save as template</WuModalHeader>
+      <WuModal
+        open={addOpen}
+        onOpenChange={(open) => {
+          setAddOpen(open)
+          if (!open) setBlocksToAdd([])
+        }}
+        variant="action"
+        size="lg"
+        {...preventModalDismiss}
+      >
+        <WuModalHeader>Add a block</WuModalHeader>
         <WuModalContent>
-          <WuFormGroup
-            Label="Template name"
-            Error={templateNameError || undefined}
-            Input={
-              <WuInput
-                variant="outlined"
-                value={templateName}
-                invalid={Boolean(templateNameError)}
-                placeholder="e.g. Leadership debrief"
-                onChange={(event) => {
-                  setTemplateName(event.target.value)
-                  if (templateNameError) setTemplateNameError('')
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') handleSaveAsTemplate()
-                }}
+          <p className="mb-4 text-sm font-semibold text-gray-900">Select blocks</p>
+          <div className="grid max-h-[420px] grid-cols-1 gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
+            {addableBlockTypes.map((type) => (
+              <BlockCatalogCard
+                key={type}
+                type={type}
+                selected={blocksToAdd.includes(type)}
+                onToggle={toggleBlockToAdd}
               />
-            }
-          />
+            ))}
+          </div>
         </WuModalContent>
         <WuModalFooter>
-          <WuButton variant="secondary" onClick={() => setSaveTemplateOpen(false)}>
+          <WuButton
+            variant="secondary"
+            onClick={() => {
+              setBlocksToAdd([])
+              setAddOpen(false)
+            }}
+          >
             Cancel
           </WuButton>
-          <WuButton variant="primary" onClick={handleSaveAsTemplate}>
-            Save
+          <WuButton variant="primary" disabled={blocksToAdd.length === 0} onClick={addSelectedBlocks}>
+            {blocksToAdd.length > 1 ? `Add ${blocksToAdd.length} blocks` : 'Add'}
           </WuButton>
         </WuModalFooter>
       </WuModal>
+
+      <WuModal
+        open={useExistingOpen}
+        onOpenChange={setUseExistingOpen}
+        variant="action"
+        size="sm"
+        {...preventModalDismiss}
+      >
+        <WuModalHeader>
+          <span className="inline-flex items-center gap-2">
+            Use Existing Report
+            <WuTooltip
+              content="Every 360 survey has one report format. This copies that format onto the report you are editing."
+              position="top"
+              showArrow
+            >
+              <span
+                className="inline-flex size-5 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white"
+                aria-label="Every 360 survey has one report format"
+              >
+                ?
+              </span>
+            </WuTooltip>
+          </span>
+        </WuModalHeader>
+        <WuModalContent>
+          <div className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-3">
+            <p className="text-left text-sm text-gray-800">Folder</p>
+            <div className="min-w-0 [&_button]:w-full">
+              <WuSelect
+                data={workforceOptions}
+                accessorKey={{ value: 'value', label: 'label' }}
+                value={workforceOptions.find((option) => option.value === sourceFolderId) ?? workforceOptions[0]}
+                onSelect={(option) => {
+                  const folderId = (option as SelectOption | null)?.value
+                  if (folderId) selectWorkforce(folderId)
+                }}
+                variant="outlined"
+              />
+            </div>
+            <p className="text-left text-sm text-gray-800">Survey</p>
+            <div className="min-w-0 [&_button]:w-full">
+              <WuSelect
+                data={surveyOptions}
+                accessorKey={{ value: 'value', label: 'label' }}
+                value={surveyOptions.find((option) => option.value === sourceSurveyId) ?? null}
+                onSelect={(option) => {
+                  const nextId = (option as SelectOption | null)?.value ?? ''
+                  if (nextId) setSourceSurveyId(nextId)
+                }}
+                variant="outlined"
+                placeholder="Select a survey"
+                disabled={surveysInWorkforce.length === 0}
+              />
+            </div>
+          </div>
+          <p className="mt-6 border border-[#f1e3a1] bg-[#fff6cc] px-3 py-2.5 text-sm leading-5 text-gray-800">
+            This will copy all report settings associated with the survey.
+          </p>
+        </WuModalContent>
+        <WuModalFooter>
+          <WuButton variant="secondary" onClick={() => setUseExistingOpen(false)}>
+            Cancel
+          </WuButton>
+          <WuButton variant="primary" disabled={!sourceSurveyId} onClick={confirmUseExisting}>
+            Submit
+          </WuButton>
+        </WuModalFooter>
+      </WuModal>
+      </div>
+      {previewing ? (
+        <aside className="sticky top-0 flex h-[calc(100dvh-11rem)] w-[30%] min-w-[240px] max-w-[420px] shrink-0 flex-col border-l border-gray-200 bg-gray-100">
+          <ReportPreview
+            survey={survey}
+            template={activeTemplate}
+            onBack={() => setPreviewing(false)}
+            onGoToDistribute={onGoToDistribute}
+          />
+        </aside>
+      ) : null}
     </div>
   )
 }

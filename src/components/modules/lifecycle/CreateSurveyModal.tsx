@@ -190,10 +190,10 @@ function getSurveyTypeOption(type: SurveyTemplate['surveyType']) {
 
 function StepBreadcrumb({ currentStep, totalSteps }: { currentStep: number; totalSteps: 2 | 3 }) {
   const stepItems = [
-    { step: 1, label: 'Choose Template', iconClassName: 'wc-templates' },
-    { step: 2, label: 'Name Survey', iconClassName: 'wc-settings' },
+    { step: 1, label: 'Choose template', iconClassName: 'wc-templates' },
+    { step: 2, label: 'Name survey', iconClassName: 'wc-settings' },
     ...(totalSteps === 3
-      ? [{ step: 3, label: 'Select Content', iconClassName: 'wc-categories' }]
+      ? [{ step: 3, label: 'Select content', iconClassName: 'wc-categories' }]
       : []),
   ]
 
@@ -416,13 +416,13 @@ export function CreateSurveyModal({ open, onOpenChange, onCreateSurvey }: Create
   return (
     <>
       <WuModal open={open} onOpenChange={handleOpenChange} size="lg" maxHeight="90vh" {...preventModalDismiss}>
-        <WuModalHeader>Create New Employee Experience Study</WuModalHeader>
+        <WuModalHeader>Create new Employee Experience study</WuModalHeader>
         <WuModalContent>
           <div className="flex flex-col gap-6 p-1">
             {step === 1 ? (
               <div className="flex max-h-[calc(90vh-12rem)] flex-col gap-4 overflow-y-auto pr-1">
                 <div className="sticky top-0 z-10 bg-white pb-4">
-                  <WuHeading size="sm">Choose Template</WuHeading>
+                  <WuHeading size="sm">Choose template</WuHeading>
                   <WuText size="sm" as="p" className="mt-1 text-gray-500">
                     Select one of our templates or start from scratch to create your study
                   </WuText>
@@ -552,14 +552,14 @@ export function CreateSurveyModal({ open, onOpenChange, onCreateSurvey }: Create
               </div>
             ) : step === 2 ? (
               <div className="flex flex-col gap-4">
-                <WuHeading size="sm">Name Your Survey</WuHeading>
+                <WuHeading size="sm">Name your survey</WuHeading>
                 <WuFormGroup
                   Label="Survey name"
                   Error={nameError || undefined}
                   Input={
                     <WuInput
                       variant="outlined"
-                      placeholder="e.g. New Hire Check-in"
+                      placeholder="e.g. new hire check-in"
                       value={surveyName}
                       invalid={Boolean(nameError)}
                       onChange={(event) => {

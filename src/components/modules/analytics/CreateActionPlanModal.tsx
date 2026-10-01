@@ -392,7 +392,7 @@ export function CreateActionPlanModal({
       maxWidth={newGuidedStep ? '720px' : undefined}
       {...preventModalDismiss}
     >
-      <WuModalHeader>Create Action Plan</WuModalHeader>
+      <WuModalHeader>Create action plan</WuModalHeader>
       <WuModalContent>
         {createdId && successKind ? (
           <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">

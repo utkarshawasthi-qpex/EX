@@ -70,7 +70,7 @@ const WuTextarea = dynamic(
 type StatusOption = { value: string; label: string };
 
 const STATUS_FILTER_OPTIONS: StatusOption[] = [
-  { value: 'all', label: 'All Statuses' },
+  { value: 'all', label: 'All statuses' },
   { value: 'active', label: 'Active' },
   { value: 'draft', label: 'Draft' },
   { value: 'archived', label: 'Archived' },
@@ -266,7 +266,7 @@ export function ProjectsListPage({
       />
 
       <WuModal open={isCreateOpen} onOpenChange={setIsCreateOpen} size="md">
-        <WuModalHeader>New Project</WuModalHeader>
+        <WuModalHeader>New project</WuModalHeader>
         <WuModalContent>
           <div className="flex flex-col gap-4">
             <WuInput

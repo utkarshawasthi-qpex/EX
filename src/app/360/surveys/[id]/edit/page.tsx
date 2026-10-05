@@ -59,8 +59,6 @@ export default function Survey360EditPage() {
   const [editSubTab, setEditSubTab] = useState<SurveyBuilderWorkspaceTab>('workspace')
   const [distributeSection, setDistributeSection] = useState<DistributeSection>('deployments')
   const [analyticsSection, setAnalyticsSection] = useState<AnalyticsSection>('data')
-  const [openReportPreview, setOpenReportPreview] = useState(false)
-
   useEffect(() => {
     if (typeof window === 'undefined') return
     const search = new URLSearchParams(window.location.search)
@@ -72,7 +70,6 @@ export default function Survey360EditPage() {
       setMainTab('analytics')
       setAnalyticsSection('individualReports')
     }
-    if (search.get('view') === 'preview') setOpenReportPreview(true)
     const loaded = getSurvey360ById(surveyId)
     setSurvey(loaded ?? null)
     setLoading(false)
@@ -147,7 +144,11 @@ export default function Survey360EditPage() {
         }}
       />
 
-      <main className="min-h-0 flex-1 overflow-auto">
+      <main
+        className={`min-h-0 flex-1 ${
+          mainTab === 'analytics' && analyticsSection === 'individualReports' ? 'overflow-hidden' : 'overflow-auto'
+        }`}
+      >
         {mainTab === 'edit' && editSubTab === 'workspace' && (
           <WorkspacePanel survey={survey} onChange={handleChange} />
         )}
@@ -169,11 +170,14 @@ export default function Survey360EditPage() {
         {mainTab === 'analytics' && analyticsSection === 'data' && survey ? (
           <SurveyDataPanel survey={survey} />
         ) : null}
-        <div className={mainTab === 'analytics' && analyticsSection === 'individualReports' ? undefined : 'hidden'}>
+        <div
+          className={
+            mainTab === 'analytics' && analyticsSection === 'individualReports' ? 'h-full min-h-0' : 'hidden'
+          }
+        >
           <ReportBuilder
             key={survey.id}
             survey={survey}
-            startInPreview={openReportPreview}
             onGoToDistribute={() => {
               setMainTab('distribute')
               setDistributeSection('deployments')

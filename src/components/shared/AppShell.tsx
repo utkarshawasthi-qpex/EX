@@ -73,7 +73,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return (
       <>
         <WuToast />
-        <div className="flex min-h-screen flex-col bg-white">
+        <div className="flex h-screen flex-col overflow-hidden bg-white">
           <ExAppHeader />
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>
         </div>

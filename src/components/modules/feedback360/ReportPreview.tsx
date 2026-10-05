@@ -28,12 +28,10 @@ function deploymentLabel(date: string) {
 export function ReportPreview({
   survey,
   template,
-  onBack,
   onGoToDistribute,
 }: {
   survey: Survey360
   template: Report360Template
-  onBack: () => void
   onGoToDistribute: () => void
 }) {
   const subjects = useMemo(() => getReport360Subjects(survey.id), [survey.id])
@@ -84,12 +82,7 @@ export function ReportPreview({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b border-gray-200 bg-white px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-gray-900">Preview</h2>
-          <WuButton variant="secondary" size="sm" onClick={onBack}>
-            Close
-          </WuButton>
-        </div>
+        <h2 className="text-sm font-semibold text-gray-900">Preview</h2>
         <button
           type="button"
           className="mt-2 flex w-full min-w-0 items-center gap-2 text-left text-xs text-gray-600"
@@ -183,7 +176,7 @@ export function ReportPreview({
       ) : !selected ? (
         <p className="p-4 text-sm text-gray-500">No subjects in this deployment.</p>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
           <div style={{ zoom: 0.52 }}>
             <ReportPageStack
               survey={survey}

@@ -498,78 +498,6 @@ function RelationshipIconPills({
   )
 }
 
-function MasterDesignPreview({ design }: { design: Report360MasterDesign }) {
-  return (
-    <div
-      className="overflow-hidden rounded-lg border bg-white shadow-sm"
-      style={{ borderColor: design.tableBorderColor, fontFamily: design.fontFamily, color: design.fontColor }}
-    >
-      <div
-        className="flex items-center justify-between border-b px-4 py-2 text-[11px] text-gray-500"
-        style={{ borderColor: design.tableBorderColor }}
-      >
-        <span className="flex items-center gap-2">
-          {design.showLogo ? <LogoThumb logo={design.leftHeaderLogo} /> : null}
-          <span>{design.headerText || 'Left header text'}</span>
-        </span>
-        {design.showLogo ? <LogoThumb logo={design.rightHeaderLogo} /> : null}
-      </div>
-      <div className="px-4 py-3">
-        <p className="mb-2 text-sm font-semibold" style={{ color: design.themeColor }}>
-          All items
-        </p>
-        <table className="w-full text-left text-[11px]" style={{ borderColor: design.tableBorderColor }}>
-          <thead>
-            <tr className="border-b" style={{ color: design.tableHeadingTextColor, borderColor: design.tableBorderColor }}>
-              <th className="py-1.5 pr-2 font-medium">Behavior</th>
-              {RELATIONSHIPS.slice(0, 4).map((key) => (
-                <th key={key} className="py-1.5 font-medium">
-                  <span
-                    className="mr-1 inline-flex size-3.5 items-center justify-center rounded-full text-[8px] font-semibold text-white"
-                    style={{ background: design.relationshipIcons[key]?.color }}
-                  >
-                    {design.relationshipIcons[key]?.letter}
-                  </span>
-                  {REPORT360_RELATIONSHIP_LABELS[key]}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {['Sets a clear direction for the team.', 'Pays focused attention when speaking.'].map(
-              (text, index) => (
-                <tr
-                  key={text}
-                  className="border-b"
-                  style={{
-                    background: index % 2 === 0 ? design.tableBackground1 : design.tableBackground2,
-                    borderColor: design.tableBorderColor,
-                  }}
-                >
-                  <td className="py-1.5 pr-2">{text}</td>
-                  <td className="py-1.5">4.2</td>
-                  <td className="py-1.5">4.6</td>
-                  <td className="py-1.5">4.1</td>
-                  <td className="py-1.5">3.9</td>
-                </tr>
-              ),
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex items-center justify-between border-t border-gray-200 px-4 py-2 text-[11px] text-gray-400">
-        <span>
-          {design.footerText || 'Footer text'}
-          {design.pageNumbering ? ' · Page 1' : ''}
-        </span>
-        <span className="text-[10px] font-semibold tracking-tight text-[#1B3A6B]">
-          question<span className="text-[#1B87E6]">pro</span>
-        </span>
-      </div>
-    </div>
-  )
-}
-
 function MasterDesignFields({
   design,
   onChange,
@@ -590,8 +518,6 @@ function MasterDesignFields({
 
   return (
     <div className="space-y-8">
-      <MasterDesignPreview design={design} />
-
       <section>
         <SectionHeading>Header &amp; page</SectionHeading>
         <div className={SETTINGS_GRID}>
@@ -3390,19 +3316,20 @@ function BlockCatalogCard({
   )
 }
 
+const PREVIEW_MIN_WIDTH = 240
+const PREVIEW_MAX_WIDTH = 420
+
 export function ReportBuilder({
   survey,
   onGoToDistribute,
-  startInPreview = false,
 }: {
   survey: Survey360
   onGoToDistribute: () => void
-  startInPreview?: boolean
 }) {
   const { showToast } = useWuShowToast()
-  const [previewing, setPreviewing] = useState(startInPreview)
+  const [previewWidth, setPreviewWidth] = useState(PREVIEW_MAX_WIDTH)
   const { template, setTemplate, save, reset } = useReport360Template(survey.id)
-  const [expandedId, setExpandedId] = useState('')
+  const [expandedIds, setExpandedIds] = useState<string[]>([])
   const [dragId, setDragId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [blocksToAdd, setBlocksToAdd] = useState<Report360BlockType[]>([])
@@ -3478,7 +3405,7 @@ export function ReportBuilder({
     const next = reset()
     setTemplate(next)
     setCopiedFromTitle(null)
-    setExpandedId('')
+    setExpandedIds([])
     showToast({ message: 'Report reset', variant: 'success' })
   }
 
@@ -3567,7 +3494,7 @@ export function ReportBuilder({
       createReport360Block(type, `block_${type}_${stamp}_${index}`),
     )
     commit({ ...activeTemplate, blocks: [...activeTemplate.blocks, ...created] })
-    setExpandedId(created[created.length - 1]?.id ?? '')
+    setExpandedIds((current) => [...current, ...created.map((block) => block.id)])
     setBlocksToAdd([])
     setAddOpen(false)
     showToast({
@@ -3580,7 +3507,7 @@ export function ReportBuilder({
     const block = activeTemplate.blocks.find((item) => item.id === blockId)
     if (!block || REPORT360_CONSTANT_BLOCK_TYPES.includes(block.type)) return
     commit({ ...activeTemplate, blocks: activeTemplate.blocks.filter((item) => item.id !== blockId) })
-    if (expandedId === blockId) setExpandedId('')
+    setExpandedIds((current) => current.filter((id) => id !== blockId))
   }
 
   const enabledCount = activeTemplate.blocks.filter((block) => block.enabled && !block.locked).length
@@ -3590,17 +3517,44 @@ export function ReportBuilder({
       activeTemplate.blocks.some((block) => block.type === type),
     )
 
+  function startPreviewResize(event: React.PointerEvent<HTMLDivElement>) {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = previewWidth
+    const previousCursor = document.body.style.cursor
+    const previousUserSelect = document.body.style.userSelect
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    function move(next: PointerEvent) {
+      const width = Math.min(
+        PREVIEW_MAX_WIDTH,
+        Math.max(PREVIEW_MIN_WIDTH, startWidth + (startX - next.clientX)),
+      )
+      setPreviewWidth(width)
+    }
+
+    function up() {
+      document.body.style.cursor = previousCursor
+      document.body.style.userSelect = previousUserSelect
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
   function createWithTemplate() {
     const created = createDefaultReportBlocks(survey.sections)
     commit({ ...activeTemplate, blocks: [...activeTemplate.blocks, ...created] })
-    setExpandedId('')
     showToast({ message: 'Default report added', variant: 'success' })
   }
 
   return (
-    <div className={cn('flex min-h-full', previewing && 'h-full min-h-0')}>
-      <div className={cn('flex min-w-0 flex-1 flex-col', previewing && 'builder-pane overflow-y-auto')}>
-      <header className={cn('sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 bg-gray-50 pt-5 pb-4', previewing ? 'px-4' : 'px-6')}>
+    <div className="flex h-full min-h-0 overflow-hidden">
+      <div className="builder-pane flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-gray-200 bg-gray-50 px-4 pt-5 pb-4">
         <div>
           <p className="text-xs text-gray-500">{survey.title}</p>
           <h1 className="text-2xl font-semibold text-gray-900">Report builder</h1>
@@ -3614,15 +3568,12 @@ export function ReportBuilder({
           <WuButton variant="secondary" onClick={openUseExisting}>
             Use an existing report
           </WuButton>
-          <WuButton variant="primary" onClick={() => setPreviewing(true)}>
-            Preview
-          </WuButton>
         </div>
       </header>
 
-      <div className={cn('flex min-w-0 flex-1 flex-col gap-3 py-6', previewing ? 'px-4' : 'px-6')}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-4 py-6">
         {activeTemplate.blocks.map((block, blockIndex) => {
-          const expanded = expandedId === block.id
+          const expanded = expandedIds.includes(block.id)
           const isSetup = block.type === 'masterDesign'
           const blockNumber = activeTemplate.blocks
             .slice(0, blockIndex + 1)
@@ -3667,7 +3618,13 @@ export function ReportBuilder({
                 <button
                   type="button"
                   className="min-w-0 flex-1 overflow-hidden text-left"
-                  onClick={() => setExpandedId(expanded ? '' : block.id)}
+                  onClick={() =>
+                    setExpandedIds((current) =>
+                      current.includes(block.id)
+                        ? current.filter((id) => id !== block.id)
+                        : [...current, block.id],
+                    )
+                  }
                 >
                   <span className="font-medium text-gray-900">{block.title}</span>
                   {block.title !== block.defaultTitle ? (
@@ -3959,7 +3916,7 @@ export function ReportBuilder({
         </div>
       </div>
 
-      <footer className="sticky bottom-0 flex flex-wrap items-center justify-end gap-3 border-t border-gray-200 bg-white px-6 py-4">
+      <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-gray-200 bg-white px-6 py-4">
         {errors.length > 0 ? (
           <p className="mr-auto text-sm text-red-600">
             {errors[0]}
@@ -4083,16 +4040,26 @@ export function ReportBuilder({
         </WuModalFooter>
       </WuModal>
       </div>
-      {previewing ? (
-        <aside className="sticky top-0 flex h-[calc(100dvh-11rem)] w-[30%] min-w-[240px] max-w-[420px] shrink-0 flex-col border-l border-gray-200 bg-gray-100">
+      <aside
+          className="relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l border-gray-200 bg-gray-100"
+          style={{ width: previewWidth }}
+        >
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize preview"
+            aria-valuemin={PREVIEW_MIN_WIDTH}
+            aria-valuemax={PREVIEW_MAX_WIDTH}
+            aria-valuenow={Math.round(previewWidth)}
+            className="absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize touch-none hover:bg-blue-400/50"
+            onPointerDown={startPreviewResize}
+          />
           <ReportPreview
             survey={survey}
             template={activeTemplate}
-            onBack={() => setPreviewing(false)}
             onGoToDistribute={onGoToDistribute}
           />
         </aside>
-      ) : null}
     </div>
   )
 }

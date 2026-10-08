@@ -6,15 +6,14 @@ import type { CollectorForm } from '@/data/mock-collector-forms'
 import {
   RESPONSE_RATE_SEGMENTS,
   fieldsForSet,
-  headcountTemplateCsv,
   mergeHeadcountRows,
-  parseHeadcountCsv,
   segmentOptions,
   segmentTitle,
   type CollectorHeadcount,
   type HeadcountSegmentSet,
 } from '@/data/mock-headcount'
 import { formatRelativeDate } from '@/data/mock-utils'
+import { headcountWorkbookBlob, parseHeadcountWorkbook } from '@/lib/headcountWorkbook'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { cn } from '@/lib/utils'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
@@ -178,26 +177,30 @@ export function CollectorHeadcountModal({ form, open, onOpenChange, onSave }: Co
 
   function downloadTemplate() {
     const assessed = assessSets(sets)
-    if (assessed.state !== 'ready') return
+    if (assessed.state !== 'ready' || !form) return
     const defined = assessed.sets
-    const sameShape = form?.headcount && sameSets(form.headcount.sets, defined)
-    const csv = headcountTemplateCsv(defined, sameShape ? form?.headcount?.rows ?? null : null)
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `expected-responses-${(form?.name ?? 'collector').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.csv`
-    link.click()
-    URL.revokeObjectURL(url)
+    const sameShape = form.headcount && sameSets(form.headcount.sets, defined)
+    const slug = (form.name || 'collector').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    void headcountWorkbookBlob(defined, sameShape ? form.headcount?.rows ?? null : null).then((blob) => {
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `Headcount_${slug || 'collector'}.xlsx`
+      link.click()
+      URL.revokeObjectURL(url)
+    })
   }
 
   function stageFile(file: File | undefined) {
     if (!file) return
     const assessed = assessSets(sets)
     if (assessed.state !== 'ready') return
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      showToast({ message: 'Upload the Excel template (.xlsx)', variant: 'error' })
+      return
+    }
     setStagedFile(file)
-    void file.text().then((text) => {
-      const result = parseHeadcountCsv(text, assessed.sets)
+    void file.arrayBuffer().then((data) => parseHeadcountWorkbook(data, assessed.sets)).then((result) => {
       if (!result.ok) {
         setAcceptedRows(null)
         setErrors(result.errors)
@@ -328,7 +331,7 @@ export function CollectorHeadcountModal({ form, open, onOpenChange, onSave }: Co
                     <h3 className="text-sm font-medium text-gray-900">Upload expected responses</h3>
                     <p className="mt-1 text-sm text-gray-500">
                       {templateReady
-                        ? 'Upload the completed template.'
+                        ? 'Upload the Excel file. Do not rename the Set tabs.'
                         : 'Available after a segment set is configured.'}
                     </p>
                   </div>
@@ -373,7 +376,7 @@ export function CollectorHeadcountModal({ form, open, onOpenChange, onSave }: Co
                   <input
                     ref={fileRef}
                     type="file"
-                    accept=".csv,text/csv"
+                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     className="hidden"
                     onChange={(event) => {
                       stageFile(event.target.files?.[0])
@@ -384,7 +387,8 @@ export function CollectorHeadcountModal({ form, open, onOpenChange, onSave }: Co
                     <ul className="space-y-1 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
                       {errors.map((error) => (
                         <li key={`${error.row}-${error.message}`}>
-                          Row {error.row}: {error.message}
+                          {error.row > 0 ? `Row ${error.row}: ` : ''}
+                          {error.message}
                         </li>
                       ))}
                     </ul>

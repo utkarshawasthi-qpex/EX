@@ -66,7 +66,8 @@ export const RESPONSE_RATE_VIEWERS = [
 
 export type ResponseRateViewerId = (typeof RESPONSE_RATE_VIEWERS)[number]['id']
 
-const COUNT_HEADER = 'Expected responses'
+const COUNT_HEADER = 'Expected headcount'
+const INSTRUCTIONS_SHEET = 'Instructions'
 const EMAIL_HEADER = 'Manager email'
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const WORKPLACE_SET_ID = 'set_workplace'
@@ -198,104 +199,123 @@ export function buildHeadcountTree(
   return buildNestedLevel(rows, fields, 0, channel, anonymityThreshold, 'root')
 }
 
-export function headcountTemplateCsv(sets: HeadcountSegmentSet[], existing: HeadcountRow[] | null): string {
-  const blocks = sets.flatMap((set, index) => {
+export type HeadcountSheet = {
+  name: string
+  lines: { cells: string[]; rowNumber: number }[]
+}
+
+export function headcountTemplateSheets(sets: HeadcountSegmentSet[], existing: HeadcountRow[] | null): HeadcountSheet[] {
+  const instructions: HeadcountSheet = {
+    name: INSTRUCTIONS_SHEET,
+    lines: [
+      'Expected headcount template',
+      '',
+      'Each set has its own tab, named Set 1, Set 2, and so on.',
+      'Do not rename these tabs. Renaming a tab blocks the upload.',
+      'This Instructions tab is read-only.',
+      'Fill Expected headcount and Manager email on each set tab.',
+      'Leave Expected headcount blank to skip a row. Enter 0 when the count is zero.',
+      'Do not change the segment columns.',
+    ].map((line, index) => ({ cells: [line], rowNumber: index + 1 })),
+  }
+  const setSheets = sets.map((set, index) => {
     const fields = fieldsForSet(set)
-    if (fields.length === 0) return []
     const headers = [...fields.map((field) => field.title), COUNT_HEADER, EMAIL_HEADER]
-    const lines = [`Set ${index + 1}`, headers.map(escapeCsv).join(',')]
-    for (const combo of combinations(fields)) {
+    const lines = [{ cells: headers, rowNumber: 1 }]
+    combinations(fields).forEach((combo, comboIndex) => {
       const match = existing?.find(
         (item) => item.setId === set.id && fields.every((field) => item.values[field.key] === combo[field.key]),
       )
-      lines.push(
-        [...fields.map((field) => combo[field.key] ?? ''), String(match?.expectedHeadcount ?? 0), match?.managerEmail ?? '']
-          .map(escapeCsv)
-          .join(','),
-      )
-    }
-    return [lines.join('\n')]
+      lines.push({
+        cells: [
+          ...fields.map((field) => combo[field.key] ?? ''),
+          match ? String(match.expectedHeadcount) : '',
+          match?.managerEmail ?? '',
+        ],
+        rowNumber: comboIndex + 2,
+      })
+    })
+    return { name: `Set ${index + 1}`, lines }
   })
-  return `${blocks.join('\n\n')}\n`
+  return [instructions, ...setSheets]
 }
 
-export function parseHeadcountCsv(
-  text: string,
+export function parseHeadcountSheets(
+  sheets: HeadcountSheet[],
   sets: HeadcountSegmentSet[],
 ): { ok: true; rows: HeadcountRow[] } | { ok: false; errors: HeadcountCsvError[] } {
-  const table = parseCsv(text.replace(/^\uFEFF/, ''))
   const errors: HeadcountCsvError[] = []
-  const sections: { index: number; lines: { cells: string[]; rowNumber: number }[] }[] = []
-  let current: (typeof sections)[number] | null = null
-  let rowNumber = 0
-  for (const cells of table) {
-    rowNumber += 1
-    if (cells.every((cell) => cell.trim() === '')) continue
-    const title = cells[0]?.trim() ?? ''
-    if (/^set\s+\d+$/i.test(title) && cells.slice(1).every((cell) => cell.trim() === '')) {
-      current = { index: Number.parseInt(title.replace(/\D/g, ''), 10), lines: [] }
-      sections.push(current)
-      continue
+  const names = sheets.map((sheet) => sheet.name)
+  const expectedNames = sets.map((_, index) => `Set ${index + 1}`)
+  const allowed = new Set([INSTRUCTIONS_SHEET, ...expectedNames])
+  for (const name of names) {
+    if (!allowed.has(name)) {
+      errors.push({
+        row: 0,
+        message: `Tab "${name}" cannot be renamed. Set tabs must be named ${expectedNames.join(', ')}.`,
+      })
     }
-    if (!current) {
-      errors.push({ row: rowNumber, message: 'Start each block with a line like Set 1.' })
-      continue
-    }
-    current.lines.push({ cells, rowNumber })
   }
-
-  if (sections.length !== sets.length) {
-    errors.push({ row: 1, message: `The file needs ${sets.length} set${sets.length === 1 ? '' : 's'}, matching the template.` })
+  for (const name of expectedNames) {
+    if (!names.includes(name)) {
+      errors.push({ row: 0, message: `Tab "${name}" is missing. Do not rename the set tabs.` })
+    }
   }
 
   const rows: HeadcountRow[] = []
-  sections.forEach((section) => {
-    const set = sets[section.index - 1]
-    if (!set) {
-      errors.push({ row: section.lines[0]?.rowNumber ?? 1, message: `Set ${section.index} is not in this template.` })
-      return
-    }
+  expectedNames.forEach((name, index) => {
+    const sheet = sheets.find((item) => item.name === name)
+    const set = sets[index]
+    if (!sheet || !set) return
     const fields = fieldsForSet(set)
     const expectedHeaders = [...fields.map((field) => field.title), COUNT_HEADER, EMAIL_HEADER]
-    const headerLine = section.lines[0]
+    const headerLine = sheet.lines.find((line) => line.rowNumber === 1) ?? sheet.lines[0]
     if (!headerLine || !sameHeaders(headerLine.cells.map((cell) => cell.trim().toLowerCase()), expectedHeaders)) {
       errors.push({
         row: headerLine?.rowNumber ?? 1,
-        message: `Set ${section.index} columns should be ${expectedHeaders.join(', ')}.`,
+        message: `${name} columns should be ${expectedHeaders.join(', ')}.`,
       })
       return
     }
     const seen = new Set<string>()
-    section.lines.slice(1).forEach(({ cells, rowNumber: lineNumber }) => {
-      const countRaw = cells[fields.length]?.trim() ?? ''
-      const managerEmail = cells[fields.length + 1]?.trim() ?? ''
-      if (isUntouchedRow(countRaw, managerEmail)) return
-      const values: Record<string, string> = {}
-      fields.forEach((field, fieldIndex) => {
-        const value = cells[fieldIndex]?.trim() ?? ''
-        if (!field.options.includes(value)) {
-          errors.push({ row: lineNumber, message: `${field.title} "${value || 'blank'}" is not one of the selected values.` })
+    sheet.lines
+      .filter((line) => line.rowNumber !== headerLine.rowNumber)
+      .forEach(({ cells, rowNumber }) => {
+        const countRaw = cells[fields.length]?.trim() ?? ''
+        const managerEmail = cells[fields.length + 1]?.trim() ?? ''
+        if (countRaw === '' && managerEmail === '') return
+        if (countRaw === '') {
+          errors.push({ row: rowNumber, message: `${name}: Expected headcount is blank. Leave the whole row blank to skip it, or enter 0.` })
+          return
         }
-        values[field.key] = value
+        const values: Record<string, string> = {}
+        fields.forEach((field, fieldIndex) => {
+          const value = cells[fieldIndex]?.trim() ?? ''
+          if (!field.options.includes(value)) {
+            errors.push({ row: rowNumber, message: `${name}: ${field.title} "${value || 'blank'}" is not one of the selected values.` })
+          }
+          values[field.key] = value
+        })
+        pushCountAndEmailErrors(errors, rowNumber, countRaw, managerEmail, name)
+        const key = fields.map((field) => values[field.key] ?? '').join('\u0000')
+        if (seen.has(key)) errors.push({ row: rowNumber, message: `${name}: This combination is already in the set.` })
+        seen.add(key)
+        if (errors.some((error) => error.row === rowNumber && error.message.startsWith(`${name}:`))) return
+        rows.push({
+          setId: set.id,
+          values,
+          expectedHeadcount: Number.parseInt(countRaw, 10),
+          managerEmail,
+          qrResponses: 0,
+          emailExpected: 0,
+          emailResponses: 0,
+        })
       })
-      pushCountAndEmailErrors(errors, lineNumber, countRaw, managerEmail)
-      const key = fields.map((field) => values[field.key] ?? '').join('\u0000')
-      if (seen.has(key)) errors.push({ row: lineNumber, message: 'This combination is already in the set.' })
-      seen.add(key)
-      if (errors.some((error) => error.row === lineNumber)) return
-      rows.push({
-        setId: set.id,
-        values,
-        expectedHeadcount: Number.parseInt(countRaw, 10),
-        managerEmail,
-        qrResponses: 0,
-        emailExpected: 0,
-        emailResponses: 0,
-      })
-    })
   })
 
-  if (rows.length === 0 && errors.length === 0) errors.push({ row: 2, message: 'Add at least one segment.' })
+  if (rows.length === 0 && errors.length === 0) {
+    errors.push({ row: 0, message: 'Enter at least one expected headcount. Blank rows are skipped.' })
+  }
   if (errors.length > 0) return { ok: false, errors }
   return { ok: true, rows }
 }
@@ -411,13 +431,19 @@ function sameHeaders(actual: string[], expected: string[]): boolean {
   )
 }
 
-function isUntouchedRow(countRaw: string, managerEmail: string): boolean {
-  return (countRaw === '' || countRaw === '0') && managerEmail === ''
-}
-
-function pushCountAndEmailErrors(errors: HeadcountCsvError[], rowNumber: number, countRaw: string, managerEmail: string) {
-  if (!/^\d+$/.test(countRaw)) errors.push({ row: rowNumber, message: 'Expected responses must be a whole number, 0 or higher.' })
-  if (!EMAIL_PATTERN.test(managerEmail)) errors.push({ row: rowNumber, message: 'Manager email must be a valid email address.' })
+function pushCountAndEmailErrors(
+  errors: HeadcountCsvError[],
+  rowNumber: number,
+  countRaw: string,
+  managerEmail: string,
+  sheetName: string,
+) {
+  if (!/^\d+$/.test(countRaw)) {
+    errors.push({ row: rowNumber, message: `${sheetName}: Expected headcount must be a whole number, 0 or higher.` })
+  }
+  if (!EMAIL_PATTERN.test(managerEmail)) {
+    errors.push({ row: rowNumber, message: `${sheetName}: Manager email must be a valid email address.` })
+  }
 }
 
 function groupBy<T>(items: T[], keyOf: (item: T) => string): Map<string, T[]> {
@@ -431,49 +457,3 @@ function groupBy<T>(items: T[], keyOf: (item: T) => string): Map<string, T[]> {
   return groups
 }
 
-function escapeCsv(value: string): string {
-  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`
-  return value
-}
-
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = []
-  let rowCells: string[] = []
-  let cell = ''
-  let quoted = false
-  const source = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index]
-    if (quoted) {
-      if (char === '"') {
-        if (source[index + 1] === '"') {
-          cell += '"'
-          index += 1
-        } else quoted = false
-      } else cell += char
-      continue
-    }
-    if (char === '"') {
-      quoted = true
-      continue
-    }
-    if (char === ',') {
-      rowCells.push(cell)
-      cell = ''
-      continue
-    }
-    if (char === '\n') {
-      rowCells.push(cell)
-      rows.push(rowCells)
-      rowCells = []
-      cell = ''
-      continue
-    }
-    cell += char
-  }
-  if (cell.length > 0 || rowCells.length > 0) {
-    rowCells.push(cell)
-    rows.push(rowCells)
-  }
-  return rows
-}

@@ -10,6 +10,7 @@ import {
   type SurveyBuilderWorkspaceTab,
 } from '@/components/modules/lifecycle/LifecycleSurveyBuilderChrome'
 import { LifecycleSurveyWorkspaceCanvas } from '@/components/modules/lifecycle/LifecycleSurveyWorkspaceCanvas'
+import { StudyDistributionPage } from '@/components/studies/StudyDistributionPage'
 import { getSurveyById } from '@/lib/mockDb'
 import { setSurveyBuilderCrumb } from '@/lib/surveyBuilderCrumb'
 import type { LifecycleSurvey } from '@/types'
@@ -48,7 +49,12 @@ export default function LifecycleSurveyEditPage() {
   const surveyId = params.id
 
   const [survey, setSurvey] = useState<LifecycleSurvey | null>(null)
-  const [mainTab, setMainTab] = useState<SurveyBuilderMainTab>('edit')
+  const requestedTab = searchParams.get('tab')
+  const [mainTab, setMainTab] = useState<SurveyBuilderMainTab>(
+    requestedTab === 'distribute' || requestedTab === 'analytics' || requestedTab === 'manageData'
+      ? requestedTab
+      : 'edit',
+  )
   const [workspaceTab, setWorkspaceTab] = useState<SurveyBuilderWorkspaceTab>('workspace')
 
   useEffect(() => {
@@ -92,9 +98,8 @@ export default function LifecycleSurveyEditPage() {
   }
 
   function handleMainTab(tab: SurveyBuilderMainTab) {
-    if (tab !== 'edit') {
+    if (tab !== 'edit' && tab !== 'distribute') {
       showToast({ variant: 'info', message: `${tab} (placeholder)` })
-      console.log('Survey builder tab:', tab)
     }
     setMainTab(tab)
   }
@@ -115,8 +120,15 @@ export default function LifecycleSurveyEditPage() {
         onAddSection={handleAddSection}
       />
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        {mainTab === 'edit' && workspaceTab === 'workspace' ? (
+      <div className="min-h-0 flex-1 overflow-auto bg-white">
+        {mainTab === 'distribute' ? (
+          <StudyDistributionPage
+            studyName={survey.title}
+            surveyId={survey.id}
+            embedded
+            initialSubTab={searchParams.get('section') === 'headcount' ? 'collectorForms' : 'send'}
+          />
+        ) : mainTab === 'edit' && workspaceTab === 'workspace' ? (
           <LifecycleSurveyWorkspaceCanvas survey={survey} onChange={setSurvey} />
         ) : (
           <div className="flex flex-col items-center justify-center px-6 py-24 text-center">

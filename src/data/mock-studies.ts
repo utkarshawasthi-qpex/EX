@@ -197,7 +197,10 @@ export function getStudyDistributeHref(study: Study): string {
       ? `/360/surveys/${study.surveyId}/edit?tab=distribute`
       : '/lifecycle';
   }
-  return `/lifecycle/distribution?study=${encodeURIComponent(study.name)}`;
+  if (study.surveyId) {
+    return `/lifecycle/surveys/${study.surveyId}/edit?tab=distribute&folder=${encodeURIComponent(study.folderId)}`;
+  }
+  return `/lifecycle/surveys/study_survey_${study.id}/edit?tab=distribute&title=${encodeURIComponent(study.name)}&folder=${encodeURIComponent(study.folderId)}`;
 }
 
 export function getStudyAnalyzeHref(study: Study): string {

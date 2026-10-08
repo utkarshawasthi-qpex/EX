@@ -8,7 +8,6 @@ const navItems = [
   { label: 'Surveys', href: '/lifecycle/surveys', icon: 'wm-format-list-bulleted' },
   { label: 'Rules', href: '/lifecycle/rules', icon: 'wm-account-tree' },
   { label: 'Roster', href: '/lifecycle/roster', icon: 'wm-groups' },
-  { label: 'Distribution', href: '/lifecycle/distribution', icon: 'wm-send' },
   { label: 'Employee portal', href: '/lifecycle/analytics/list', icon: 'wc-analytics' },
   { label: 'Settings', href: '/lifecycle/settings', icon: 'wc-settings' },
 ]

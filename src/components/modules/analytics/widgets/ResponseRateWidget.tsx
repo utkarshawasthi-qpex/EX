@@ -4,7 +4,10 @@ import dynamic from 'next/dynamic'
 import { Fragment, useMemo, useState } from 'react'
 import { WidgetCardShell } from '@/components/modules/analytics/widgets/WidgetCardShell'
 import { FilteredWidgetGuard } from '@/components/modules/analytics/widgets/FilteredWidgetGuard'
+import { DenominatorEmptyState, QrResponseRatePanel } from '@/components/modules/analytics/widgets/QrResponseRatePanel'
+import { headcountHasDenominator } from '@/data/mock-headcount'
 import { getFilteredResponseRate } from '@/lib/dashboardFilters'
+import { useSurveyDistribution } from '@/lib/distributionStore'
 import { getSurveyById } from '@/lib/mockDb'
 import { cn } from '@/lib/utils'
 import type { ActiveFilter, DashboardWidget } from '@/types'
@@ -197,8 +200,12 @@ export function ResponseRateWidget({
   const primaryCriteria = criteria[0]
   const criteriaLabel = primaryCriteria ? SEGMENT_LABELS[primaryCriteria.dimension] : ''
   const criteriaCatalog = primaryCriteria ? SEGMENT_VALUES[primaryCriteria.dimension] ?? [] : []
-  const surveyName =
-    (widget?.surveyId ? getSurveyById(widget.surveyId)?.title : undefined) ?? 'Survey'
+  const surveyId = typeof widget?.surveyId === 'string' ? widget.surveyId : ''
+  const distribution = useSurveyDistribution(surveyId)
+  const surveyRecord = surveyId ? getSurveyById(surveyId) : undefined
+  const surveyName = surveyRecord?.title ?? 'Survey'
+  const hasCollectorForms = surveyId.length > 0 && distribution.collectorForms.length > 0
+  const uploadedForms = distribution.collectorForms.filter((form) => headcountHasDenominator(form.headcount))
 
   const [companyOverall, setCompanyOverall] = useState(true)
   const [sortKey, setSortKey] = useState<SortKey>('label')
@@ -281,6 +288,34 @@ export function ResponseRateWidget({
     { key: 'pending', label: 'Pending' },
     { key: 'rate', label: 'Response rate' },
   ]
+
+  if (hasCollectorForms) {
+    return (
+      <WidgetCardShell
+        title={widget?.title?.trim() || 'Response rate'}
+        flushContent
+        onEdit={onEdit}
+        onDuplicate={onDuplicate}
+        onDelete={onDelete}
+      >
+        <FilteredWidgetGuard activeFilters={activeFilters}>
+          {uploadedForms.length > 0 ? (
+            <QrResponseRatePanel
+              sources={uploadedForms.flatMap((form) =>
+                form.headcount
+                  ? [{ id: form.id, name: form.name, responsesCollected: form.responsesCollected, headcount: form.headcount }]
+                  : [],
+              )}
+              anonymityThreshold={surveyRecord?.anonymityThreshold ?? 5}
+              surveyName={surveyName}
+            />
+          ) : (
+            <DenominatorEmptyState surveyId={surveyId} />
+          )}
+        </FilteredWidgetGuard>
+      </WidgetCardShell>
+    )
+  }
 
   return (
     <WidgetCardShell

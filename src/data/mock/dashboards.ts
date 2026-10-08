@@ -41,6 +41,7 @@ function widget(
   width: 'full' | 'half',
   order: number,
   config?: Record<string, unknown>,
+  surveyId = 'surv_annual_engagement_2025',
 ): DashboardWidget {
   return {
     id,
@@ -48,7 +49,7 @@ function widget(
     title,
     width,
     order,
-    surveyId: 'surv_annual_engagement_2025',
+    surveyId,
     ...(config ? { config } : {}),
   }
 }
@@ -68,7 +69,7 @@ export const mockDashboards: Dashboard[] = [
         order: 1,
         widgets: [
           widget('wid_new_scorecard', 'scorecard', 'Scorecard', 'full', 1),
-          widget('wid_new_response_rate', 'response_rate', 'Response Rate', 'half', 2),
+          widget('wid_new_response_rate', 'response_rate', 'Response Rate', 'half', 2, undefined, 'surv_workplace_culture'),
           widget('wid_new_time_trend', 'time_trend', 'Time Trend', 'half', 3),
           widget('wid_new_enps', 'enps', 'eNPS', 'half', 4),
           widget('wid_new_heatmap', 'heatmap', 'Heatmap', 'half', 5),
@@ -138,7 +139,7 @@ export const mockDashboards: Dashboard[] = [
         order: 1,
         widgets: [
           widget('wid_ppt_scorecard', 'scorecard', 'Scorecard', 'full', 1),
-          widget('wid_ppt_response_rate', 'response_rate', 'Response Rate', 'half', 2),
+          widget('wid_ppt_response_rate', 'response_rate', 'Response Rate', 'half', 2, undefined, 'surv_workplace_culture'),
           widget('wid_ppt_time_trend', 'time_trend', 'Time Trend', 'half', 3),
           widget('wid_ppt_enps', 'enps', 'eNPS', 'half', 4),
           widget('wid_ppt_heatmap', 'heatmap', 'Heatmap', 'half', 5),

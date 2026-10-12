@@ -7,7 +7,7 @@ import {
   type EmployeeFilterGroup,
   type EmployeeFilterPreset,
 } from '@/data/mock-employee-filters'
-import { DASHBOARD_FILTER_FIELDS } from '@/data/mock/dashboardFilters'
+import { DASHBOARD_FILTER_FIELDS } from '@/data/mock/dashboardFilterFields'
 import type {
   FilterAudience,
   PortalAccessRule,

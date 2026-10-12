@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import { format, parse } from 'date-fns'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ReportPageStack, getReportPagePlan } from '@/components/modules/feedback360/ReportPages'
-import { getReport360Subjects, type Report360Template } from '@/data/mock-360-reports'
+import { getReport360MockSubject, getReport360Subjects, type Report360Template } from '@/data/mock-360-reports'
 import { buildSurvey360ExportRows } from '@/data/mock-360-export'
 import { mockSurvey360Deployments } from '@/data/mock/survey360Deployments'
 import type { Survey360 } from '@/data/mock/surveys360'
@@ -36,10 +36,16 @@ export function ReportPreview({
 }) {
   const subjects = useMemo(() => getReport360Subjects(survey.id), [survey.id])
   const rows = useMemo(() => buildSurvey360ExportRows(survey.id, []), [survey.id])
+  const [previewMode, setPreviewMode] = useState<'mock' | 'employee'>('mock')
   const [deploymentId, setDeploymentId] = useState(mockSurvey360Deployments[0]?.id ?? '')
   const [selectedId, setSelectedId] = useState('')
   const [skippedOpen, setSkippedOpen] = useState(false)
   const [selectorsOpen, setSelectorsOpen] = useState(false)
+  const mockSubject = useMemo(() => getReport360MockSubject(survey.id), [survey.id])
+  const previewModeOptions: SelectOption[] = [
+    { value: 'mock', label: 'Mock data' },
+    { value: 'employee', label: 'Employee' },
+  ]
 
   const deploymentOptions: SelectOption[] = mockSurvey360Deployments.map((deployment) => ({
     value: deployment.id,
@@ -68,7 +74,8 @@ export function ReportPreview({
     }
   }, [available, selectedId])
 
-  const selected = available.find((subject) => subject.id === selectedId) ?? available[0]
+  const employee = available.find((subject) => subject.id === selectedId) ?? available[0]
+  const selected = previewMode === 'mock' ? mockSubject : employee
   const subjectOptions: SelectOption[] = available.map((subject) => ({
     value: subject.id,
     label: subject.name,
@@ -93,13 +100,26 @@ export function ReportPreview({
             {selectorsOpen ? '▾' : '▸'}
           </span>
           <span className="min-w-0 flex-1 truncate">
-            {deploymentOption?.label ?? 'Deployment'}
-            <span className="text-gray-400"> · </span>
-            {selected?.name ?? 'Subject'}
+            {previewMode === 'mock' ? 'Mock data' : `${deploymentOption?.label ?? 'Deployment'} · ${employee?.name ?? 'Employee'}`}
           </span>
         </button>
         {selectorsOpen ? (
           <div className="mt-2 grid grid-cols-1 gap-2">
+            <label className="block min-w-0 text-[11px] text-gray-500">
+              Preview
+              <div className="mt-1 min-w-0 [&_button]:w-full [&_button]:min-w-0">
+                <WuSelect
+                  data={previewModeOptions}
+                  accessorKey={{ value: 'value', label: 'label' }}
+                  value={previewModeOptions.find((option) => option.value === previewMode) ?? previewModeOptions[0]}
+                  onSelect={(option) => {
+                    const next = (option as SelectOption | null)?.value
+                    if (next === 'mock' || next === 'employee') setPreviewMode(next)
+                  }}
+                  variant="outlined"
+                />
+              </div>
+            </label>
             <label className="block min-w-0 text-[11px] text-gray-500">
               Deployment
               <div className="mt-1 min-w-0 [&_button]:w-full [&_button]:min-w-0">
@@ -113,11 +133,12 @@ export function ReportPreview({
                   }}
                   variant="outlined"
                   placeholder="Select a deployment"
+                  disabled={previewMode === 'mock'}
                 />
               </div>
             </label>
             <label className="block min-w-0 text-[11px] text-gray-500">
-              Subject
+              Employee
               <div className="mt-1 min-w-0 [&_button]:w-full [&_button]:min-w-0">
                 <WuSelect
                   data={subjectOptions}
@@ -125,8 +146,8 @@ export function ReportPreview({
                   value={selectedOption}
                   onSelect={(option) => setSelectedId((option as SelectOption | null)?.value ?? selectedId)}
                   variant="outlined"
-                  placeholder="Select a subject"
-                  disabled={subjectOptions.length === 0}
+                  placeholder="Select an employee"
+                  disabled={previewMode === 'mock' || subjectOptions.length === 0}
                 />
               </div>
             </label>
@@ -160,7 +181,7 @@ export function ReportPreview({
         ) : null}
       </header>
 
-      {subjects.length === 0 ? (
+      {previewMode === 'employee' && subjects.length === 0 ? (
         <div className="px-4 py-8">
           <EmptyState
             icon="wm-groups"
@@ -182,7 +203,7 @@ export function ReportPreview({
               survey={survey}
               subject={selected}
               template={template}
-              deploymentDate={deploymentDate}
+              deploymentDate={previewMode === 'mock' ? undefined : deploymentDate}
             />
           </div>
         </div>

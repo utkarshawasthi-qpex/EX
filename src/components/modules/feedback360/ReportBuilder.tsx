@@ -3316,6 +3316,27 @@ function BlockCatalogCard({
   )
 }
 
+function StartOption({
+  title,
+  description,
+  onClick,
+}: {
+  title: string
+  description: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-full min-h-40 flex-col items-start rounded-lg border border-gray-200 bg-white p-5 text-left hover:border-blue-300 hover:bg-blue-50"
+    >
+      <span className="text-base font-semibold text-gray-900">{title}</span>
+      <span className="mt-2 text-sm leading-5 text-gray-500">{description}</span>
+    </button>
+  )
+}
+
 const PREVIEW_MIN_WIDTH = 240
 const PREVIEW_MAX_WIDTH = 420
 
@@ -3337,7 +3358,39 @@ export function ReportBuilder({
   const [sourceFolderId, setSourceFolderId] = useState('new-folks')
   const [sourceSurveyId, setSourceSurveyId] = useState('')
   const [copiedFromTitle, setCopiedFromTitle] = useState<string | null>(null)
+  const [chooserOpen, setChooserOpen] = useState<boolean | null>(null)
+  const [reportSaved, setReportSaved] = useState(false)
   const activeTemplate = template
+  const entryKey = `ex_360_report_entry_${survey.id}`
+  const savedKey = `ex_360_report_saved_${survey.id}`
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(savedKey) === '1'
+    setReportSaved(saved)
+    if (saved) {
+      setChooserOpen(false)
+      return
+    }
+    const entry = window.localStorage.getItem(entryKey)
+    if (entry === 'builder' || entry === 'chooser') {
+      setChooserOpen(entry === 'chooser')
+      return
+    }
+    const stored = getReport360Template(survey.id)
+    const customized = stored.blocks.some((block) => !REPORT360_STARTER_BLOCK_TYPES.includes(block.type))
+    setChooserOpen(!customized)
+    if (customized) setReportSaved(true)
+  }, [entryKey, savedKey, survey.id])
+
+  function enterBuilder() {
+    window.localStorage.setItem(entryKey, 'builder')
+    setChooserOpen(false)
+  }
+
+  function showChooser() {
+    window.localStorage.setItem(entryKey, 'chooser')
+    setChooserOpen(true)
+  }
 
   function commit(next: Report360Template) {
     setTemplate(next)
@@ -3398,12 +3451,15 @@ export function ReportBuilder({
       return
     }
     save(activeTemplate)
+    window.localStorage.setItem(savedKey, '1')
+    setReportSaved(true)
     showToast({ message: 'Report saved', variant: 'success' })
   }
 
   function handleReset() {
-    const next = reset()
-    setTemplate(next)
+    reset()
+    window.localStorage.removeItem(savedKey)
+    setReportSaved(false)
     setCopiedFromTitle(null)
     setExpandedIds([])
     showToast({ message: 'Report reset', variant: 'success' })
@@ -3472,9 +3528,10 @@ export function ReportBuilder({
   function confirmUseExisting() {
     const source = surveysInWorkforce.find((item) => item.value === sourceSurveyId)
     if (!source) return
-    setTemplate(cloneReport360Template(reportForSurvey(source.value)))
+    save(cloneReport360Template(reportForSurvey(source.value)))
     setCopiedFromTitle(source.label)
     setUseExistingOpen(false)
+    enterBuilder()
     showToast({
       message: `Report settings copied from ${source.label}.`,
       variant: 'success',
@@ -3511,11 +3568,6 @@ export function ReportBuilder({
   }
 
   const enabledCount = activeTemplate.blocks.filter((block) => block.enabled && !block.locked).length
-  const isStarterReport =
-    activeTemplate.blocks.length === REPORT360_STARTER_BLOCK_TYPES.length &&
-    REPORT360_STARTER_BLOCK_TYPES.every((type) =>
-      activeTemplate.blocks.some((block) => block.type === type),
-    )
 
   function startPreviewResize(event: React.PointerEvent<HTMLDivElement>) {
     event.preventDefault()
@@ -3545,9 +3597,19 @@ export function ReportBuilder({
     window.addEventListener('pointerup', up)
   }
 
-  function createWithTemplate() {
-    const created = createDefaultReportBlocks(survey.sections)
-    commit({ ...activeTemplate, blocks: [...activeTemplate.blocks, ...created] })
+  function startBlankReport() {
+    save(createDefaultReport360Template())
+    setCopiedFromTitle(null)
+    setExpandedIds([])
+    enterBuilder()
+  }
+
+  function startDefaultTemplate() {
+    const base = createDefaultReport360Template()
+    save({ ...base, blocks: [...base.blocks, ...createDefaultReportBlocks(survey.sections)] })
+    setCopiedFromTitle(null)
+    setExpandedIds([])
+    enterBuilder()
     showToast({ message: 'Default report added', variant: 'success' })
   }
 
@@ -3559,18 +3621,48 @@ export function ReportBuilder({
           <p className="text-xs text-gray-500">{survey.title}</p>
           <h1 className="text-2xl font-semibold text-gray-900">Report builder</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {copiedFromTitle
-              ? `Copied from ${copiedFromTitle} · ${enabledCount} blocks enabled`
-              : `${enabledCount} blocks enabled · drag to reorder`}
+            {chooserOpen
+              ? 'Choose how to start this report'
+              : copiedFromTitle
+                ? `Copied from ${copiedFromTitle} · ${enabledCount} blocks enabled`
+                : `${enabledCount} blocks enabled · drag to reorder`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <WuButton variant="secondary" onClick={openUseExisting}>
-            Use an existing report
-          </WuButton>
+          {chooserOpen === false ? (
+            <>
+              {reportSaved ? null : (
+                <WuButton variant="secondary" onClick={showChooser}>
+                  Back
+                </WuButton>
+              )}
+              <WuButton variant="secondary" onClick={openUseExisting}>
+                Use an existing report
+              </WuButton>
+            </>
+          ) : null}
         </div>
       </header>
 
+      {chooserOpen === null ? (
+        <div className="min-h-0 flex-1" />
+      ) : chooserOpen ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-8">
+          <div className="mx-auto grid max-w-3xl gap-4 md:grid-cols-2">
+            <StartOption
+              title="Use default template"
+              description="Start from a full report with the standard blocks."
+              onClick={startDefaultTemplate}
+            />
+            <StartOption
+              title="Create a new report"
+              description="Start with the cover and introduction, then add the blocks you want."
+              onClick={startBlankReport}
+            />
+          </div>
+        </div>
+      ) : (
+      <>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-4 py-6">
         {activeTemplate.blocks.map((block, blockIndex) => {
           const expanded = expandedIds.includes(block.id)
@@ -3890,30 +3982,19 @@ export function ReportBuilder({
             </Fragment>
           )
         })}
-        <div className={cn('grid gap-3', isStarterReport && 'sm:grid-cols-2')}>
-          <button
-            type="button"
-            className="flex h-14 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white text-sm font-medium text-blue-700 hover:border-blue-300 hover:bg-blue-50"
-            onClick={() => {
-              setBlocksToAdd([])
-              setAddOpen(true)
-            }}
-          >
-            <span className="text-lg leading-none" aria-hidden>
-              +
-            </span>
-            Add a block
-          </button>
-          {isStarterReport ? (
-            <button
-              type="button"
-              className="flex h-14 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[#1B3A6B] bg-slate-50 text-sm font-medium text-[#1B3A6B] hover:bg-slate-100"
-              onClick={createWithTemplate}
-            >
-              Create default report
-            </button>
-          ) : null}
-        </div>
+        <button
+          type="button"
+          className="flex h-14 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white text-sm font-medium text-blue-700 hover:border-blue-300 hover:bg-blue-50"
+          onClick={() => {
+            setBlocksToAdd([])
+            setAddOpen(true)
+          }}
+        >
+          <span className="text-lg leading-none" aria-hidden>
+            +
+          </span>
+          Add a block
+        </button>
       </div>
 
       <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-gray-200 bg-white px-6 py-4">
@@ -3930,6 +4011,8 @@ export function ReportBuilder({
           Save changes
         </WuButton>
       </footer>
+      </>
+      )}
 
       <WuModal
         open={addOpen}
@@ -4040,6 +4123,7 @@ export function ReportBuilder({
         </WuModalFooter>
       </WuModal>
       </div>
+      {chooserOpen === false ? (
       <aside
           className="relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l border-gray-200 bg-gray-100"
           style={{ width: previewWidth }}
@@ -4060,6 +4144,7 @@ export function ReportBuilder({
             onGoToDistribute={onGoToDistribute}
           />
         </aside>
+      ) : null}
     </div>
   )
 }

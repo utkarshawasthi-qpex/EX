@@ -1356,6 +1356,18 @@ export function getReport360Subjects(surveyId: string): Report360Subject[] {
   return MOCK_360_REPORT_SUBJECTS.filter((subject) => subject.surveyId === surveyId)
 }
 
+/** Sample person used when the preview is set to mock data. */
+export function getReport360MockSubject(surveyId: string): Report360Subject {
+  const sample = MOCK_360_REPORT_SUBJECTS[0]
+  return {
+    ...JSON.parse(JSON.stringify(sample)) as Report360Subject,
+    id: 'sub_mock_preview',
+    surveyId,
+    name: 'Sample employee',
+    role: 'Sample role',
+  }
+}
+
 export function getReport360Subject(
   surveyId: string,
   subjectId: string,

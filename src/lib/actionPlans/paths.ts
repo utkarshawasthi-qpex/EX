@@ -6,6 +6,8 @@ export const ACTION_PLANS_LIST = `${ACTION_PLANS_BASE}/list`
 
 export const ACTION_PLANS_MY_TASKS = `${ACTION_PLANS_BASE}/my-tasks`
 
+export const ACTION_PLANS_TEAM = `${ACTION_PLANS_BASE}/team`
+
 export const ACTION_PLANS_ANALYTICS = `${ACTION_PLANS_BASE}/analytics`
 
 export function actionPlanDetailPath(id: string): string {
@@ -22,7 +24,8 @@ export function redirectPathFromEmpower(pathname: string): string {
     return id ? actionPlanDetailPath(id) : ACTION_PLANS_LIST
   }
   if (pathname.startsWith('/empower/initiatives')) return ACTION_PLANS_LIST
-  if (pathname.startsWith('/empower/tasks')) return ACTION_PLANS_OVERVIEW
+  if (pathname.startsWith('/empower/tasks')) return ACTION_PLANS_MY_TASKS
+  if (pathname.startsWith('/empower/team')) return ACTION_PLANS_TEAM
   if (pathname.startsWith('/empower/analytics')) return ACTION_PLANS_ANALYTICS
   if (pathname.startsWith('/empower/admin')) return '/lifecycle/analytics/admin'
   return ACTION_PLANS_OVERVIEW

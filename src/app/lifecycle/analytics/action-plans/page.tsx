@@ -7,7 +7,6 @@ import { HubCreateInitiativeModal } from '@/components/modules/actionPlans/HubCr
 import {
   ACTION_PLANS_ANALYTICS,
   ACTION_PLANS_LIST,
-  ACTION_PLANS_MY_TASKS,
   ACTION_PLANS_TEAM,
   actionPlanDetailPath,
   computeActionPlanProgress,
@@ -30,6 +29,7 @@ import { cn } from '@/lib/utils'
 import { EMPOWER_DATA_CHANGED_EVENT, notifyEmpowerDataChanged } from '@/lib/empowerEvents'
 import { getCurrentUser } from '@/lib/userContext'
 import type { EmpowerInitiativeRecord } from '@/types/empowerIntegration'
+import type { UpcomingTask } from '@/lib/empowerIntegration/storage'
 
 const WuButton = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((m) => ({ default: m.WuButton })),
@@ -44,9 +44,12 @@ const WuTooltip = dynamic(
   { ssr: false },
 )
 
+type TaskView = 'date' | 'initiative'
+
 export default function ActionPlansOverviewPage() {
   const [initiatives, setInitiatives] = useState<EmpowerInitiativeRecord[]>([])
   const [createOpen, setCreateOpen] = useState(false)
+  const [taskView, setTaskView] = useState<TaskView>('date')
   const user = getCurrentUser()
 
   const refresh = useCallback(() => {
@@ -67,6 +70,7 @@ export default function ActionPlansOverviewPage() {
     () => getUpcomingTasksForUser(user.id, initiatives),
     [initiatives, user.id],
   )
+  const tasksByInitiative = useMemo(() => groupTasksByInitiative(upcomingTasks), [upcomingTasks])
   const team = useMemo(
     () => getTeamMemberSnapshots(user.id, initiatives),
     [initiatives, user.id],
@@ -92,28 +96,76 @@ export default function ActionPlansOverviewPage() {
       </div>
 
       <div className="mt-4 flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-        <section className="shrink-0 rounded-xl border border-gray-200 bg-white px-5 py-3">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-gray-900">At a glance</h2>
-            <Link href={ACTION_PLANS_ANALYTICS} className="shrink-0 text-sm text-[#1B87E6] hover:underline">
-              View analytics →
-            </Link>
-          </div>
-          {analyticsEmpty ? (
-            <p className="py-2 text-sm text-gray-500">
-              Counts show up here once initiatives and tasks are underway.
-            </p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-3">
-              <GlanceTile value={analytics.activeInitiatives} label="Active initiatives" />
-              <GlanceTile value={analytics.tasksInProgress} label="Tasks in progress" />
-              <GlanceTile value={analytics.newIdeas} label="Ideas" badge="Coming soon" />
+        <div className="grid shrink-0 items-stretch gap-3 lg:grid-cols-2">
+          <section className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white px-5 py-3">
+            <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-gray-900">At a glance</h2>
+              <Link href={ACTION_PLANS_ANALYTICS} className="shrink-0 text-sm text-[#1B87E6] hover:underline">
+                View analytics →
+              </Link>
             </div>
-          )}
-        </section>
+            {analyticsEmpty ? (
+              <BlockNote text="Counts show up here once initiatives and tasks are underway." />
+            ) : (
+              <div className="grid flex-1 gap-3 sm:grid-cols-3">
+                <GlanceTile value={analytics.activeInitiatives} label="Active initiatives" />
+                <GlanceTile value={analytics.tasksInProgress} label="Tasks in progress" />
+                <GlanceTile value={analytics.newIdeas} label="Ideas" badge="Coming soon" />
+              </div>
+            )}
+          </section>
 
-        <div className="grid shrink-0 items-stretch gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(260px,1fr)]">
-          <section className="flex h-[21rem] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white px-5 py-3">
+          <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white px-5 py-3">
+            <div className="mb-2 flex shrink-0 items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">Team view</h2>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Direct reports, the initiatives they own, and their open tasks.
+                </p>
+              </div>
+              <Link href={ACTION_PLANS_TEAM} className="shrink-0 text-sm text-[#1B87E6] hover:underline">
+                View team
+              </Link>
+            </div>
+            {team.length === 0 ? (
+              <BlockNote text="No direct reports yet. People who report to you will show up here with the initiatives they own and the tasks still open." />
+            ) : (
+              <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+                {team.map((member) => (
+                  <li key={member.employee.id} className="flex min-h-14 flex-1">
+                    <Link
+                      href={ACTION_PLANS_TEAM}
+                      className="flex h-full w-full items-center gap-4 rounded-lg bg-[#F7F8FA] px-4 py-2.5 hover:bg-gray-100"
+                    >
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-gray-600">
+                          {getEmployeeInitials(member.employee.id)}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-gray-900">{member.name}</span>
+                          <span className="block truncate text-xs text-gray-500">{member.employee.jobTitle}</span>
+                        </span>
+                        <span className="w-16 shrink-0 text-center">
+                          <span className="block text-lg font-semibold leading-none text-gray-900">
+                            {member.ownedInitiatives.length}
+                          </span>
+                          <span className="mt-1 block text-xs text-gray-500">Initiatives</span>
+                        </span>
+                        <span className="w-16 shrink-0 text-center">
+                          <span className="block text-lg font-semibold leading-none text-gray-900">
+                            {member.openTaskCount}
+                          </span>
+                          <span className="mt-1 block text-xs text-gray-500">Open tasks</span>
+                        </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <div className="grid min-h-0 flex-1 items-stretch gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(260px,1fr)]">
+          <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white px-5 py-3">
             <div className="mb-2 flex shrink-0 items-start justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold text-gray-900">Active initiatives</h2>
@@ -136,26 +188,16 @@ export default function ActionPlansOverviewPage() {
                   }
                 />
               ) : (
-                <>
-                  <ul
-                    className={cn(
-                      'grid min-h-0 gap-2 overflow-y-auto sm:grid-cols-2',
-                      activeInitiatives.length > 2 ? 'flex-1' : 'max-h-[72%] shrink-0',
-                    )}
-                  >
-                    {activeInitiatives.map((plan) => (
-                      <InitiativeCard key={plan.id} plan={plan} userId={user.id} user={user} />
-                    ))}
-                  </ul>
-                  {activeInitiatives.length <= 2 ? (
-                    <BlockNote text="Create another initiative, or open the full list to see every one you can access." />
-                  ) : null}
-                </>
+                <ul className="grid min-h-0 flex-1 auto-rows-[minmax(8.75rem,1fr)] grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+                  {activeInitiatives.map((plan) => (
+                    <InitiativeCard key={plan.id} plan={plan} userId={user.id} user={user} />
+                  ))}
+                </ul>
               )}
             </div>
           </section>
 
-          <section className="flex h-[21rem] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white px-5 py-3">
+          <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white px-5 py-3">
             <div className="mb-2 flex shrink-0 items-start justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold text-gray-900">Your open tasks</h2>
@@ -163,9 +205,32 @@ export default function ActionPlansOverviewPage() {
                   Next up, where you are the owner or a contributor.
                 </p>
               </div>
-              <Link href={ACTION_PLANS_MY_TASKS} className="shrink-0 text-sm text-[#1B87E6] hover:underline">
-                View all
-              </Link>
+              <div className="inline-flex shrink-0 overflow-hidden rounded border border-gray-200">
+                <button
+                  type="button"
+                  className={cn(
+                    'px-2 py-1 text-gray-600',
+                    taskView === 'date' && 'bg-blue-50 text-[#1B87E6]',
+                  )}
+                  aria-label="List view, tasks by date"
+                  title="By date"
+                  onClick={() => setTaskView('date')}
+                >
+                  <span className="wm-format-list-bulleted" aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'border-l border-gray-200 px-2 py-1 text-gray-600',
+                    taskView === 'initiative' && 'bg-blue-50 text-[#1B87E6]',
+                  )}
+                  aria-label="Block view, tasks by initiative"
+                  title="By initiative"
+                  onClick={() => setTaskView('initiative')}
+                >
+                  <span className="wm-view-module" aria-hidden />
+                </button>
+              </div>
             </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {upcomingTasks.length === 0 ? (
@@ -177,96 +242,41 @@ export default function ActionPlansOverviewPage() {
                     </Link>
                   }
                 />
-              ) : (
-                <>
-                  <ul
-                    className={cn(
-                      'min-h-0 overflow-y-auto',
-                      upcomingTasks.length >= 4 ? 'flex-1' : 'max-h-[72%] shrink-0',
-                    )}
-                  >
-                    {upcomingTasks.map(({ task, initiative }) => {
-                      const overdue = Boolean(task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10))
-                      return (
-                        <li key={task.id} className="border-b border-gray-100 last:border-0">
-                          <Link
-                            href={actionPlanDetailPath(initiative.id)}
-                            className="flex items-start gap-3 py-2"
+              ) : taskView === 'date' ? (
+                <ul className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                  {upcomingTasks.map(({ task, initiative }) => {
+                    const overdue = isOverdueDate(task.dueDate)
+                    return (
+                      <li key={task.id} className="flex min-h-14 flex-1 border-b border-gray-100 last:border-0">
+                        <Link
+                          href={actionPlanDetailPath(initiative.id)}
+                          className="flex w-full items-center gap-3 py-2"
+                        >
+                          <span className="size-2 shrink-0 rounded-full bg-[#1B87E6]" aria-hidden />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-gray-900">{task.text}</span>
+                            <span className="mt-0.5 block truncate text-xs text-gray-500">{initiative.title}</span>
+                          </span>
+                          <span
+                            className={cn(
+                              'shrink-0 text-xs font-medium',
+                              overdue ? 'text-red-600' : 'text-gray-500',
+                            )}
                           >
-                            <span className="mt-1.5 size-2 shrink-0 rounded-full bg-[#1B87E6]" aria-hidden />
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium text-gray-900">{task.text}</span>
-                              <span className="mt-0.5 block truncate text-xs text-gray-500">{initiative.title}</span>
-                            </span>
-                            <span
-                              className={cn(
-                                'shrink-0 pt-0.5 text-xs',
-                                overdue ? 'font-medium text-red-600' : 'text-gray-500',
-                              )}
-                            >
-                              {formatDueDate(task.dueDate)}
-                            </span>
-                          </Link>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                  {upcomingTasks.length < 4 ? (
-                    <BlockNote text="Overdue dates are in red. Open a task to go to its initiative." />
-                  ) : null}
-                </>
+                            {formatDueDate(task.dueDate)}
+                          </span>
+                        </Link>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <InitiativeTaskGroups groups={tasksByInitiative} />
               )}
             </div>
           </section>
         </div>
 
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white px-5 py-3">
-          <div className="mb-2 flex shrink-0 items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">Team view</h2>
-              <p className="mt-0.5 text-xs text-gray-500">
-                Direct reports, the initiatives they own, and their open tasks.
-              </p>
-            </div>
-            <Link href={ACTION_PLANS_TEAM} className="shrink-0 text-sm text-[#1B87E6] hover:underline">
-              View team
-            </Link>
-          </div>
-          {team.length === 0 ? (
-            <BlockNote text="No direct reports yet. People who report to you will show up here with the initiatives they own and the tasks still open." />
-          ) : (
-            <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto">
-              {team.map((member) => (
-                <li key={member.employee.id}>
-                  <Link
-                    href={ACTION_PLANS_TEAM}
-                    className="flex items-center gap-4 rounded-lg bg-[#F7F8FA] px-4 py-2.5 hover:bg-gray-100"
-                  >
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-gray-600">
-                      {getEmployeeInitials(member.employee.id)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-gray-900">{member.name}</span>
-                      <span className="block truncate text-xs text-gray-500">{member.employee.jobTitle}</span>
-                    </span>
-                    <span className="w-20 shrink-0 text-center">
-                      <span className="block text-lg font-semibold leading-none text-gray-900">
-                        {member.ownedInitiatives.length}
-                      </span>
-                      <span className="mt-1 block text-xs text-gray-500">Initiatives</span>
-                    </span>
-                    <span className="w-20 shrink-0 text-center">
-                      <span className="block text-lg font-semibold leading-none text-gray-900">
-                        {member.openTaskCount}
-                      </span>
-                      <span className="mt-1 block text-xs text-gray-500">Open tasks</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
       </div>
 
       <HubCreateInitiativeModal
@@ -281,9 +291,112 @@ export default function ActionPlansOverviewPage() {
   )
 }
 
+function InitiativeTaskGroups({
+  groups,
+}: {
+  groups: { id: string; title: string; items: UpcomingTask[] }[]
+}) {
+  const [openIds, setOpenIds] = useState<string[] | null>(null)
+  const [nameSort, setNameSort] = useState<'asc' | 'desc'>('asc')
+  const expanded = openIds ?? (groups[0] ? [groups[0].id] : [])
+
+  function toggle(id: string) {
+    setOpenIds(expanded.includes(id) ? expanded.filter((item) => item !== id) : [...expanded, id])
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      {groups.map((group) => {
+        const isOpen = expanded.includes(group.id)
+        const tasks = [...group.items].sort((left, right) => {
+          const comparison = left.task.text.localeCompare(right.task.text)
+          return nameSort === 'asc' ? comparison : -comparison
+        })
+        return (
+          <section key={group.id} className={cn('flex min-h-0 flex-col', isOpen && 'flex-1')}>
+            <div className="flex items-start gap-1.5 py-2">
+              <button
+                type="button"
+                onClick={() => toggle(group.id)}
+                className="mt-1 text-gray-500"
+                aria-expanded={isOpen}
+                aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${group.title}`}
+              >
+                <span
+                  className={cn(
+                    'inline-block size-0',
+                    isOpen
+                      ? 'border-x-4 border-x-transparent border-t-[5px] border-t-gray-500'
+                      : 'border-y-4 border-y-transparent border-l-[5px] border-l-gray-500',
+                  )}
+                  aria-hidden
+                />
+              </button>
+              <div className="min-w-0">
+                <Link
+                  href={actionPlanDetailPath(group.id)}
+                  className="block truncate text-sm font-medium text-[#1B87E6] hover:underline"
+                >
+                  {group.title}
+                </Link>
+                <p className="text-xs text-gray-500">
+                  {group.items.length} open task{group.items.length === 1 ? '' : 's'} assigned to you on this
+                  initiative
+                </p>
+              </div>
+            </div>
+            {isOpen ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="bg-[#F5F6F8] px-3 py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setNameSort((current) => (current === 'asc' ? 'desc' : 'asc'))}
+                    className="flex items-center gap-1 text-xs font-medium tracking-wide text-gray-500 uppercase"
+                  >
+                    Name
+                    <span className="text-[10px] leading-none text-gray-400" aria-hidden>
+                      ↕
+                    </span>
+                  </button>
+                </div>
+                {tasks.map(({ task }) => (
+                  <div
+                    key={task.id}
+                    className="flex min-h-11 flex-1 items-center border-b border-gray-200 px-3 text-sm font-medium text-gray-900"
+                  >
+                    <span className="truncate">{task.text}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        )
+      })}
+    </div>
+  )
+}
+
+function isOverdueDate(dueDate: string | undefined): boolean {
+  if (!dueDate) return false
+  return dueDate < new Date().toISOString().slice(0, 10)
+}
+
+function groupTasksByInitiative(tasks: UpcomingTask[]) {
+  const groups: { id: string; title: string; items: UpcomingTask[] }[] = []
+  tasks.forEach((item) => {
+    const existing = groups.find((group) => group.id === item.initiative.id)
+    if (existing) {
+      existing.items.push(item)
+      return
+    }
+    groups.push({ id: item.initiative.id, title: item.initiative.title, items: [item] })
+  })
+  return groups
+}
+
 function GlanceTile({ value, label, badge }: { value: number; label: string; badge?: string }) {
   return (
-    <div className="rounded-lg bg-[#F4F6F8] px-4 py-2.5">
+    <div className="flex h-full flex-col justify-center rounded-lg bg-[#F4F6F8] px-4 py-2.5">
       <p className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-gray-900">
         {value}
         {badge ? (
@@ -299,7 +412,7 @@ function GlanceTile({ value, label, badge }: { value: number; label: string; bad
 
 function BlockNote({ text, action }: { text: string; action?: React.ReactNode }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center px-4 py-2 text-center">
       <p className="max-w-sm text-sm text-gray-500">{text}</p>
       {action ? <div className="mt-2">{action}</div> : null}
     </div>

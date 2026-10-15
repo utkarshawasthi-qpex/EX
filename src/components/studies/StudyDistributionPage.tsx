@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import type { IWuTableColumnDef } from '@npm-questionpro/wick-ui-lib'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
-import { CollectorHeadcountModal } from '@/components/studies/CollectorHeadcountModal'
+import { CollectorHeadcountModal, type CollectorHeadcountHandle } from '@/components/studies/CollectorHeadcountModal'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { type CollectorEmployeeField, type CollectorForm } from '@/data/mock-collector-forms'
@@ -137,6 +137,43 @@ function showEmailOption(draft: CollectorDraft) {
   return draft.validateEmployee || draft.collectEmployeeData
 }
 
+const CREATE_STEPS = [
+  { icon: '📝', label: 'Collector form' },
+  { icon: '↑', label: 'Expected responses' },
+] as const
+
+function CollectorStepIndicator({ currentStep }: { currentStep: number }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {CREATE_STEPS.map((stepItem, index) => (
+        <span key={stepItem.label} className="flex items-center gap-2">
+          {index < currentStep ? (
+            <span className="text-sm font-medium text-blue-400" aria-hidden>
+              ✓
+            </span>
+          ) : null}
+          <span
+            className={cn(
+              'flex items-center gap-1 text-sm',
+              index === currentStep && 'font-semibold text-blue-600',
+              index < currentStep && 'text-blue-400',
+              index > currentStep && 'text-gray-400',
+            )}
+          >
+            <span aria-hidden>{stepItem.icon}</span>
+            {stepItem.label}
+          </span>
+          {index < CREATE_STEPS.length - 1 ? (
+            <span className="text-gray-300" aria-hidden>
+              &gt;
+            </span>
+          ) : null}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function ensureEmployeeFields(fields: CollectorEmployeeField[]) {
   return fields.length > 0 ? fields : [defaultEmployeeField()]
 }
@@ -171,10 +208,13 @@ export function StudyDistributionPage({
 
   const studyName = studyNameProp?.trim() || searchParams.get('study')?.trim() || 'this study'
   const resolvedSurveyId = surveyId?.trim() || 'survey_unknown'
-  const { collectorForms: collectors, setCollectorForms, saveFormHeadcount } = useSurveyDistribution(resolvedSurveyId)
+  const { collectorForms: collectors, setCollectorForms } = useSurveyDistribution(resolvedSurveyId)
   const [subTab, setSubTab] = useState<DistributeSubTab>(initialSubTab)
-  const [headcountFormId, setHeadcountFormId] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [createStep, setCreateStep] = useState(0)
+  const [createSession, setCreateSession] = useState(0)
+  const [responsesBlocked, setResponsesBlocked] = useState(false)
+  const headcountRef = useRef<CollectorHeadcountHandle>(null)
   const [draft, setDraft] = useState<CollectorDraft>(emptyCollectorDraft)
   const [editing, setEditing] = useState<CollectorForm | null>(null)
   const [qrForm, setQrForm] = useState<CollectorForm | null>(null)
@@ -291,7 +331,6 @@ export function StudyDistributionPage({
           <div className="flex items-center gap-1">
             <RowAction icon="wm-content-copy" label="Copy link" onClick={() => copyLink(row.original)} />
             <RowAction icon="wm-qr-code" label="QR code" onClick={() => setQrForm(row.original)} />
-            <RowAction icon="wm-upload" label="Expected responses" onClick={() => setHeadcountFormId(row.original.id)} />
             <RowAction icon="wm-edit" label="Edit" onClick={() => openEditor(row.original)} />
             <RowAction icon="wm-delete" label="Delete" onClick={() => setDeleteForm(row.original)} />
           </div>
@@ -305,13 +344,21 @@ export function StudyDistributionPage({
     setCreateOpen(false)
     setEditing(form)
     setDraft(draftFromCollector(form))
+    setCreateStep(0)
+    setCreateSession((current) => current + 1)
+    setResponsesBlocked(false)
   }
 
   function closeEditor() {
     setCreateOpen(false)
     setEditing(null)
     setDraft(emptyCollectorDraft())
+    setCreateStep(0)
   }
+
+  const onResponsesBlocked = useCallback((blocked: boolean) => {
+    setResponsesBlocked(blocked)
+  }, [])
 
   function updateField(id: string, patch: Partial<CollectorEmployeeField>) {
     setDraft((current) => ({
@@ -342,8 +389,16 @@ export function StudyDistributionPage({
         : [],
       modifiedAt: today,
     }
+    const headcount = headcountRef.current?.commit() ?? null
+    if (!headcount) return
     if (editing) {
-      setCollectorForms((current) => current.map((item) => (item.id === editing.id ? { ...item, ...settings } : item)))
+      setCollectorForms((current) =>
+        current.map((item) =>
+          item.id === editing.id
+            ? { ...item, ...settings, headcount, responsesExpected: headcount.totalExpected }
+            : item,
+        ),
+      )
       closeEditor()
       showToast({ message: 'Collector form updated', variant: 'success' })
       return
@@ -354,8 +409,9 @@ export function StudyDistributionPage({
         id,
         link: `https://ex.questionpro.com/c/${id}`,
         responsesCollected: 0,
-        responsesExpected: null,
+        responsesExpected: headcount.totalExpected,
         createdAt: today,
+        headcount,
         ...settings,
       },
       ...current,
@@ -369,7 +425,6 @@ export function StudyDistributionPage({
     setSubTab('collectorForms')
   }, [searchParams])
 
-  const headcountForm = collectors.find((form) => form.id === headcountFormId) ?? null
   const emailOption = (
     <label className="flex items-center gap-2 text-sm text-gray-700">
       <WuCheckbox
@@ -446,6 +501,9 @@ export function StudyDistributionPage({
               onClick={() => {
                 setEditing(null)
                 setDraft(emptyCollectorDraft())
+                setCreateStep(0)
+                setCreateSession((current) => current + 1)
+                setResponsesBlocked(false)
                 setCreateOpen(true)
               }}
             >
@@ -519,7 +577,7 @@ export function StudyDistributionPage({
           </span>
         </WuModalHeader>
         <WuModalContent>
-          <div className="space-y-5">
+          <div className={createStep === 0 ? 'space-y-5' : 'hidden'}>
             <div className="flex items-center gap-4">
               <span className="shrink-0 text-sm text-gray-600">Collector form name</span>
               <div className="min-w-0 flex-1">
@@ -648,13 +706,45 @@ export function StudyDistributionPage({
               </div>
             ) : null}
           </div>
+          {createOpen || editing ? (
+            <div className={createStep === 1 ? undefined : 'hidden'}>
+              <CollectorHeadcountModal
+                ref={headcountRef}
+                embedded
+                form={editing}
+                open
+                collectorName={draft.name}
+                sessionKey={createSession}
+                onOpenChange={() => undefined}
+                onSave={() => undefined}
+                onBlockedChange={onResponsesBlocked}
+              />
+            </div>
+          ) : null}
         </WuModalContent>
         <WuModalFooter>
-          <div className="flex w-full items-center justify-end gap-3">
-            <WuButton variant="link" onClick={closeEditor}>
-              Cancel
-            </WuButton>
-            <WuButton onClick={createCollector}>{editing ? 'Save' : 'Create collector form'}</WuButton>
+          <div className="flex w-full items-center justify-between gap-4">
+            <CollectorStepIndicator currentStep={createStep} />
+            <div className="flex items-center gap-3">
+              {createStep === 0 ? (
+                <WuButton variant="secondary" onClick={closeEditor}>
+                  Cancel
+                </WuButton>
+              ) : (
+                <WuButton variant="secondary" onClick={() => setCreateStep(0)}>
+                  Back
+                </WuButton>
+              )}
+              {createStep === 0 ? (
+                <WuButton disabled={!draft.name.trim()} onClick={() => setCreateStep(1)}>
+                  Next
+                </WuButton>
+              ) : (
+                <WuButton onClick={createCollector} disabled={responsesBlocked}>
+                  {editing ? 'Save' : 'Create collector form'}
+                </WuButton>
+              )}
+            </div>
           </div>
         </WuModalFooter>
       </WuModal>
@@ -701,18 +791,6 @@ export function StudyDistributionPage({
           </WuButton>
         </WuModalFooter>
       </WuModal>
-
-      <CollectorHeadcountModal
-        form={headcountForm}
-        open={headcountForm != null}
-        onOpenChange={(open) => {
-          if (!open) setHeadcountFormId(null)
-        }}
-        onSave={(headcount) => {
-          if (!headcountFormId) return
-          saveFormHeadcount(headcountFormId, headcount)
-        }}
-      />
 
       <ConfirmModal
         open={deleteForm != null}

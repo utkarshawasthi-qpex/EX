@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { CollectorForm } from '@/data/mock-collector-forms'
 import {
   RESPONSE_RATE_SEGMENTS,
@@ -55,6 +55,16 @@ type CollectorHeadcountModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSave: (headcount: CollectorHeadcount) => void
+  /** Render the fields only, for the create-form wizard. */
+  embedded?: boolean
+  collectorName?: string
+  sessionKey?: number
+  onBlockedChange?: (blocked: boolean) => void
+}
+
+export type CollectorHeadcountHandle = {
+  /** Returns the expected-responses payload, or null when the step is incomplete. */
+  commit: () => CollectorHeadcount | null
 }
 
 const DIMENSION_OPTIONS = [{ value: 'none', label: '- select -' }, ...RESPONSE_RATE_SEGMENTS.map((segment) => ({ value: segment.key, label: segment.title }))]
@@ -97,7 +107,11 @@ function parseTotal(value: string): number | null | 'invalid' {
   return Number.parseInt(trimmed, 10)
 }
 
-export function CollectorHeadcountModal({ form, open, onOpenChange, onSave }: CollectorHeadcountModalProps) {
+export const CollectorHeadcountModal = forwardRef<CollectorHeadcountHandle, CollectorHeadcountModalProps>(
+  function CollectorHeadcountModal(
+    { form, open, onOpenChange, onSave, embedded = false, collectorName, sessionKey = 0, onBlockedChange },
+    ref,
+  ) {
   const { showToast } = useWuShowToast()
   const fileRef = useRef<HTMLInputElement>(null)
   const [sets, setSets] = useState<DraftSet[]>([emptySet()])
@@ -108,59 +122,75 @@ export function CollectorHeadcountModal({ form, open, onOpenChange, onSave }: Co
   const [dragging, setDragging] = useState(false)
   const [errors, setErrors] = useState<{ row: number; message: string }[]>([])
 
-  useEffect(() => {
-    if (!form) return
-    setSets(setsFromHeadcount(form.headcount))
-    setTotalInput(form.headcount?.totalExpected != null ? String(form.headcount.totalExpected) : '')
+  function resetDraft(headcount: CollectorHeadcount | null | undefined) {
+    setSets(setsFromHeadcount(headcount))
+    setTotalInput(headcount?.totalExpected != null ? String(headcount.totalExpected) : '')
     setTemplateOpen(false)
     setStagedFile(null)
     setAcceptedRows(null)
     setDragging(false)
     setErrors([])
-  }, [form])
+  }
+
+  useEffect(() => {
+    if (embedded) return
+    if (!form) return
+    resetDraft(form.headcount)
+  }, [embedded, form])
+
+  useEffect(() => {
+    if (!embedded) return
+    resetDraft(form?.headcount)
+  }, [embedded, sessionKey, form])
 
   function enteredTotal(): number | null | 'invalid' {
     return parseTotal(totalInput)
   }
 
-  function saveTotal() {
-    if (!form) return
+  function commit(): CollectorHeadcount | null {
     const total = enteredTotal()
     if (total === 'invalid') {
       showToast({ message: 'Total expected responses must be a whole number, 0 or higher', variant: 'error' })
-      return
+      return null
     }
     const assessed = assessSets(sets)
     if (assessed.state === 'incomplete') {
       showToast({ message: 'Choose a segment and at least one value in each set', variant: 'error' })
-      return
+      return null
     }
     if (assessed.state === 'ready') {
       const previousRows =
-        !acceptedRows && form.headcount && form.headcount.rows.length > 0 && sameSets(form.headcount.sets, assessed.sets) && !stagedFile
+        !acceptedRows && form?.headcount && form.headcount.rows.length > 0 && sameSets(form.headcount.sets, assessed.sets) && !stagedFile
           ? form.headcount.rows
           : null
       const uploadedRows = acceptedRows ?? previousRows
       if (!uploadedRows) {
         showToast({ message: 'Upload the completed template before saving', variant: 'error' })
-        return
+        return null
       }
-      const sameShape = form.headcount && sameSets(form.headcount.sets, assessed.sets)
-      const rows = mergeHeadcountRows(sameShape ? form.headcount?.rows ?? null : null, uploadedRows, assessed.sets)
-      onSave({ sets: assessed.sets, rows, totalExpected: total, updatedAt: new Date().toISOString() })
-      setSets(setsFromHeadcount({ sets: assessed.sets, rows, totalExpected: total, updatedAt: new Date().toISOString() }))
-      setStagedFile(null)
-      setAcceptedRows(null)
-      setErrors([])
-      showToast({ message: 'Expected responses saved', variant: 'success' })
-      return
+      const sameShape = form?.headcount && sameSets(form.headcount.sets, assessed.sets)
+      const rows = mergeHeadcountRows(sameShape ? form?.headcount?.rows ?? null : null, uploadedRows, assessed.sets)
+      return { sets: assessed.sets, rows, totalExpected: total, updatedAt: new Date().toISOString() }
     }
-    onSave({
-      sets: form.headcount?.sets ?? [],
-      rows: form.headcount?.rows ?? [],
+    return {
+      sets: form?.headcount?.sets ?? [],
+      rows: form?.headcount?.rows ?? [],
       totalExpected: total,
       updatedAt: new Date().toISOString(),
-    })
+    }
+  }
+
+  useImperativeHandle(ref, () => ({ commit }), [sets, totalInput, acceptedRows, stagedFile, form])
+
+  function saveTotal() {
+    if (!form) return
+    const headcount = commit()
+    if (!headcount) return
+    onSave(headcount)
+    setSets(setsFromHeadcount(headcount))
+    setStagedFile(null)
+    setAcceptedRows(null)
+    setErrors([])
     showToast({ message: 'Expected responses saved', variant: 'success' })
   }
 
@@ -177,11 +207,11 @@ export function CollectorHeadcountModal({ form, open, onOpenChange, onSave }: Co
 
   function downloadTemplate() {
     const assessed = assessSets(sets)
-    if (assessed.state !== 'ready' || !form) return
+    if (assessed.state !== 'ready') return
     const defined = assessed.sets
-    const sameShape = form.headcount && sameSets(form.headcount.sets, defined)
-    const slug = (form.name || 'collector').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
-    void headcountWorkbookBlob(defined, sameShape ? form.headcount?.rows ?? null : null).then((blob) => {
+    const sameShape = !!form?.headcount && sameSets(form.headcount.sets, defined)
+    const slug = (collectorName || form?.name || 'collector').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    void headcountWorkbookBlob(defined, sameShape ? form?.headcount?.rows ?? null : null).then((blob) => {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -224,6 +254,10 @@ export function CollectorHeadcountModal({ form, open, onOpenChange, onSave }: Co
   const fileReady = acceptedRows != null || savedFileStillMatches
   const saveBlocked = assessed.state === 'incomplete' || (templateReady && !fileReady)
 
+  useEffect(() => {
+    onBlockedChange?.(saveBlocked)
+  }, [onBlockedChange, saveBlocked])
+
   const savedSummary = form?.headcount
     ? [
         form.headcount.totalExpected != null ? `${form.headcount.totalExpected.toLocaleString()} expected` : null,
@@ -235,14 +269,8 @@ export function CollectorHeadcountModal({ form, open, onOpenChange, onSave }: Co
         .join(' · ')
     : ''
 
-  return (
-    <WuModal open={open} onOpenChange={onOpenChange} variant="action" size="lg" {...preventModalDismiss}>
-      <WuModalHeader>
-        <span className="block leading-tight">Expected responses</span>
-        {form?.name ? <span className="mt-1 block text-sm font-normal text-gray-500">{form.name}</span> : null}
-      </WuModalHeader>
-      <WuModalContent>
-        <div className="space-y-5">
+  const fields = (
+    <div className="space-y-5">
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-4">
             <label className="block max-w-sm">
               <span className="mb-1.5 block text-sm font-medium text-gray-800">
@@ -397,8 +425,18 @@ export function CollectorHeadcountModal({ form, open, onOpenChange, onSave }: Co
               </div>
             ) : null}
           </div>
-        </div>
-      </WuModalContent>
+    </div>
+  )
+
+  if (embedded) return fields
+
+  return (
+    <WuModal open={open} onOpenChange={onOpenChange} variant="action" size="lg" {...preventModalDismiss}>
+      <WuModalHeader>
+        <span className="block leading-tight">Expected responses</span>
+        {form?.name ? <span className="mt-1 block text-sm font-normal text-gray-500">{form.name}</span> : null}
+      </WuModalHeader>
+      <WuModalContent>{fields}</WuModalContent>
       <WuModalFooter>
         <div className="flex w-full items-center justify-end gap-3">
           <WuButton variant="link" onClick={() => onOpenChange(false)}>
@@ -411,7 +449,8 @@ export function CollectorHeadcountModal({ form, open, onOpenChange, onSave }: Co
       </WuModalFooter>
     </WuModal>
   )
-}
+},
+)
 
 function SegmentSetEditor({
   index,

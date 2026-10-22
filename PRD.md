@@ -782,6 +782,12 @@ Shows 360-specific settings:
 - "+ New Deployment" button
 - "Launch" primary button → confirmation modal
 
+**Rater due date and auto-reminders (Phase 1 — locked decisions):**
+- Optional **Rater due date** on create and in the deployment header. Prototype is date-only. Editable until the deployment is closed. Soft close: late responses are still accepted.
+- **Rater due date**, **Close deployment**, and recurring end **Until rater due date** are three different events. Do not label the end option “When deployment closes.” Close deployment cancels all remaining scheduled reminder firings. When a due date is set, every scheduled firing must be on or before that date. Full rules: `docs/360/03-deployment/due-date-and-auto-reminders.PRD.md`.
+- Scheduled reminders live on the **Reminders** page: **Scheduled** (primary tab) and **Manual** (secondary). Google Calendar-style add/edit modal. Same template and subject line for scheduled and manual sends. Same-person same-day overlap is flagged, not blocked.
+- Respondent survey form does **not** show the due date in v1.
+
 ---
 
 ### 360-04 — Report Builder

@@ -195,3 +195,10 @@ body {
   z-index: 100;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15) !important;
 }
+
+/* WuDatePicker popover is portaled to body; keep it clickable above WuModal. */
+[data-radix-popper-content-wrapper]:has(.wu-date-picker-content),
+.wu-date-picker-content {
+  z-index: 80;
+  pointer-events: auto;
+}

@@ -7,6 +7,8 @@ export type Survey360Deployment = {
   responses: number
   invited: number
   date: string
+  /** Optional close date for the deployment, stored as yyyy-MM-dd. */
+  dueDate: string | null
   responseRate: number
   list: Survey360DeploymentList
 }
@@ -19,6 +21,7 @@ export const mockSurvey360Deployments: Survey360Deployment[] = [
     responses: 0,
     invited: 5,
     date: '2026-09-18 14:31:00',
+    dueDate: '2026-10-31',
     responseRate: 100,
     list: 'ongoing',
   },
@@ -29,6 +32,7 @@ export const mockSurvey360Deployments: Survey360Deployment[] = [
     responses: 42,
     invited: 48,
     date: '2026-03-12 09:15:00',
+    dueDate: '2026-03-31',
     responseRate: 87.5,
     list: 'completed',
   },
@@ -39,6 +43,7 @@ export const mockSurvey360Deployments: Survey360Deployment[] = [
     responses: 110,
     invited: 110,
     date: '2025-12-02 16:40:00',
+    dueDate: null,
     responseRate: 100,
     list: 'completed',
   },

@@ -146,7 +146,9 @@ export default function Survey360EditPage() {
 
       <main
         className={`min-h-0 flex-1 ${
-          mainTab === 'analytics' && analyticsSection === 'individualReports' ? 'overflow-hidden' : 'overflow-auto'
+          (mainTab === 'analytics' && analyticsSection === 'individualReports') || mainTab === 'distribute'
+            ? 'overflow-hidden'
+            : 'overflow-auto'
         }`}
       >
         {mainTab === 'edit' && editSubTab === 'workspace' && (
@@ -165,7 +167,13 @@ export default function Survey360EditPage() {
           <MediaLibraryPanel survey={survey} onChange={handleChange} />
         )}
         {mainTab === 'distribute' && (
-          <DistributePanel survey={survey} section={distributeSection} />
+          <div className="h-full min-h-0">
+            <DistributePanel
+              survey={survey}
+              section={distributeSection}
+              onSectionChange={setDistributeSection}
+            />
+          </div>
         )}
         {mainTab === 'analytics' && analyticsSection === 'data' && survey ? (
           <SurveyDataPanel survey={survey} />

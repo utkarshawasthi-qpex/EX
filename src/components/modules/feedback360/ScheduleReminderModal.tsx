@@ -15,11 +15,14 @@ import {
   type Survey360ReminderRule,
   DEFAULT_REMINDER_BODY,
   DEFAULT_REMINDER_SUBJECT,
+  DEFAULT_SURVEY_REMINDER_BODY,
+  DEFAULT_SURVEY_REMINDER_SUBJECT,
   REMINDER_AUDIENCE_OPTIONS,
   REMINDER_FROM_OPTIONS,
   WEEKDAY_BUTTONS,
   formatReminderDate,
   reminderTemplateId,
+  reminderToLabel,
   summarizeReminderRule,
   todayStamp,
   validateReminderRule,
@@ -97,6 +100,9 @@ type ScheduleReminderModalProps = {
   templates: ReminderMailTemplate[]
   subjectCount: number
   evaluatorCount: number
+  employeeCount?: number
+  audienceOptions?: { value: ReminderAudience; label: string }[]
+  defaultAudience?: ReminderAudience
   onSave: (rule: Survey360ReminderRule) => void
 }
 
@@ -104,18 +110,23 @@ function option(list: SelectOption[], value: string) {
   return list.find((item) => item.value === value) ?? list[0]
 }
 
-function emptyRule(): Survey360ReminderRule {
+function emptyRule(audience: ReminderAudience = 'subject'): Survey360ReminderRule {
+  const survey = audience === 'employee'
   return {
     id: '',
     deploymentId: '',
     mode: 'one_time',
     time: '',
-    audience: 'subject',
+    audience,
     from: REMINDER_FROM_OPTIONS[0].value,
-    templateId: reminderTemplateId('subject'),
-    subject: DEFAULT_REMINDER_SUBJECT,
-    body: toEditorHtml(DEFAULT_REMINDER_BODY),
+    templateId: reminderTemplateId(audience),
+    subject: survey ? DEFAULT_SURVEY_REMINDER_SUBJECT : DEFAULT_REMINDER_SUBJECT,
+    body: toEditorHtml(survey ? DEFAULT_SURVEY_REMINDER_BODY : DEFAULT_REMINDER_BODY),
   }
+}
+
+function fallbackBody(audience: ReminderAudience) {
+  return audience === 'employee' ? DEFAULT_SURVEY_REMINDER_BODY : DEFAULT_REMINDER_BODY
 }
 
 function earliestAllowedDate(current?: string) {
@@ -204,9 +215,12 @@ export function ScheduleReminderModal({
   templates,
   subjectCount,
   evaluatorCount,
+  employeeCount,
+  audienceOptions = REMINDER_AUDIENCE_OPTIONS,
+  defaultAudience = 'subject',
   onSave,
 }: ScheduleReminderModalProps) {
-  const [draft, setDraft] = useState<Survey360ReminderRule>(emptyRule())
+  const [draft, setDraft] = useState<Survey360ReminderRule>(emptyRule(defaultAudience))
   const [error, setError] = useState('')
   const [step, setStep] = useState(0)
   const [editEmail, setEditEmail] = useState(true)
@@ -215,14 +229,18 @@ export function ScheduleReminderModal({
   useEffect(() => {
     if (!open) return
     const next = initial
-      ? { ...emptyRule(), ...initial, body: toEditorHtml(initial.body || DEFAULT_REMINDER_BODY) }
-      : emptyRule()
+      ? {
+          ...emptyRule(initial.audience ?? defaultAudience),
+          ...initial,
+          body: toEditorHtml(initial.body || fallbackBody(initial.audience ?? defaultAudience)),
+        }
+      : emptyRule(defaultAudience)
     setDraft(next)
     setError('')
     setStep(0)
     setEditEmail(true)
     setEditorKey((current) => current + 1)
-  }, [open, initial])
+  }, [open, initial, defaultAudience])
 
   const isEdit = Boolean(initial?.id)
   const endOptions = useMemo(() => {
@@ -254,10 +272,11 @@ export function ScheduleReminderModal({
   const toOptions = [
     {
       value: 'all',
-      label:
-        draft.audience === 'evaluator'
-          ? `All Evaluators (${evaluatorCount})`
-          : `All Subjects (${subjectCount})`,
+      label: reminderToLabel(draft.audience, {
+        subjectCount,
+        evaluatorCount,
+        employeeCount,
+      }),
     },
   ]
   const canContinueWhen =
@@ -524,8 +543,8 @@ export function ScheduleReminderModal({
         ) : (
           <div className="flex min-h-[28rem] flex-col">
             <MailComposeCard
-              typeOptions={[...REMINDER_AUDIENCE_OPTIONS]}
-              inviteType={option(REMINDER_AUDIENCE_OPTIONS, draft.audience)}
+              typeOptions={[...audienceOptions]}
+              inviteType={option(audienceOptions, draft.audience)}
               onTypeChange={(next) => changeAudience(next.value as ReminderAudience)}
               toOptions={toOptions}
               fromOptions={[...REMINDER_FROM_OPTIONS]}

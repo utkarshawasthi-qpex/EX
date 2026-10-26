@@ -10,11 +10,8 @@ import type { Survey360Deployment } from '@/data/mock/survey360Deployments'
 import { formatDate } from '@/data/mock-utils'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { EmptyState } from '@/components/ui/EmptyState'
-import {
-  MailComposeCard,
-  toEditorHtml,
-  type MailSelectOption,
-} from '@/components/modules/feedback360/MailComposeCard'
+import { MailComposer } from '@/components/modules/feedback360/MailComposer'
+import { toEditorHtml } from '@/components/modules/feedback360/MailComposeCard'
 import { ScheduleReminderModal } from '@/components/modules/feedback360/ScheduleReminderModal'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { useRosterStore } from '@/lib/rosterStore'
@@ -2065,129 +2062,6 @@ function CriteriaReportBody({
           {report.met ? 'Criteria met' : 'Criteria not met'}
         </span>
       </div>
-    </div>
-  )
-}
-
-function MailComposer({
-  title,
-  banner,
-  typeOptions,
-  inviteType,
-  onTypeChange,
-  toOptions,
-  fromOptions,
-  mailFrom,
-  onFromChange,
-  templateOptions,
-  selectedTemplate,
-  onTemplateChange,
-  emailSubject,
-  onSubjectChange,
-  emailBody,
-  onBodyChange,
-  editEmail,
-  onEditEmailChange,
-  editorKey,
-  recipientCount,
-  recipientKind,
-  onSend,
-  onSendTest,
-  onSchedule,
-  showMore = true,
-}: {
-  title: string
-  banner?: string
-  typeOptions: MailSelectOption[]
-  inviteType: MailSelectOption
-  onTypeChange: (next: MailSelectOption) => void
-  toOptions: MailSelectOption[]
-  fromOptions: MailSelectOption[]
-  mailFrom: MailSelectOption
-  onFromChange: (next: MailSelectOption) => void
-  templateOptions: MailSelectOption[]
-  selectedTemplate: MailSelectOption
-  onTemplateChange: (id: string) => void
-  emailSubject: string
-  onSubjectChange: (value: string) => void
-  emailBody: string
-  onBodyChange: (value: string) => void
-  editEmail: boolean
-  onEditEmailChange: (value: boolean) => void
-  editorKey: number
-  recipientCount: number
-  recipientKind: 'subject' | 'evaluator'
-  onSend: () => void
-  onSendTest: () => void
-  onSchedule: () => void
-  showMore?: boolean
-}) {
-  return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#F7F9FC] px-6 py-5">
-      <div className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3">
-        <div>
-          <WuHeading size="sm" className="text-gray-900">
-            {title}
-          </WuHeading>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200">
-            {recipientCount} {recipientKind}
-            {recipientCount === 1 ? '' : 's'}
-          </span>
-          <WuTooltip
-            content="Turn on Edit email to change the subject, body, and merge variables before you send."
-            position="left"
-            showArrow
-          >
-            <span
-              className="inline-flex size-5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-semibold text-white"
-              aria-label="About this page"
-            >
-              ?
-            </span>
-          </WuTooltip>
-        </div>
-      </div>
-
-      {banner ? (
-        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          {banner}
-        </div>
-      ) : null}
-
-      <MailComposeCard
-        typeOptions={typeOptions}
-        inviteType={inviteType}
-        onTypeChange={onTypeChange}
-        toOptions={toOptions}
-        fromOptions={fromOptions}
-        mailFrom={mailFrom}
-        onFromChange={onFromChange}
-        templateOptions={templateOptions}
-        selectedTemplate={selectedTemplate}
-        onTemplateChange={onTemplateChange}
-        emailSubject={emailSubject}
-        onSubjectChange={onSubjectChange}
-        emailBody={emailBody}
-        onBodyChange={onBodyChange}
-        editEmail={editEmail}
-        onEditEmailChange={onEditEmailChange}
-        editorKey={editorKey}
-        footerRight={
-          <>
-            {showMore ? (
-              <WuMenu Trigger={<WuButton variant="secondary">More</WuButton>} align="end">
-                <WuMenuItem onSelect={onSendTest}>Send test</WuMenuItem>
-                <WuMenuItem onSelect={onSchedule}>Schedule mail</WuMenuItem>
-              </WuMenu>
-            ) : null}
-            <WuButton variant="primary" onClick={onSend}>
-              Send Mail
-            </WuButton>
-          </>
-        }
-      />
     </div>
   )
 }

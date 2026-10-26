@@ -6,15 +6,14 @@ import { useSearchParams } from 'next/navigation'
 import type { IWuTableColumnDef } from '@npm-questionpro/wick-ui-lib'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
 import { CollectorHeadcountModal, type CollectorHeadcountHandle } from '@/components/studies/CollectorHeadcountModal'
+import { LifecycleSendWorkspace } from '@/components/studies/LifecycleSendWorkspace'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { type CollectorEmployeeField, type CollectorForm } from '@/data/mock-collector-forms'
-import { getEmployeeDisplayName, type DirectoryEmployee } from '@/data/mock-employee-directory'
 import { formatStudyDate } from '@/data/mock-utils'
 import { useSurveyDistribution } from '@/lib/distributionStore'
 import { preventModalDismiss } from '@/lib/modalProps'
 import { cn } from '@/lib/utils'
-import { useRosterStore } from '@/lib/rosterStore'
 
 const WuButton = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuButton })),
@@ -203,8 +202,6 @@ export function StudyDistributionPage({
 }) {
   const searchParams = useSearchParams()
   const { showToast } = useWuShowToast()
-  const { employees } = useRosterStore()
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const studyName = studyNameProp?.trim() || searchParams.get('study')?.trim() || 'this study'
   const resolvedSurveyId = surveyId?.trim() || 'survey_unknown'
@@ -219,70 +216,6 @@ export function StudyDistributionPage({
   const [editing, setEditing] = useState<CollectorForm | null>(null)
   const [qrForm, setQrForm] = useState<CollectorForm | null>(null)
   const [deleteForm, setDeleteForm] = useState<CollectorForm | null>(null)
-  const allSelected = employees.length > 0 && selectedIds.size === employees.length
-
-  function toggle(id: string, checked: boolean) {
-    setSelectedIds((current) => {
-      const next = new Set(current)
-      if (checked) next.add(id)
-      else next.delete(id)
-      return next
-    })
-  }
-
-  function toggleAll(checked: boolean) {
-    setSelectedIds(checked ? new Set(employees.map((employee) => employee.id)) : new Set())
-  }
-
-  function sendInvites() {
-    if (selectedIds.size === 0) {
-      showToast({ message: 'Select at least one employee', variant: 'error' })
-      return
-    }
-    showToast({
-      message: `Survey sent to ${selectedIds.size} employees`,
-      variant: 'success',
-    })
-    setSelectedIds(new Set())
-  }
-
-  const columns = useMemo<IWuTableColumnDef<DirectoryEmployee>[]>(
-    () => [
-      {
-        accessorKey: 'id',
-        id: 'select',
-        header: () => (
-          <WuCheckbox checked={allSelected} partial={selectedIds.size > 0 && !allSelected} onChange={toggleAll} />
-        ),
-        size: 44,
-        enableSorting: false,
-        cell: ({ row }) => (
-          <WuCheckbox
-            checked={selectedIds.has(row.original.id)}
-            onChange={(checked) => toggle(row.original.id, checked)}
-          />
-        ),
-      },
-      {
-        accessorKey: 'firstName',
-        header: 'Name',
-        cell: ({ row }) => getEmployeeDisplayName(row.original),
-      },
-      {
-        accessorKey: 'email',
-        header: 'Email address',
-      },
-      {
-        accessorKey: 'department',
-        header: 'Department',
-      },
-      {
-        accessorKey: 'location',
-        header: 'Location',
-      },
-    ],
-    [allSelected, selectedIds],
-  )
 
   function copyLink(form: CollectorForm) {
     void navigator.clipboard.writeText(form.link)
@@ -436,17 +369,15 @@ export function StudyDistributionPage({
   )
 
   return (
-    <div className="flex min-h-full flex-col bg-white">
-      <div className="border-b border-gray-200 bg-white">
+    <div className="flex min-h-0 flex-1 flex-col bg-white">
+      <div className="shrink-0 border-b border-gray-200 bg-white">
         {embedded ? null : (
           <div className="px-6 pt-6">
             <WuHeading size="sm" className="text-gray-800">
               Distribute {studyName}
             </WuHeading>
             <WuText size="sm" className="mt-1 text-gray-500">
-              {subTab === 'send'
-                ? 'Select employees from the roster and send the survey.'
-                : 'Share a link so people can open it and respond.'}
+              {subTab === 'collectorForms' ? 'Share a link so people can open it and respond.' : null}
             </WuText>
           </div>
         )}
@@ -470,16 +401,11 @@ export function StudyDistributionPage({
               )
             })}
           </div>
-          {subTab === 'send' ? (
-            <WuButton onClick={sendInvites} disabled={selectedIds.size === 0}>
-              Send to {selectedIds.size || 'selected'}
-            </WuButton>
-          ) : null}
         </div>
       </div>
 
-      <div className="px-6 py-6">
       {subTab === 'collectorForms' ? (
+        <div className="px-6 py-6">
         <div>
           <div className="mb-4 flex items-center gap-2">
             <h2 className="text-base font-semibold text-[#1B3A6B]">Collector forms</h2>
@@ -530,25 +456,12 @@ export function StudyDistributionPage({
             />
           )}
         </div>
-      ) : employees.length === 0 ? (
-        <EmptyState
-          icon="wm-person"
-          title="No employees in the list"
-          description="Import employees before distributing a study."
-        />
+        </div>
       ) : (
-        <div>
-          <WuTable
-            data={employees as unknown[]}
-            columns={columns as unknown as IWuTableColumnDef<unknown>[]}
-            variant="striped"
-            size="compact"
-            stickyHeader
-            maxHeight="calc(100vh - 220px)"
-          />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <LifecycleSendWorkspace surveyId={resolvedSurveyId} surveyName={studyName} />
         </div>
       )}
-      </div>
 
       <WuModal
         open={createOpen || editing != null}

@@ -120,7 +120,13 @@ export default function LifecycleSurveyEditPage() {
         onAddSection={handleAddSection}
       />
 
-      <div className="min-h-0 flex-1 overflow-auto bg-white">
+      <div
+        className={
+          mainTab === 'distribute'
+            ? 'flex min-h-0 flex-1 flex-col overflow-hidden bg-white'
+            : 'min-h-0 flex-1 overflow-auto bg-white'
+        }
+      >
         {mainTab === 'distribute' ? (
           <StudyDistributionPage
             studyName={survey.title}

@@ -12,7 +12,7 @@ export type ReminderWeekday = 0 | 1 | 2 | 3 | 4 | 5 | 6
 export type ReminderMode = 'one_time' | 'recurring'
 export type ReminderInterval = 'daily' | 'every_n_days' | 'weekly' | 'every_n_weeks' | 'monthly'
 export type ReminderEndKind = 'on_date' | 'after_n' | 'until_due_date'
-export type ReminderAudience = 'subject' | 'evaluator'
+export type ReminderAudience = 'subject' | 'evaluator' | 'employee'
 
 export type Survey360ReminderRule = {
   id: string
@@ -42,9 +42,21 @@ This is a reminder to finish your 360 feedback for [COMPANY_NAME]. It only takes
 Thank you,
 [COMPANY_NAME]`
 
+export const DEFAULT_SURVEY_REMINDER_SUBJECT = 'Reminder: complete your survey'
+export const DEFAULT_SURVEY_REMINDER_BODY = `Dear {FIRST_NAME},
+
+This is a reminder to finish your survey for [COMPANY_NAME]. It only takes a few minutes.
+
+Thank you,
+[COMPANY_NAME]`
+
 export const REMINDER_AUDIENCE_OPTIONS: { value: ReminderAudience; label: string }[] = [
   { value: 'subject', label: 'Subject Reminder' },
   { value: 'evaluator', label: 'Evaluator Reminder' },
+]
+
+export const LIFECYCLE_REMINDER_AUDIENCE_OPTIONS: { value: ReminderAudience; label: string }[] = [
+  { value: 'employee', label: 'Survey Reminder' },
 ]
 
 export const REMINDER_FROM_OPTIONS: { value: string; label: string }[] = [
@@ -52,23 +64,37 @@ export const REMINDER_FROM_OPTIONS: { value: string; label: string }[] = [
 ]
 
 export function reminderAudienceLabel(audience: ReminderAudience) {
-  return audience === 'evaluator' ? 'Evaluator Reminder' : 'Subject Reminder'
+  if (audience === 'evaluator') return 'Evaluator Reminder'
+  if (audience === 'employee') return 'Survey Reminder'
+  return 'Subject Reminder'
 }
 
 export function reminderTemplateId(audience: ReminderAudience) {
-  return audience === 'evaluator' ? 'tpl_evaluator_reminder' : 'tpl_subject_reminder'
+  if (audience === 'evaluator') return 'tpl_evaluator_reminder'
+  if (audience === 'employee') return 'tpl_survey_reminder'
+  return 'tpl_subject_reminder'
 }
 
-function composeFields(audience: ReminderAudience): Pick<
+export function reminderToLabel(
+  audience: ReminderAudience,
+  counts: { subjectCount: number; evaluatorCount: number; employeeCount?: number },
+) {
+  if (audience === 'evaluator') return `All Evaluators (${counts.evaluatorCount})`
+  if (audience === 'employee') return `All employees (${counts.employeeCount ?? counts.subjectCount})`
+  return `All Subjects (${counts.subjectCount})`
+}
+
+export function composeFields(audience: ReminderAudience): Pick<
   Survey360ReminderRule,
   'audience' | 'from' | 'templateId' | 'subject' | 'body'
 > {
+  const survey = audience === 'employee'
   return {
     audience,
     from: REMINDER_FROM_OPTIONS[0].value,
     templateId: reminderTemplateId(audience),
-    subject: DEFAULT_REMINDER_SUBJECT,
-    body: DEFAULT_REMINDER_BODY,
+    subject: survey ? DEFAULT_SURVEY_REMINDER_SUBJECT : DEFAULT_REMINDER_SUBJECT,
+    body: survey ? DEFAULT_SURVEY_REMINDER_BODY : DEFAULT_REMINDER_BODY,
   }
 }
 

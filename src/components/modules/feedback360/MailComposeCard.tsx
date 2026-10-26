@@ -28,6 +28,12 @@ const WuContentEditor = dynamic(
 
 export type MailSelectOption = { value: string; label: string }
 
+export const ADD_FROM_EMAIL_VALUE = '__add_from_email__'
+const ADD_FROM_EMAIL_OPTION: MailSelectOption = {
+  value: ADD_FROM_EMAIL_VALUE,
+  label: '+ Add from email',
+}
+
 const MAIL_VARIABLES = [
   { token: '[First Name]', label: 'First Name' },
   { token: '[Last Name]', label: 'Last Name' },
@@ -38,6 +44,10 @@ const MAIL_VARIABLES = [
   { token: '[Deployment date YYYY-MM-DD]', label: 'Deployment date YYYY-MM-DD' },
   { token: '[Deployment date MMM/DD/YYYY]', label: 'Deployment date MMM/DD/YYYY' },
   { token: '[Deployment date DD/MM/YYYY]', label: 'Deployment date DD/MM/YYYY' },
+  { token: '[Due date YYYY/MM/DD]', label: 'Due date YYYY/MM/DD' },
+  { token: '[Due date YYYY-MM-DD]', label: 'Due date YYYY-MM-DD' },
+  { token: '[Due date MMM/DD/YYYY]', label: 'Due date MMM/DD/YYYY' },
+  { token: '[Due date DD/MM/YYYY]', label: 'Due date DD/MM/YYYY' },
   { token: '[Current Date]', label: 'Current Date' },
   { token: '[Employee Unique Email]', label: 'Employee Unique Email' },
 ] as const
@@ -58,7 +68,7 @@ export function toEditorHtml(body: string) {
     .join('')
 }
 
-function MailInlineField({
+export function MailInlineField({
   label,
   children,
   className,
@@ -110,7 +120,7 @@ function InsertVariableToolbar({ onInsert }: { onInsert: (token: string) => void
 }
 
 export function MailComposeCard({
-  typeOptions,
+  typeOptions = [],
   inviteType,
   onTypeChange,
   toOptions,
@@ -129,10 +139,20 @@ export function MailComposeCard({
   editorKey,
   footerRight,
   className,
+  hideType = false,
+  hideFrom = false,
+  hideSubject = false,
+  typeField,
+  toField,
+  fromExtra,
+  extraContent,
+  editLabel = 'Edit email',
+  typeFieldPlacement = 'start',
+  onAddFrom,
 }: {
-  typeOptions: MailSelectOption[]
-  inviteType: MailSelectOption
-  onTypeChange: (next: MailSelectOption) => void
+  typeOptions?: MailSelectOption[]
+  inviteType?: MailSelectOption
+  onTypeChange?: (next: MailSelectOption) => void
   toOptions: MailSelectOption[]
   fromOptions: MailSelectOption[]
   mailFrom: MailSelectOption
@@ -149,9 +169,25 @@ export function MailComposeCard({
   editorKey: number
   footerRight?: ReactNode
   className?: string
+  hideType?: boolean
+  hideFrom?: boolean
+  hideSubject?: boolean
+  typeField?: ReactNode
+  toField?: ReactNode
+  fromExtra?: ReactNode
+  extraContent?: ReactNode
+  editLabel?: string
+  typeFieldPlacement?: 'start' | 'templates'
+  onAddFrom?: () => void
 }) {
-  const selectedType = typeOptions.find((option) => option.value === inviteType.value) ?? typeOptions[0]
+  const selectedType =
+    typeOptions.find((option) => option.value === inviteType?.value) ?? typeOptions[0]
+  const showType = Boolean(typeField) || (!hideType && typeOptions.length > 0)
+  const showTypeAtStart = showType && typeFieldPlacement === 'start'
+  const showTypeWithTemplates = showType && typeFieldPlacement === 'templates'
+  const fromSelectOptions = onAddFrom ? [...fromOptions, ADD_FROM_EMAIL_OPTION] : fromOptions
   const [insertKey, setInsertKey] = useState(0)
+  const [fromSelectKey, setFromSelectKey] = useState(0)
 
   function insertVariable(token: string) {
     const surface = document.querySelector(
@@ -173,54 +209,106 @@ export function MailComposeCard({
   return (
     <WuCard rounded className={cn('flex min-h-0 flex-1 flex-col overflow-hidden p-0', className)}>
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-8 gap-y-2 border-b border-gray-200 bg-white px-5 py-2.5">
-        <MailInlineField label="Type :" className="min-w-[200px] flex-1">
-          <WuSelect
-            data={typeOptions}
-            accessorKey={{ value: 'value', label: 'label' }}
-            value={selectedType}
-            onSelect={(next) => onTypeChange(next as MailSelectOption)}
-            variant="outlined"
-          />
-        </MailInlineField>
-        <MailInlineField label="To :" className="min-w-[200px] flex-1">
-          <WuSelect
-            data={toOptions}
-            accessorKey={{ value: 'value', label: 'label' }}
-            value={toOptions[0]}
-            onSelect={() => undefined}
-            variant="outlined"
-          />
-        </MailInlineField>
-        <MailInlineField label="From :" className="min-w-[240px] flex-1">
-          <WuSelect
-            data={fromOptions}
-            accessorKey={{ value: 'value', label: 'label' }}
-            value={mailFrom}
-            onSelect={(next) => onFromChange(next as MailSelectOption)}
-            variant="outlined"
-          />
-        </MailInlineField>
+        {showTypeAtStart ? (
+          typeField ?? (
+            <MailInlineField label="Type :" className="min-w-[200px] flex-1">
+              <WuSelect
+                data={typeOptions}
+                accessorKey={{ value: 'value', label: 'label' }}
+                value={selectedType}
+                onSelect={(next) => onTypeChange?.(next as MailSelectOption)}
+                variant="outlined"
+              />
+            </MailInlineField>
+          )
+        ) : null}
+        {toField ?? (
+          <MailInlineField label="To :" className="min-w-[200px] flex-1">
+            <WuSelect
+              data={toOptions}
+              accessorKey={{ value: 'value', label: 'label' }}
+              value={toOptions[0]}
+              onSelect={() => undefined}
+              variant="outlined"
+            />
+          </MailInlineField>
+        )}
+        {hideFrom ? null : (
+          <MailInlineField label="From :" className="min-w-[240px] flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <WuSelect
+                  key={fromSelectKey}
+                  data={fromSelectOptions}
+                  accessorKey={{ value: 'value', label: 'label' }}
+                  value={mailFrom}
+                  onSelect={(next) => {
+                    const option = next as MailSelectOption
+                    if (option.value === ADD_FROM_EMAIL_VALUE) {
+                      setFromSelectKey((current) => current + 1)
+                      onAddFrom?.()
+                      return
+                    }
+                    onFromChange(option)
+                  }}
+                  variant="outlined"
+                />
+              </div>
+              {fromExtra}
+            </div>
+          </MailInlineField>
+        )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-4 border-b border-gray-200 bg-white px-5 py-2.5">
-        <MailInlineField label="Subject :" className="min-w-0 flex-1">
-          <WuInput
-            variant="outlined"
-            value={emailSubject}
-            disabled={!editEmail}
-            onChange={(event) => onSubjectChange(event.target.value)}
-          />
-        </MailInlineField>
-        <div className="w-52 shrink-0">
-          <WuSelect
-            data={templateOptions}
-            accessorKey={{ value: 'value', label: 'label' }}
-            value={selectedTemplate}
-            onSelect={(next) => onTemplateChange((next as MailSelectOption).value)}
-            variant="outlined"
-          />
+      {showTypeWithTemplates ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-gray-200 bg-white px-5 py-2.5">
+          {typeField ?? (
+            <MailInlineField label="Type :" className="min-w-[200px] flex-1">
+              <WuSelect
+                data={typeOptions}
+                accessorKey={{ value: 'value', label: 'label' }}
+                value={selectedType}
+                onSelect={(next) => onTypeChange?.(next as MailSelectOption)}
+                variant="outlined"
+              />
+            </MailInlineField>
+          )}
+          <div className="w-52 shrink-0">
+            <WuSelect
+              data={templateOptions}
+              accessorKey={{ value: 'value', label: 'label' }}
+              value={selectedTemplate}
+              onSelect={(next) => onTemplateChange((next as MailSelectOption).value)}
+              variant="outlined"
+            />
+          </div>
         </div>
-      </div>
+      ) : null}
+
+      {hideSubject ? null : (
+        <div className="flex shrink-0 items-center gap-4 border-b border-gray-200 bg-white px-5 py-2.5">
+          <MailInlineField label="Subject :" className="min-w-0 flex-1">
+            <WuInput
+              variant="outlined"
+              value={emailSubject}
+              disabled={!editEmail}
+              onChange={(event) => onSubjectChange(event.target.value)}
+            />
+          </MailInlineField>
+          {showTypeWithTemplates ? null : (
+            <div className="w-52 shrink-0">
+              <WuSelect
+                data={templateOptions}
+                accessorKey={{ value: 'value', label: 'label' }}
+                value={selectedTemplate}
+                onSelect={(next) => onTemplateChange((next as MailSelectOption).value)}
+                variant="outlined"
+              />
+            </div>
+          )}
+        </div>
+      )}
+      {extraContent}
 
       {editEmail ? (
         <div className="min-h-0 flex-1 overflow-y-auto bg-white px-3 py-3">
@@ -250,7 +338,7 @@ export function MailComposeCard({
 
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-white px-5 py-3">
         <label className="flex items-center gap-3 text-sm text-gray-700">
-          Edit email
+          {editLabel}
           <WuToggle checked={editEmail} onChange={onEditEmailChange} />
         </label>
         {footerRight ? <div className="flex items-center gap-2">{footerRight}</div> : null}

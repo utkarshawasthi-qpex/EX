@@ -2,21 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  color-scheme: light;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   color: var(--foreground);
   background: var(--background);
+}
+
+/* WickUI selects, inputs, and the content editor inherit body color. Keep them
+   readable even if a nested surface does not set an explicit text class. */
+input,
+textarea,
+select,
+.ProseMirror,
+[contenteditable='true'],
+[data-slot='wu-content-editor'],
+[data-slot='wu-content-editor'] .ProseMirror {
+  color: #171717;
 }
 
 @layer utilities {

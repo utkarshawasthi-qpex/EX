@@ -12,8 +12,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className="light" style={{ colorScheme: 'light' }}>
+      <body className="bg-white text-[#171717]">
         <AppInitialiser />
         <AppShell>{children}</AppShell>
       </body>

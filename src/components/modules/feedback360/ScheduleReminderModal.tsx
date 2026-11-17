@@ -103,6 +103,7 @@ type ScheduleReminderModalProps = {
   employeeCount?: number
   audienceOptions?: { value: ReminderAudience; label: string }[]
   defaultAudience?: ReminderAudience
+  variant?: 'full' | 'when'
   onSave: (rule: Survey360ReminderRule) => void
 }
 
@@ -218,6 +219,7 @@ export function ScheduleReminderModal({
   employeeCount,
   audienceOptions = REMINDER_AUDIENCE_OPTIONS,
   defaultAudience = 'subject',
+  variant = 'full',
   onSave,
 }: ScheduleReminderModalProps) {
   const [draft, setDraft] = useState<Survey360ReminderRule>(emptyRule(defaultAudience))
@@ -240,7 +242,7 @@ export function ScheduleReminderModal({
     setStep(0)
     setEditEmail(true)
     setEditorKey((current) => current + 1)
-  }, [open, initial, defaultAudience])
+  }, [open, initial, defaultAudience, variant])
 
   const isEdit = Boolean(initial?.id)
   const endOptions = useMemo(() => {
@@ -331,11 +333,13 @@ export function ScheduleReminderModal({
       setStep(0)
       return
     }
-    const emailError = validateReminderEmail(draft)
-    if (emailError) {
-      setError(emailError)
-      setStep(1)
-      return
+    if (variant !== 'when') {
+      const emailError = validateReminderEmail(draft)
+      if (emailError) {
+        setError(emailError)
+        setStep(1)
+        return
+      }
     }
     onSave({
       ...draft,
@@ -344,6 +348,9 @@ export function ScheduleReminderModal({
     })
     onOpenChange(false)
   }
+
+  const whenOnly = variant === 'when'
+  const headerLabel = whenOnly ? (isEdit ? 'Edit schedule' : 'Schedule mail') : isEdit ? 'Edit reminder' : 'Add reminder'
 
   return (
     <WuModal
@@ -355,9 +362,9 @@ export function ScheduleReminderModal({
       allowExternalPortals
       {...preventModalDismiss}
     >
-      <WuModalHeader>{isEdit ? 'Edit reminder' : 'Add reminder'}</WuModalHeader>
+      <WuModalHeader>{headerLabel}</WuModalHeader>
       <WuModalContent>
-        {step === 0 ? (
+        {step === 0 || whenOnly ? (
           <div className="space-y-4">
             <WuFormGroup
               Label="When"
@@ -570,9 +577,9 @@ export function ScheduleReminderModal({
       </WuModalContent>
       <WuModalFooter>
         <div className="flex w-full items-center justify-between gap-4">
-          <ReminderStepIndicator currentStep={step} />
+          {whenOnly ? <span /> : <ReminderStepIndicator currentStep={step} />}
           <div className="flex items-center gap-3">
-            {step === 0 ? (
+            {step === 0 || whenOnly ? (
               <WuButton variant="secondary" onClick={() => onOpenChange(false)}>
                 Cancel
               </WuButton>
@@ -581,7 +588,11 @@ export function ScheduleReminderModal({
                 Back
               </WuButton>
             )}
-            {step === 0 ? (
+            {whenOnly ? (
+              <WuButton disabled={!canContinueWhen} onClick={save}>
+                {isEdit ? 'Save schedule' : 'Schedule'}
+              </WuButton>
+            ) : step === 0 ? (
               <WuButton disabled={!canContinueWhen} onClick={goToEmail}>
                 Next
               </WuButton>

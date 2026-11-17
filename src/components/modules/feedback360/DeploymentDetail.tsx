@@ -4,7 +4,6 @@ import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { useWuShowToast } from '@npm-questionpro/wick-ui-lib'
-import type { IWuTabItem } from '@npm-questionpro/wick-ui-lib'
 import { getEmployeeDisplayName } from '@/data/mock-employee-directory'
 import type { Survey360Deployment } from '@/data/mock/survey360Deployments'
 import { formatDate } from '@/data/mock-utils'
@@ -18,11 +17,10 @@ import { useRosterStore } from '@/lib/rosterStore'
 import { cn } from '@/lib/utils'
 import {
   mockSurvey360ReminderRules,
-  nextFiring,
-  reminderAudienceLabel,
+  reminderScheduleStamp,
   ruleFiresOnDate,
-  summarizeReminderRule,
   todayStamp,
+  type ReminderAudience,
   type Survey360ReminderRule,
 } from '@/data/mock/survey360ReminderRules'
 
@@ -86,24 +84,22 @@ const WuHeading = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuHeading })),
   { ssr: false },
 )
-const WuCard = dynamic(
-  () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuCard })),
-  { ssr: false },
-)
 const WuTooltip = dynamic(
   () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuTooltip })),
   { ssr: false },
 )
-const WuTab = dynamic(
-  () => import('@npm-questionpro/wick-ui-lib').then((mod) => ({ default: mod.WuTab })),
-  { ssr: false },
-)
 
-type WorkspaceSection = 'selection' | 'options' | 'invitations' | 'reminders' | 'templates' | 'history'
+type WorkspaceSection =
+  | 'selection'
+  | 'options'
+  | 'invitations'
+  | 'reminders'
+  | 'scheduled'
+  | 'templates'
+  | 'history'
 type PeopleTab = 'subjects' | 'evaluators'
 type OptionsTab = 'subject' | 'manager' | 'nominations'
 type MailSection = 'invitations' | 'reminders'
-type ReminderTab = 'scheduled' | 'manual'
 type Relationship = 'Self' | 'Manager' | 'Peer' | 'Direct Report' | 'External'
 type ParticipantStatus = 'Not started' | 'Invited' | 'Completed'
 
@@ -216,6 +212,7 @@ const NAV: { id: WorkspaceSection; label: string }[] = [
   { id: 'options', label: 'Participant options' },
   { id: 'invitations', label: 'Invitations' },
   { id: 'reminders', label: 'Reminders' },
+  { id: 'scheduled', label: 'Scheduled' },
   { id: 'templates', label: 'Templates' },
   { id: 'history', label: 'Sent history' },
 ]
@@ -502,22 +499,55 @@ export function DeploymentDetail({ deployment, onBack, onUpdate }: DeploymentDet
         },
       ],
     },
+    {
+      id: 'hist_invite_sched',
+      tab: 'scheduled',
+      mailType: 'Subject Invitation',
+      subject: DEFAULT_INVITE_SUBJECT,
+      date: '2026-10-29 09:00:00',
+      status: 'Scheduled',
+      recipients: [
+        {
+          id: 'hist_invite_sched_r',
+          to: 'sarah.johnson@questionpro.example',
+          name: 'Sarah Johnson',
+          time: '2026-10-29 09:00:00',
+          status: 'Scheduled',
+          comments: '',
+        },
+      ],
+    },
+    {
+      id: 'hist_reminder_sched',
+      tab: 'scheduled',
+      mailType: 'Evaluator Reminder',
+      subject: DEFAULT_REMINDER_SUBJECT,
+      date: `${todayStamp()} 17:00:00`,
+      status: 'Scheduled',
+      recipients: [
+        {
+          id: 'hist_reminder_sched_r',
+          to: 'priya.nair@questionpro.example',
+          name: 'Priya Nair',
+          time: `${todayStamp()} 17:00:00`,
+          status: 'Scheduled',
+          comments: '',
+        },
+      ],
+    },
   ])
   const [selectedBatch, setSelectedBatch] = useState<MailBatch | null>(null)
   const [recipientStatus, setRecipientStatus] = useState(HISTORY_STATUS_OPTIONS[0])
   const [editingDueDate, setEditingDueDate] = useState(false)
   const [dueDateDraft, setDueDateDraft] = useState(deployment.dueDate ?? '')
-  const [reminderTab, setReminderTab] = useState<ReminderTab>('scheduled')
   const [reminderRules, setReminderRules] = useState<Survey360ReminderRule[]>(() =>
     mockSurvey360ReminderRules.filter((rule) => rule.deploymentId === deployment.id),
   )
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<Survey360ReminderRule | null>(null)
-  const [ruleToDelete, setRuleToDelete] = useState<Survey360ReminderRule | null>(null)
 
   useEffect(() => {
     setReminderRules(mockSurvey360ReminderRules.filter((rule) => rule.deploymentId === deployment.id))
-    setReminderTab('scheduled')
   }, [deployment.id])
 
   const subjectName = (subjectId: string) => subjects.find((subject) => subject.id === subjectId)?.name ?? 'Subject'
@@ -741,8 +771,9 @@ export function DeploymentDetail({ deployment, onBack, onUpdate }: DeploymentDet
     tab: HistoryTab = 'sent',
     status = 'Delivery Successful',
     recipientStatus = 'Sent',
+    at?: string,
   ) {
-    const time = formatStamp(new Date())
+    const time = at ?? formatStamp(new Date())
     const batch: MailBatch = {
       id: `hist_${Date.now()}`,
       tab,
@@ -787,6 +818,8 @@ export function DeploymentDetail({ deployment, onBack, onUpdate }: DeploymentDet
     () => history.filter((batch) => batch.tab === historyTab),
     [history, historyTab],
   )
+  const scheduledMails = history.filter((batch) => batch.tab === 'scheduled')
+  const scheduledEmpty = scheduledMails.length === 0
 
   const visibleRecipients = useMemo(() => {
     if (!selectedBatch) return []
@@ -811,7 +844,6 @@ export function DeploymentDetail({ deployment, onBack, onUpdate }: DeploymentDet
       if (template) applyTemplate(template)
       return
     }
-    setReminderTab('scheduled')
     setInviteType(REMINDER_TYPES[0])
     const template = templates.find((item) => item.id === 'tpl_subject_reminder') ?? templates[0]
     if (template) applyTemplate(template)
@@ -823,13 +855,46 @@ export function DeploymentDetail({ deployment, onBack, onUpdate }: DeploymentDet
     setEditEmail(true)
     if (isReminder) {
       setInviteType(REMINDER_TYPES[0])
-      setReminderTab('manual')
       setSection('reminders')
     } else {
       setInviteType(INVITE_TYPES[0])
       setSection('invitations')
     }
     showToast({ variant: 'success', message: `${template.name} opened` })
+  }
+
+  function composeAudience(): ReminderAudience {
+    return inviteType.value.includes('evaluator') ? 'evaluator' : 'subject'
+  }
+
+  function openScheduleFromCompose() {
+    if (toPool.length === 0) {
+      showToast({
+        variant: 'info',
+        message: toIsSubjects
+          ? 'Add subjects on Participant Selection before scheduling.'
+          : 'Add evaluators on Participant Selection before scheduling.',
+      })
+      setSection('selection')
+      return
+    }
+    if (!emailSubject.trim() || !emailBody.trim()) {
+      showToast({ variant: 'info', message: 'Add a subject and message before scheduling.' })
+      return
+    }
+    setEditingRule({
+      id: '',
+      deploymentId: deployment.id,
+      mode: 'one_time',
+      time: '',
+      audience: composeAudience(),
+      kind: section === 'reminders' ? 'reminder' : 'invitation',
+      from: mailFrom.value,
+      templateId: selectedTemplateId,
+      subject: emailSubject,
+      body: emailBody,
+    })
+    window.setTimeout(() => setScheduleOpen(true), 0)
   }
 
   function reminderOverlapMessage(people: { name: string; email: string }[]) {
@@ -905,50 +970,58 @@ export function DeploymentDetail({ deployment, onBack, onUpdate }: DeploymentDet
     if (firesToday && warning) {
       showToast({ variant: 'info', message: warning })
     }
-    showToast({ variant: 'success', message: exists ? 'Reminder updated' : 'Reminder scheduled' })
-  }
-
-  function previewScheduledSend(rule: Survey360ReminderRule) {
-    const audiencePool = rule.audience === 'evaluator' ? evaluators : subjects
-    const people = audiencePool.map((person) => ({ name: person.name, email: person.email }))
-    if (people.length === 0) {
-      showToast({
-        variant: 'info',
-        message:
-          rule.audience === 'evaluator'
-            ? 'Add evaluators on Participant selection to preview who would receive this.'
-            : 'Add subjects on Participant selection to preview who would receive this.',
-      })
-      return
+    if (!exists) {
+      recordSend(
+        audiencePool.map((person) => ({ name: person.name, email: person.email })),
+        inviteType.label,
+        'scheduled',
+        'Scheduled',
+        'Scheduled',
+        reminderScheduleStamp(nextRule, deployment.dueDate),
+      )
     }
-    const overlap = reminderOverlapMessage(people)
-    if (overlap) showToast({ variant: 'info', message: overlap })
-    const time = formatStamp(new Date())
-    setHistory((current) => [
-      {
-        id: `hist_${Date.now()}`,
-        tab: 'scheduled',
-        mailType: reminderAudienceLabel(rule.audience),
-        subject: rule.subject,
-        date: time,
-        status: 'Scheduled',
-        recipients: people.map((person, index) => ({
-          id: `hist_${Date.now()}_${index}`,
-          to: person.email,
-          name: person.name,
-          time,
-          status: 'Scheduled',
-          comments: summarizeReminderRule(rule, deployment.dueDate),
-        })),
-      },
-      ...current,
-    ])
     showToast({
       variant: 'success',
-      message: `Scheduled send logged for ${people.length} ${rule.audience === 'evaluator' ? 'evaluator' : 'subject'}${people.length === 1 ? '' : 's'}`,
+      message: exists
+        ? 'Schedule updated'
+        : nextRule.kind === 'invitation'
+          ? 'Invitation scheduled'
+          : 'Reminder scheduled',
     })
-    setHistoryTab('scheduled')
-    setSection('history')
+    setSection('scheduled')
+  }
+
+  const composerProps = {
+    typeOptions: composeTypeOptions,
+    inviteType,
+    onTypeChange: setInviteType,
+    toOptions,
+    fromOptions: FROM_OPTIONS,
+    mailFrom,
+    onFromChange: setMailFrom,
+    templateOptions,
+    selectedTemplate: selectedTemplate
+      ? { value: selectedTemplate.id, label: selectedTemplate.name }
+      : templateOptions[0],
+    onTemplateChange: (id: string) => {
+      const template = templates.find((item) => item.id === id)
+      if (template) applyTemplate(template)
+    },
+    emailSubject,
+    onSubjectChange: setEmailSubject,
+    emailBody,
+    onBodyChange: setEmailBody,
+    editEmail,
+    onEditEmailChange: (value: boolean) => {
+      setEditEmail(value)
+      if (value) setEditorKey((current) => current + 1)
+    },
+    editorKey,
+    recipientCount: toPool.length,
+    recipientKind: toIsSubjects ? 'subject' : 'evaluator',
+    onSend: sendEmail,
+    onSendTest: () => showToast({ variant: 'success', message: 'Test mail sent to your inbox' }),
+    onSchedule: openScheduleFromCompose,
   }
 
   const rows = peopleTab === 'subjects' ? visibleSubjects : visibleEvaluators
@@ -1341,223 +1414,82 @@ export function DeploymentDetail({ deployment, onBack, onUpdate }: DeploymentDet
         ) : null}
 
         {section === 'invitations' ? (
-          <MailComposer
-            title="Invitations"
-            typeOptions={composeTypeOptions}
-            inviteType={inviteType}
-            onTypeChange={setInviteType}
-            toOptions={toOptions}
-            fromOptions={FROM_OPTIONS}
-            mailFrom={mailFrom}
-            onFromChange={setMailFrom}
-            templateOptions={templateOptions}
-            selectedTemplate={
-              selectedTemplate
-                ? { value: selectedTemplate.id, label: selectedTemplate.name }
-                : templateOptions[0]
-            }
-            onTemplateChange={(id) => {
-              const template = templates.find((item) => item.id === id)
-              if (template) applyTemplate(template)
-            }}
-            emailSubject={emailSubject}
-            onSubjectChange={setEmailSubject}
-            emailBody={emailBody}
-            onBodyChange={setEmailBody}
-            editEmail={editEmail}
-            onEditEmailChange={(value) => {
-              setEditEmail(value)
-              if (value) setEditorKey((current) => current + 1)
-            }}
-            editorKey={editorKey}
-            recipientCount={toPool.length}
-            recipientKind={toIsSubjects ? 'subject' : 'evaluator'}
-            onSend={sendEmail}
-            onSendTest={() =>
-              showToast({ variant: 'success', message: 'Test mail sent to your inbox' })
-            }
-            onSchedule={() =>
-              showToast({ variant: 'success', message: 'Mail scheduled for later today' })
-            }
-          />
+          <MailComposer title="Invitations" {...composerProps} />
         ) : null}
 
         {section === 'reminders' ? (
-          <div className="flex h-full min-h-0 flex-col overflow-hidden">
-            <WuTab
-              key={reminderTab}
-              defaultValue={reminderTab}
-              items={
-                [
-                  {
-                    value: 'scheduled',
-                    Trigger: 'Scheduled',
-                    Content: (
-              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <WuHeading size="sm" className="text-gray-900">
-                      Scheduled reminders
-                    </WuHeading>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <WuButton variant="secondary" onClick={() => setReminderTab('manual')}>
-                      Send reminder now
-                    </WuButton>
-                    <WuButton
-                      variant="primary"
-                      onClick={() => {
-                        setEditingRule(null)
-                        setScheduleOpen(true)
-                      }}
-                    >
-                      Add reminder
-                    </WuButton>
-                  </div>
-                </div>
+          <MailComposer
+            title="Reminders"
+            banner={toPool.length > 0 ? reminderOverlapMessage(toPool) : undefined}
+            {...composerProps}
+          />
+        ) : null}
 
-                {reminderRules.length === 0 ? (
-                  <EmptyState
-                    icon="wm-calendar"
-                    title="No scheduled reminders"
-                    description="Add a one-time or repeating reminder."
-                    action={
-                      <WuButton
-                        variant="primary"
-                        onClick={() => {
-                          setEditingRule(null)
-                          setScheduleOpen(true)
-                        }}
-                      >
-                        Add reminder
-                      </WuButton>
-                    }
-                  />
-                ) : (
-                  <div className="space-y-3">
-                    {reminderRules.map((rule) => {
-                      const next = nextFiring(rule, deployment.dueDate)
-                      const firesToday = ruleFiresOnDate(rule, todayStamp(), deployment.dueDate)
-                      const sentToday = history.some(
-                        (batch) =>
-                          /reminder/i.test(batch.mailType) && batch.date.startsWith(todayStamp()),
-                      )
-                      return (
-                        <WuCard key={rule.id} rounded className="p-4">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-gray-900">
-                                {reminderAudienceLabel(rule.audience)} · {rule.mode === 'one_time' ? 'One-time' : 'Recurring'}
-                              </p>
-                              <p className="mt-1 text-sm text-gray-700">
-                                {summarizeReminderRule(rule, deployment.dueDate)}
-                              </p>
-                              <p className="mt-1 truncate text-sm text-gray-600">{rule.subject}</p>
-                              <p className="mt-2 text-xs text-gray-500">
-                                Next: {next ? formatDate(`${next}T00:00:00`) : 'No upcoming firing'}
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              {firesToday ? (
-                                <span
-                                  className={cn(
-                                    'rounded-full px-2 py-0.5 text-xs font-medium',
-                                    sentToday
-                                      ? 'bg-amber-100 text-amber-800'
-                                      : 'bg-blue-50 text-blue-700',
-                                  )}
-                                >
-                                  {sentToday ? 'Overlap today' : 'Fires today'}
-                                </span>
-                              ) : null}
-                              <WuButton variant="secondary" size="sm" onClick={() => previewScheduledSend(rule)}>
-                                Preview send
-                              </WuButton>
-                              <WuButton
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingRule(rule)
-                                  setScheduleOpen(true)
-                                }}
-                              >
-                                Edit
-                              </WuButton>
-                              <WuButton variant="secondary" size="sm" onClick={() => setRuleToDelete(rule)}>
-                                Delete
-                              </WuButton>
-                            </div>
-                          </div>
-                        </WuCard>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-                    ),
-                  },
-                  {
-                    value: 'manual',
-                    Trigger: 'Manual',
-                    Content: (
-              <MailComposer
-                title="Manual reminder"
-                banner={reminderOverlapMessage(toPool)}
-                showMore={false}
-                typeOptions={composeTypeOptions}
-                inviteType={inviteType}
-                onTypeChange={setInviteType}
-                toOptions={toOptions}
-                fromOptions={FROM_OPTIONS}
-                mailFrom={mailFrom}
-                onFromChange={setMailFrom}
-                templateOptions={templateOptions}
-                selectedTemplate={
-                  selectedTemplate
-                    ? { value: selectedTemplate.id, label: selectedTemplate.name }
-                    : templateOptions[0]
-                }
-                onTemplateChange={(id) => {
-                  const template = templates.find((item) => item.id === id)
-                  if (template) applyTemplate(template)
-                }}
-                emailSubject={emailSubject}
-                onSubjectChange={setEmailSubject}
-                emailBody={emailBody}
-                onBodyChange={setEmailBody}
-                editEmail={editEmail}
-                onEditEmailChange={(value) => {
-                  setEditEmail(value)
-                  if (value) setEditorKey((current) => current + 1)
-                }}
-                editorKey={editorKey}
-                recipientCount={toPool.length}
-                recipientKind={toIsSubjects ? 'subject' : 'evaluator'}
-                onSend={sendEmail}
-                onSendTest={() =>
-                  showToast({ variant: 'success', message: 'Test mail sent to your inbox' })
-                }
-                onSchedule={() => {
-                  setReminderTab('scheduled')
-                  setEditingRule({
-                    id: '',
-                    deploymentId: deployment.id,
-                    mode: 'one_time',
-                    time: '',
-                    audience: inviteType.value.includes('subject') ? 'subject' : 'evaluator',
-                    from: mailFrom.value,
-                    templateId: selectedTemplateId,
-                    subject: emailSubject,
-                    body: emailBody,
-                  })
-                  setScheduleOpen(true)
-                }}
+        {section === 'scheduled' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <div className="mb-4">
+              <WuHeading size="sm" className="text-gray-900">
+                Scheduled
+              </WuHeading>
+            </div>
+
+            {scheduledEmpty ? (
+              <EmptyState
+                icon="wm-calendar"
+                title="No scheduled emails"
+                description="Scheduled invitations and reminders for this deployment appear here."
               />
-                    ),
-                  },
-                ] as IWuTabItem[]
-              }
-            />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-xs text-gray-500">
+                      <th className="px-3 py-2 font-medium">Type</th>
+                      <th className="px-3 py-2 font-medium">Subject</th>
+                      <th className="px-3 py-2 font-medium">Date</th>
+                      <th className="px-3 py-2 font-medium">Status</th>
+                      <th className="px-3 py-2 font-medium" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scheduledMails.map((batch) => (
+                      <tr key={batch.id} className="border-b border-gray-100">
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <button
+                            type="button"
+                            className="text-left font-medium text-blue-600 hover:underline"
+                            onClick={() => {
+                              setRecipientStatus(HISTORY_STATUS_OPTIONS[0])
+                              setSelectedBatch(batch)
+                            }}
+                          >
+                            {batch.mailType}
+                          </button>
+                        </td>
+                        <td className="px-3 py-3 text-gray-800">{batch.subject}</td>
+                        <td className="px-3 py-3 whitespace-nowrap text-gray-600">
+                          {formatMailStamp(batch.date)}
+                        </td>
+                        <td className="px-3 py-3 text-gray-700">{batch.status}</td>
+                        <td className="px-3 py-3 text-right">
+                          <button
+                            type="button"
+                            className="inline-flex size-6 items-center justify-center rounded-full border border-gray-400 text-[11px] font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                            aria-label={`Individual mail history for ${batch.mailType}`}
+                            onClick={() => {
+                              setRecipientStatus(HISTORY_STATUS_OPTIONS[0])
+                              setSelectedBatch(batch)
+                            }}
+                          >
+                            i
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ) : null}
 
@@ -1968,6 +1900,7 @@ export function DeploymentDetail({ deployment, onBack, onUpdate }: DeploymentDet
         templates={templates}
         subjectCount={subjects.length}
         evaluatorCount={evaluators.length}
+        variant="when"
         onSave={saveReminderRule}
       />
 
@@ -1986,23 +1919,6 @@ export function DeploymentDetail({ deployment, onBack, onUpdate }: DeploymentDet
         variant="critical"
         onConfirm={() => {
           if (subjectToRemove) removeSubject(subjectToRemove)
-        }}
-      />
-
-      <ConfirmModal
-        open={ruleToDelete != null}
-        onOpenChange={(open) => {
-          if (!open) setRuleToDelete(null)
-        }}
-        title="Delete reminder"
-        description="Delete this scheduled reminder? Remaining firings will be cancelled."
-        confirmLabel="Delete"
-        variant="critical"
-        onConfirm={() => {
-          if (!ruleToDelete) return
-          setReminderRules((current) => current.filter((rule) => rule.id !== ruleToDelete.id))
-          setRuleToDelete(null)
-          showToast({ variant: 'success', message: 'Scheduled reminder deleted' })
         }}
       />
     </div>

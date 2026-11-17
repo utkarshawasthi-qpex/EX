@@ -213,7 +213,7 @@ const ANALYTICS_TYPE_OPTIONS = [
 
 const NO_MARKERS_OPTION: SelectOption = { value: '', label: 'No markers available' }
 
-const DEFAULT_FULL_WIDTH_TYPES: WidgetType[] = ['summary', 'scorecard', 'driver_analysis']
+const DEFAULT_FULL_WIDTH_TYPES: WidgetType[] = ['summary', 'scorecard', 'driver_analysis', 'text_analysis']
 
 function getDataWidgets(widgets: DashboardWidget[]): DashboardWidget[] {
   return widgets.filter((widget) => widget.type !== 'summary' && widget.type !== 'notes')
@@ -1111,6 +1111,10 @@ export function AddWidgetModal({
   }
 
   function toggleQuestion(questionId: string) {
+    if (selectedType === 'text_analysis') {
+      setSelectedQuestions([questionId])
+      return
+    }
     setSelectedQuestions((current) =>
       current.includes(questionId)
         ? current.filter((id) => id !== questionId)
@@ -1600,20 +1604,28 @@ export function AddWidgetModal({
                 ) : (
                   <div className="max-h-[280px] overflow-y-auto">
                     <div className="sticky top-0 z-10 flex items-center gap-3 bg-white py-2">
-                      <WuCheckbox
-                        checked={
-                          Boolean(selectedSurvey?.questions.length) &&
-                          selectedQuestions.length === selectedSurvey?.questions.length
-                        }
-                        partial={Boolean(
-                          selectedQuestions.length &&
-                            selectedQuestions.length !== selectedSurvey?.questions.length,
-                        )}
-                        onChange={toggleAllQuestions}
-                      />
-                      <WuText size="sm" as="span" className="font-medium text-gray-700">
-                        Questions
-                      </WuText>
+                      {selectedType === 'text_analysis' ? (
+                        <WuText size="sm" as="span" className="font-medium text-gray-700">
+                          Question
+                        </WuText>
+                      ) : (
+                        <>
+                          <WuCheckbox
+                            checked={
+                              Boolean(selectedSurvey?.questions.length) &&
+                              selectedQuestions.length === selectedSurvey?.questions.length
+                            }
+                            partial={Boolean(
+                              selectedQuestions.length &&
+                                selectedQuestions.length !== selectedSurvey?.questions.length,
+                            )}
+                            onChange={toggleAllQuestions}
+                          />
+                          <WuText size="sm" as="span" className="font-medium text-gray-700">
+                            Questions
+                          </WuText>
+                        </>
+                      )}
                     </div>
                     {selectedSurvey?.questions.length ? (
                       selectedSurvey.questions.map((question) => (
@@ -1623,10 +1635,20 @@ export function AddWidgetModal({
                           className="flex w-full items-start gap-3 px-1 py-2 text-left hover:bg-gray-50"
                           onClick={() => toggleQuestion(question.id)}
                         >
-                          <WuCheckbox
-                            checked={selectedQuestions.includes(question.id)}
-                            onChange={() => undefined}
-                          />
+                          {selectedType === 'text_analysis' ? (
+                            <input
+                              type="radio"
+                              name="text-analysis-question"
+                              className="mt-0.5 accent-blue-600"
+                              checked={selectedQuestions[0] === question.id}
+                              onChange={() => undefined}
+                            />
+                          ) : (
+                            <WuCheckbox
+                              checked={selectedQuestions.includes(question.id)}
+                              onChange={() => undefined}
+                            />
+                          )}
                           <WuText size="sm" as="span" className="text-gray-700">
                             {getQuestionLabel(question)}
                           </WuText>
@@ -1739,7 +1761,7 @@ export function AddWidgetModal({
       return (
       <div className="space-y-5">
         {renderColumnsSet()}
-        {!isDriverAnalysisType(selectedType) && (
+        {!isDriverAnalysisType(selectedType) && selectedType !== 'text_analysis' && (
           <div className="border-t border-gray-100 pt-5">
             <FieldRow label="Widget size">
               <div className="flex gap-2">

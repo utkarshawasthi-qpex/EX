@@ -173,16 +173,319 @@ export const mockSurveyComparisonData = {
   ],
 }
 
-export const mockTextAnalysisData = {
-  themes: [
-    { theme: 'Leadership Communication', count: 42, sentiment: 'negative' as const },
-    { theme: 'Work-Life Balance', count: 38, sentiment: 'positive' as const },
-    { theme: 'Career Growth', count: 31, sentiment: 'neutral' as const },
-    { theme: 'Team Collaboration', count: 28, sentiment: 'positive' as const },
-    { theme: 'Compensation', count: 24, sentiment: 'negative' as const },
-    { theme: 'Remote Work', count: 19, sentiment: 'positive' as const },
+export type TextAnalysisSentimentMix = {
+  negative: number
+  neutral: number
+  positive: number
+}
+
+export type TextAnalysisSubTopic = {
+  id: string
+  name: string
+  mentions: number
+  sentiment: TextAnalysisSentimentMix
+}
+
+export type TextAnalysisTopic = {
+  id: string
+  name: string
+  mentions: number
+  sentiment: TextAnalysisSentimentMix
+  subTopics?: TextAnalysisSubTopic[]
+}
+
+export const mockTextAnalysisData: { topics: TextAnalysisTopic[] } = {
+  topics: [
+    {
+      id: 'topic_leadership',
+      name: 'Leadership Communication',
+      mentions: 42,
+      sentiment: { negative: 20, neutral: 9, positive: 13 },
+      subTopics: [
+        {
+          id: 'sub_unclear_direction',
+          name: 'Unclear direction',
+          mentions: 18,
+          sentiment: { negative: 12, neutral: 4, positive: 2 },
+        },
+        {
+          id: 'sub_delayed_decisions',
+          name: 'Delayed decisions',
+          mentions: 14,
+          sentiment: { negative: 8, neutral: 3, positive: 3 },
+        },
+        {
+          id: 'sub_town_halls',
+          name: 'Town halls',
+          mentions: 10,
+          sentiment: { negative: 0, neutral: 2, positive: 8 },
+        },
+      ],
+    },
+    {
+      id: 'topic_work_life',
+      name: 'Work-Life Balance',
+      mentions: 38,
+      sentiment: { negative: 8, neutral: 9, positive: 21 },
+      subTopics: [
+        {
+          id: 'sub_flexible_hours',
+          name: 'Flexible hours',
+          mentions: 16,
+          sentiment: { negative: 2, neutral: 3, positive: 11 },
+        },
+        {
+          id: 'sub_meeting_load',
+          name: 'Meeting load',
+          mentions: 12,
+          sentiment: { negative: 5, neutral: 4, positive: 3 },
+        },
+        {
+          id: 'sub_time_off',
+          name: 'Time off',
+          mentions: 10,
+          sentiment: { negative: 1, neutral: 2, positive: 7 },
+        },
+      ],
+    },
+    {
+      id: 'topic_career',
+      name: 'Career Growth',
+      mentions: 31,
+      sentiment: { negative: 10, neutral: 13, positive: 8 },
+      subTopics: [
+        {
+          id: 'sub_promotion_path',
+          name: 'Promotion path',
+          mentions: 12,
+          sentiment: { negative: 5, neutral: 5, positive: 2 },
+        },
+        {
+          id: 'sub_mentorship',
+          name: 'Mentorship',
+          mentions: 11,
+          sentiment: { negative: 3, neutral: 5, positive: 3 },
+        },
+        {
+          id: 'sub_learning_budget',
+          name: 'Learning budget',
+          mentions: 8,
+          sentiment: { negative: 2, neutral: 3, positive: 3 },
+        },
+      ],
+    },
+    {
+      id: 'topic_collaboration',
+      name: 'Team Collaboration',
+      mentions: 28,
+      sentiment: { negative: 5, neutral: 5, positive: 18 },
+      subTopics: [
+        {
+          id: 'sub_handoffs',
+          name: 'Cross-team handoffs',
+          mentions: 15,
+          sentiment: { negative: 4, neutral: 3, positive: 8 },
+        },
+        {
+          id: 'sub_peer_support',
+          name: 'Peer support',
+          mentions: 13,
+          sentiment: { negative: 1, neutral: 2, positive: 10 },
+        },
+      ],
+    },
+    {
+      id: 'topic_compensation',
+      name: 'Compensation',
+      mentions: 24,
+      sentiment: { negative: 15, neutral: 6, positive: 3 },
+      subTopics: [
+        {
+          id: 'sub_base_pay',
+          name: 'Base pay',
+          mentions: 14,
+          sentiment: { negative: 9, neutral: 3, positive: 2 },
+        },
+        {
+          id: 'sub_bonus_clarity',
+          name: 'Bonus clarity',
+          mentions: 10,
+          sentiment: { negative: 6, neutral: 3, positive: 1 },
+        },
+      ],
+    },
+    {
+      id: 'topic_remote',
+      name: 'Remote Work',
+      mentions: 19,
+      sentiment: { negative: 4, neutral: 4, positive: 11 },
+      subTopics: [
+        {
+          id: 'sub_stipend',
+          name: 'Home office stipend',
+          mentions: 8,
+          sentiment: { negative: 1, neutral: 2, positive: 5 },
+        },
+        {
+          id: 'sub_timezone',
+          name: 'Timezone overlap',
+          mentions: 11,
+          sentiment: { negative: 3, neutral: 2, positive: 6 },
+        },
+      ],
+    },
+    {
+      id: 'topic_recognition',
+      name: 'Recognition',
+      mentions: 16,
+      sentiment: { negative: 4, neutral: 5, positive: 7 },
+      subTopics: [
+        {
+          id: 'sub_shout_outs',
+          name: 'Peer shout-outs',
+          mentions: 9,
+          sentiment: { negative: 1, neutral: 3, positive: 5 },
+        },
+        {
+          id: 'sub_manager_feedback',
+          name: 'Manager feedback',
+          mentions: 7,
+          sentiment: { negative: 3, neutral: 2, positive: 2 },
+        },
+      ],
+    },
+    {
+      id: 'topic_tools',
+      name: 'Tools and Technology',
+      mentions: 14,
+      sentiment: { negative: 10, neutral: 2, positive: 2 },
+      subTopics: [
+        {
+          id: 'sub_slow_tools',
+          name: 'Slow internal tools',
+          mentions: 9,
+          sentiment: { negative: 7, neutral: 1, positive: 1 },
+        },
+        {
+          id: 'sub_license_access',
+          name: 'License access',
+          mentions: 5,
+          sentiment: { negative: 3, neutral: 1, positive: 1 },
+        },
+      ],
+    },
+    {
+      id: 'topic_onboarding',
+      name: 'Onboarding Experience for New Hires in High-Growth Product Teams Across Regional Offices',
+      mentions: 11,
+      sentiment: { negative: 3, neutral: 4, positive: 4 },
+      subTopics: [
+        {
+          id: 'sub_first_week_buddy',
+          name: 'First-week buddy',
+          mentions: 6,
+          sentiment: { negative: 1, neutral: 2, positive: 3 },
+        },
+        {
+          id: 'sub_manager_checkins',
+          name: 'Manager check-ins',
+          mentions: 5,
+          sentiment: { negative: 2, neutral: 2, positive: 1 },
+        },
+      ],
+    },
+    {
+      id: 'topic_benefits',
+      name: 'Benefits',
+      mentions: 8,
+      sentiment: { negative: 1, neutral: 2, positive: 5 },
+    },
   ],
 }
+
+export type TextAnalysisCommentSentiment = 'negative' | 'neutral' | 'positive'
+
+export type TextAnalysisComment = {
+  id: string
+  topicId: string
+  subTopicId?: string
+  sentiment: TextAnalysisCommentSentiment
+  text: string
+  highlight: string
+}
+
+const TEXT_ANALYSIS_COMMENT_TEMPLATES: Record<
+  TextAnalysisCommentSentiment,
+  Array<(phrase: string) => string>
+> = {
+  negative: [
+    (phrase) => `I'm tired of hearing about ${phrase} without any follow-through.`,
+    (phrase) => `${phrase} is getting worse, and it is starting to affect delivery.`,
+    (phrase) => `We keep raising ${phrase}, but nothing changes after the survey.`,
+    (phrase) => `The biggest frustration this year has been ${phrase}.`,
+    (phrase) => `It's hard to stay motivated when ${phrase} is still unresolved.`,
+    (phrase) => `Managers acknowledge ${phrase} in meetings, then it disappears.`,
+  ],
+  neutral: [
+    (phrase) => `People mention ${phrase} often, though opinions are mixed.`,
+    (phrase) => `${phrase} comes up in almost every team discussion.`,
+    (phrase) => `I don't have a strong view on ${phrase} either way.`,
+    (phrase) => `Some teams handle ${phrase} well; others still struggle.`,
+    (phrase) => `${phrase} feels average compared with other companies I've worked at.`,
+    (phrase) => `We talk about ${phrase}, but I haven't seen a clear pattern yet.`,
+  ],
+  positive: [
+    (phrase) => `I appreciate how we handle ${phrase} — it really helps day to day.`,
+    (phrase) => `${phrase} is one of the things that keeps me here.`,
+    (phrase) => `Leaders have improved ${phrase} over the last quarter.`,
+    (phrase) => `The support around ${phrase} has been genuinely helpful.`,
+    (phrase) => `I would call ${phrase} a strength of this organization.`,
+    (phrase) => `Recent changes to ${phrase} have made my work easier.`,
+  ],
+}
+
+function buildTextAnalysisComments(): TextAnalysisComment[] {
+  const comments: TextAnalysisComment[] = []
+  let index = 0
+
+  function addComments(
+    topicId: string,
+    highlight: string,
+    sentiment: TextAnalysisSentimentMix,
+    subTopicId?: string,
+  ) {
+    ;(['negative', 'neutral', 'positive'] as const).forEach((key) => {
+      const count = sentiment[key]
+      const templates = TEXT_ANALYSIS_COMMENT_TEMPLATES[key]
+      for (let i = 0; i < count; i += 1) {
+        index += 1
+        const text = templates[i % templates.length](highlight)
+        comments.push({
+          id: `txtc_${index}`,
+          topicId,
+          subTopicId,
+          sentiment: key,
+          text,
+          highlight,
+        })
+      }
+    })
+  }
+
+  mockTextAnalysisData.topics.forEach((topic) => {
+    if (topic.subTopics && topic.subTopics.length > 0) {
+      topic.subTopics.forEach((subTopic) => {
+        addComments(topic.id, subTopic.name, subTopic.sentiment, subTopic.id)
+      })
+      return
+    }
+    addComments(topic.id, topic.name, topic.sentiment)
+  })
+
+  return comments
+}
+
+export const mockTextAnalysisComments = buildTextAnalysisComments()
 
 export const mockTextReportData = {
   surveyName: 'Workplace Culture',

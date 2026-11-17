@@ -62,9 +62,13 @@ export function MailComposer({
   fromExtra,
   extraContent,
   editLabel,
+  footerLeft,
+  beforeFields,
   sendLabel = 'Send Mail',
   typeFieldPlacement,
   onAddFrom,
+  helpText = 'Turn on Edit email to change the subject, body, and merge variables before you send.',
+  hideHeader = false,
 }: {
   title: string
   banner?: string
@@ -99,37 +103,43 @@ export function MailComposer({
   fromExtra?: ReactNode
   extraContent?: ReactNode
   editLabel?: string
+  footerLeft?: ReactNode
+  beforeFields?: ReactNode
   sendLabel?: string
   typeFieldPlacement?: 'start' | 'templates'
   onAddFrom?: () => void
+  helpText?: string
+  hideHeader?: boolean
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#F7F9FC] px-6 py-5">
-      <div className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3">
-        <div>
-          <WuHeading size="sm" className="text-gray-900">
-            {title}
-          </WuHeading>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200">
-            {recipientCount} {recipientKind}
-            {recipientCount === 1 ? '' : 's'}
-          </span>
-          <WuTooltip
-            content="Turn on Edit email to change the subject, body, and merge variables before you send."
-            position="left"
-            showArrow
-          >
-            <span
-              className="inline-flex size-5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-semibold text-white"
-              aria-label="About this page"
-            >
-              ?
+      {hideHeader ? null : (
+        <div className="mb-4 flex shrink-0 flex-wrap items-start justify-between gap-3">
+          <div>
+            <WuHeading size="sm" className="text-gray-900">
+              {title}
+            </WuHeading>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200">
+              {recipientCount} {recipientKind}
+              {recipientCount === 1 ? '' : 's'}
             </span>
-          </WuTooltip>
+            <WuTooltip
+              content={helpText}
+              position="left"
+              showArrow
+            >
+              <span
+                className="inline-flex size-5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-semibold text-white"
+                aria-label="About this page"
+              >
+                ?
+              </span>
+            </WuTooltip>
+          </div>
         </div>
-      </div>
+      )}
 
       {banner ? (
         <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -163,6 +173,8 @@ export function MailComposer({
         fromExtra={fromExtra}
         extraContent={extraContent}
         editLabel={editLabel}
+        footerLeft={footerLeft}
+        beforeFields={beforeFields}
         typeFieldPlacement={typeFieldPlacement}
         onAddFrom={onAddFrom}
         footerRight={

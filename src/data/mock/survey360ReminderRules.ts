@@ -28,6 +28,7 @@ export type Survey360ReminderRule = {
   endDate?: string
   occurrenceCount?: number
   audience: ReminderAudience
+  kind?: 'invitation' | 'reminder'
   from: string
   templateId: string
   subject: string
@@ -67,6 +68,18 @@ export function reminderAudienceLabel(audience: ReminderAudience) {
   if (audience === 'evaluator') return 'Evaluator Reminder'
   if (audience === 'employee') return 'Survey Reminder'
   return 'Subject Reminder'
+}
+
+export function scheduledRuleTypeLabel(rule: Survey360ReminderRule) {
+  const cadence = rule.mode === 'one_time' ? 'One-time' : 'Recurring'
+  const isInvite = rule.kind === 'invitation'
+  if (rule.audience === 'evaluator') {
+    return `${isInvite ? 'Evaluator Invitation' : 'Evaluator Reminder'} · ${cadence}`
+  }
+  if (rule.audience === 'employee') {
+    return `${isInvite ? 'Survey Invitation' : 'Survey Reminder'} · ${cadence}`
+  }
+  return `${isInvite ? 'Subject Invitation' : 'Subject Reminder'} · ${cadence}`
 }
 
 export function reminderTemplateId(audience: ReminderAudience) {
@@ -205,6 +218,13 @@ export function generateOccurrences(
 
 export function nextFiring(rule: Survey360ReminderRule, dueDate: string | null, from = todayStamp()) {
   return generateOccurrences(rule, dueDate).find((date) => date >= from) ?? null
+}
+
+export function reminderScheduleStamp(rule: Survey360ReminderRule, dueDate: string | null) {
+  const date = nextFiring(rule, dueDate) ?? rule.date ?? rule.startDate ?? todayStamp()
+  const hhmm = rule.time || '09:00'
+  const time = hhmm.length === 5 ? `${hhmm}:00` : hhmm
+  return `${date} ${time}`
 }
 
 export function ruleFiresOnDate(rule: Survey360ReminderRule, date: string, dueDate: string | null) {

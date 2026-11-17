@@ -54,11 +54,19 @@ type RecipientOption = MailSelectOption & { email: string }
 export function DeliveryModeField({
   value,
   onChange,
+  lockedModes = [],
+  onLockedClick,
 }: {
   value: LifecycleDeliveryMode[]
   onChange: (next: LifecycleDeliveryMode[]) => void
+  lockedModes?: LifecycleDeliveryMode[]
+  onLockedClick?: (mode: LifecycleDeliveryMode) => void
 }) {
   function toggle(mode: LifecycleDeliveryMode) {
+    if (lockedModes.includes(mode) && !value.includes(mode)) {
+      onLockedClick?.(mode)
+      return
+    }
     if (value.includes(mode)) {
       if (value.length === 1) return
       onChange(value.filter((item) => item !== mode))
@@ -72,13 +80,17 @@ export function DeliveryModeField({
       <div className="flex flex-wrap items-center gap-1.5">
         {LIFECYCLE_DELIVERY_MODES.map((mode) => {
           const active = value.includes(mode.id)
+          const locked = lockedModes.includes(mode.id) && !active
           return (
             <button
               key={mode.id}
               type="button"
               onClick={() => toggle(mode.id)}
+              aria-disabled={locked}
+              title={locked ? 'Buy credits to send by SMS or Slack' : undefined}
               className={cn(
                 'rounded-md px-2.5 py-1 text-xs font-medium ring-1 transition-colors',
+                locked && 'cursor-not-allowed opacity-50',
                 active
                   ? 'bg-blue-50 text-blue-700 ring-blue-200'
                   : 'bg-white text-gray-600 ring-gray-200 hover:text-gray-900',
@@ -93,16 +105,60 @@ export function DeliveryModeField({
   )
 }
 
+export function DeploymentField({
+  options,
+  value,
+  onChange,
+}: {
+  options: MailSelectOption[]
+  value: MailSelectOption | null
+  onChange: (next: MailSelectOption) => void
+}) {
+  return (
+    <MailInlineField label="Deployment :" className="min-w-[280px] max-w-xl flex-1">
+      <WuSelect
+        data={options}
+        accessorKey={{ value: 'value', label: 'label' }}
+        value={value ?? options[0]}
+        onSelect={(next) => {
+          const option = (Array.isArray(next) ? next[0] : next) as MailSelectOption | null
+          if (option?.value) onChange(option)
+        }}
+        variant="outlined"
+      />
+    </MailInlineField>
+  )
+}
+
+export function SendCreditsBar({
+  credits,
+  onBuyMore,
+}: {
+  credits: number
+  onBuyMore: () => void
+}) {
+  return (
+    <div className="flex items-center gap-4 text-sm">
+      <span className="text-gray-600">Available Credits : $ {credits}</span>
+      <button type="button" className="font-medium text-blue-600 hover:text-blue-800" onClick={onBuyMore}>
+        Buy More
+      </button>
+    </div>
+  )
+}
+
 export function RecipientPicker({
   employees,
   selectedIds,
   onChange,
   groups,
+  onGroupAdded,
 }: {
   employees: DirectoryEmployee[]
   selectedIds: string[]
   onChange: (ids: string[]) => void
   groups: EmployeeFilterPreset[]
+  onGroupAdded?: (group: { id: string; name: string } | null) => void
 }) {
   const [query, setQuery] = useState('')
   const [groupOpen, setGroupOpen] = useState(false)
@@ -139,6 +195,7 @@ export function RecipientPicker({
       .filter((employee) => employeeMatchesFilterGroups(employee, group.groups))
       .map((employee) => employee.id)
     onChange([...new Set([...selectedIds, ...matched])])
+    onGroupAdded?.({ id: group.id, name: group.name })
     setGroupOpen(false)
   }
 
@@ -154,6 +211,7 @@ export function RecipientPicker({
               onSelect={(next) => {
                 const rows = (Array.isArray(next) ? next : next ? [next] : []) as RecipientOption[]
                 onChange(rows.map((row) => row.value))
+                onGroupAdded?.(null)
               }}
               multiple
               selectAll={{ enable: true, label: 'All employees' }}

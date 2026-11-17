@@ -91,6 +91,7 @@ export const mockDashboards: Dashboard[] = [
               'q_incl_voice',
             ],
           }),
+          widget('wid_new_text_analysis', 'text_analysis', 'Text analysis', 'full', 9),
         ],
       },
     ],

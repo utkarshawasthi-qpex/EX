@@ -147,6 +147,8 @@ export function MailComposeCard({
   fromExtra,
   extraContent,
   editLabel = 'Edit email',
+  footerLeft,
+  beforeFields,
   typeFieldPlacement = 'start',
   onAddFrom,
 }: {
@@ -177,6 +179,8 @@ export function MailComposeCard({
   fromExtra?: ReactNode
   extraContent?: ReactNode
   editLabel?: string
+  footerLeft?: ReactNode
+  beforeFields?: ReactNode
   typeFieldPlacement?: 'start' | 'templates'
   onAddFrom?: () => void
 }) {
@@ -208,6 +212,11 @@ export function MailComposeCard({
 
   return (
     <WuCard rounded className={cn('flex min-h-0 flex-1 flex-col overflow-hidden p-0', className)}>
+      {beforeFields ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-gray-200 bg-white px-5 py-2.5">
+          {beforeFields}
+        </div>
+      ) : null}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-8 gap-y-2 border-b border-gray-200 bg-white px-5 py-2.5">
         {showTypeAtStart ? (
           typeField ?? (
@@ -337,10 +346,12 @@ export function MailComposeCard({
       )}
 
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-white px-5 py-3">
-        <label className="flex items-center gap-3 text-sm text-gray-700">
-          {editLabel}
-          <WuToggle checked={editEmail} onChange={onEditEmailChange} />
-        </label>
+        {footerLeft ?? (
+          <label className="flex items-center gap-3 text-sm text-gray-700">
+            {editLabel}
+            <WuToggle checked={editEmail} onChange={onEditEmailChange} />
+          </label>
+        )}
         {footerRight ? <div className="flex items-center gap-2">{footerRight}</div> : null}
       </div>
     </WuCard>
